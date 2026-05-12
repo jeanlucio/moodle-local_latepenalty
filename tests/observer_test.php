@@ -130,12 +130,7 @@ final class observer_test extends advanced_testcase {
         $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
         rebuild_course_cache($course->id);
 
-        $DB->insert_record('local_latepenalty_rules', (object) [
-            'cmid'          => $assign->cmid,
-            'enabled'       => $ruleenabled ? 1 : 0,
-            'daily_penalty' => $daily,
-            'max_penalty'   => $max,
-        ]);
+        $this->upsert_rule($assign->cmid, $ruleenabled, $daily, $max);
 
         $submissiontime = $deadline + $submissionoffset;
         $DB->insert_record('assign_submission', (object) [
@@ -179,6 +174,37 @@ final class observer_test extends advanced_testcase {
         $grade->load_optional_fields();
 
         return (float) ($grade->finalgrade ?? 0.0);
+    }
+
+    /**
+     * Insert or update a penalty rule for the given course module.
+     *
+     * create_module() already triggers local_latepenalty_coursemodule_edit_post_actions()
+     * which inserts a row with enabled=0. Using upsert avoids a duplicate-key error.
+     *
+     * @param int $cmid
+     * @param bool $enabled
+     * @param float $daily
+     * @param float $max
+     * @return void
+     */
+    private function upsert_rule(int $cmid, bool $enabled, float $daily, float $max): void {
+        global $DB;
+
+        $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
+        if ($existing) {
+            $existing->enabled       = $enabled ? 1 : 0;
+            $existing->daily_penalty = $daily;
+            $existing->max_penalty   = $max;
+            $DB->update_record('local_latepenalty_rules', $existing);
+        } else {
+            $DB->insert_record('local_latepenalty_rules', (object) [
+                'cmid'          => $cmid,
+                'enabled'       => $enabled ? 1 : 0,
+                'daily_penalty' => $daily,
+                'max_penalty'   => $max,
+            ]);
+        }
     }
 
     // Tests for calculate_days_late: pure unit tests (no DB required).
@@ -381,10 +407,7 @@ final class observer_test extends advanced_testcase {
         $DB->set_field('assign', 'duedate', 0, ['id' => $assign->id]);
         rebuild_course_cache($course->id);
 
-        $DB->insert_record('local_latepenalty_rules', (object) [
-            'cmid' => $assign->cmid, 'enabled' => 1,
-            'daily_penalty' => 10.0, 'max_penalty' => 50.0,
-        ]);
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
         $DB->insert_record('assign_submission', (object) [
             'assignment' => $assign->id, 'userid' => $student->id,
             'timecreated' => time(), 'timemodified' => time(),
@@ -461,10 +484,7 @@ final class observer_test extends advanced_testcase {
         $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $forum->cmid]);
         rebuild_course_cache($course->id);
 
-        $DB->insert_record('local_latepenalty_rules', (object) [
-            'cmid' => $forum->cmid, 'enabled' => 1,
-            'daily_penalty' => 10.0, 'max_penalty' => 50.0,
-        ]);
+        $this->upsert_rule($forum->cmid, true, 10.0, 50.0);
 
         // No forum posts — professor grades the student directly.
         $gradeitem = grade_item::fetch([
