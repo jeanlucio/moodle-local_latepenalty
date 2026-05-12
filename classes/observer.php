@@ -47,21 +47,39 @@ class observer {
         // Extract event data.
         $eventdata = $event->get_data();
         $userid = $event->relateduserid;
-        $contextid = $event->contextid;
 
-        // Validate event data.
-        if (empty($userid) || empty($contextid)) {
-            debugging('local_latepenalty: Invalid event data (missing userid or contextid)', DEBUG_DEVELOPER);
+        if (empty($userid)) {
+            debugging('local_latepenalty: Invalid event data (missing relateduserid)', DEBUG_DEVELOPER);
             return;
         }
 
-        // Get context and course module.
-        $context = \context::instance_by_id($contextid, IGNORE_MISSING);
-        if (!$context || $context->contextlevel != CONTEXT_MODULE) {
+        // The user_graded event always uses context_course, not context_module.
+        // The grade item ID is stored in $event->other['itemid'] — use it to find the cmid.
+        $itemid = $eventdata['other']['itemid'] ?? null;
+
+        if (empty($itemid)) {
             return;
         }
 
-        $cmid = $context->instanceid;
+        $gradeitem = $DB->get_record('grade_items', ['id' => $itemid], 'itemtype,itemmodule,iteminstance,courseid');
+
+        if (!$gradeitem || $gradeitem->itemtype !== 'mod') {
+            return;
+        }
+
+        $cm = get_coursemodule_from_instance(
+            $gradeitem->itemmodule,
+            $gradeitem->iteminstance,
+            $gradeitem->courseid,
+            false,
+            IGNORE_MISSING
+        );
+
+        if (!$cm) {
+            return;
+        }
+
+        $cmid = $cm->id;
 
         // Prevent recursive processing.
         $key = $userid . '_' . $cmid;
