@@ -1,0 +1,11 @@
+/**
+ * Late-penalty notice shown on the course page below each affected activity.
+ *
+ * Scoped to the plugin class so it does not leak into other components.
+ */
+.local-latepenalty-notice {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.875em;
+    padding-block-start: 0.2rem;
+    padding-inline-start: 0.25rem;
+}

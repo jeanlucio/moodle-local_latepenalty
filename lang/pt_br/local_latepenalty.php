@@ -25,6 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 // phpcs:disable moodle.Files.LineLength
 
+$string['courseinfo_notice'] = 'Esta atividade precisa ser realizada até {$a->deadline}. Uma penalidade de {$a->daily}% será aplicada por dia de atraso até o limite de {$a->max}%.';
 $string['error_daily_range'] = 'O desconto diário deve estar entre 0% e 100%';
 $string['error_max_less_than_daily'] = 'O desconto diário não pode exceder o limite máximo';
 $string['error_max_range'] = 'O limite máximo deve estar entre 0% e 100%';

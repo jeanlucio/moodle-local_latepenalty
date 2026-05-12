@@ -2,6 +2,13 @@
 
 All notable changes to the Late Penalty plugin will be documented in this file.
 
+## [1.0.1] - 2026-05-12
+
+### Added
+- Course page penalty notice: activities with an enabled rule now display a
+  short reminder below the activity link showing the deadline and penalty
+  terms, visible to all enrolled users
+
 ## [1.0.0] - 2026-05-12
 
 ### Added

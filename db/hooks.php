@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Hook listener callbacks for local_latepenalty.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -24,8 +24,9 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026051202;
-$plugin->requires = 2024042200;
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.0';
+$callbacks = [
+    [
+        'hook'     => \core_course\hook\before_course_viewed::class,
+        'callback' => \local_latepenalty\hook_listener::class . '::inject_course_notices',
+    ],
+];
