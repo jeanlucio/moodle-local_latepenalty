@@ -92,6 +92,8 @@ The maximum penalty must be greater than or equal to the daily penalty.
 6. The adjusted grade is written back to the Gradebook via the standard grade API.
 7. On the course page, a notice is displayed below each affected activity so students know the penalty terms.
 
+> **Note — manual grading without a submission:** The penalty is based on the student's **submission timestamp**, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
+
 #### Calculation Formula
 
 ```
@@ -248,6 +250,8 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 5. Os dias de atraso são calculados e o desconto é aplicado.
 6. A nota ajustada é registrada de volta no Livro de Notas via API padrão de notas.
 7. Na página do curso, um aviso é exibido abaixo de cada atividade afetada para que os alunos conheçam as condições da penalidade.
+
+> **Observação — avaliação sem entrega:** A penalidade é baseada no **timestamp de entrega do aluno**, não no momento em que o professor avalia. Se um professor atribuir nota a um aluno que nunca entregou (ex.: Fórum em que o aluno não fez nenhuma postagem), não existe registro de entrega e o plugin ignora a penalidade. Isso é intencional: sem entrega, não há atraso a medir.
 
 #### Fórmula de Cálculo
 
