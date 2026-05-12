@@ -100,8 +100,10 @@ class observer {
             $eventfinalgrade = isset($eventdata['other']['finalgrade'])
                 ? (float) $eventdata['other']['finalgrade']
                 : null;
-            if ($eventfinalgrade !== null
-                    && abs($eventfinalgrade - self::$pendingpenalty[$key]) < 0.001) {
+            if (
+                $eventfinalgrade !== null
+                && abs($eventfinalgrade - self::$pendingpenalty[$key]) < 0.001
+            ) {
                 unset(self::$pendingpenalty[$key]);
                 return;
             }
