@@ -29,11 +29,18 @@ namespace local_latepenalty;
  */
 class observer {
     /**
-     * Static array to prevent recursive processing of the same grade.
+     * Map of "userid_cmid" => expected penalised grade (float).
      *
-     * @var array
+     * Moodle's event system buffers events fired during an observer and
+     * dispatches them only after the current observer returns.  A simple
+     * "processing" flag would already be unset by then, so every event
+     * would re-trigger the penalty loop.  Instead we record the exact
+     * bounded grade we just wrote; when the next user_graded arrives with
+     * that same value we know it is our own event and skip it.
+     *
+     * @var array<string, float>
      */
-    private static $processing = [];
+    private static array $pendingpenalty = [];
 
     /**
      * Handle the user_graded event and apply late penalty if applicable.
@@ -80,20 +87,29 @@ class observer {
         }
 
         $cmid = $cm->id;
+        $key  = $userid . '_' . $cmid;
 
-        // Prevent recursive processing.
-        $key = $userid . '_' . $cmid;
-        if (isset(self::$processing[$key])) {
-            return;
+        // Skip events that were fired by our own penalty application.
+        // Moodle's event manager buffers new events while dispatching
+        // (self::$dispatching = true) and processes them after the current
+        // observer returns — meaning a simple "processing" lock would be
+        // unset before the buffered event fires.  Comparing the incoming
+        // other['finalgrade'] against the value we just stored is the only
+        // reliable guard against the re-entrant loop.
+        if (isset(self::$pendingpenalty[$key])) {
+            $eventfinalgrade = isset($eventdata['other']['finalgrade'])
+                ? (float) $eventdata['other']['finalgrade']
+                : null;
+            if ($eventfinalgrade !== null
+                    && abs($eventfinalgrade - self::$pendingpenalty[$key]) < 0.001) {
+                unset(self::$pendingpenalty[$key]);
+                return;
+            }
+            // A different grade arrived (e.g. teacher re-graded); clear and proceed.
+            unset(self::$pendingpenalty[$key]);
         }
 
-        self::$processing[$key] = true;
-
-        try {
-            self::process_penalty($userid, $cmid, $eventdata);
-        } finally {
-            unset(self::$processing[$key]);
-        }
+        self::process_penalty($userid, $cmid, $eventdata);
     }
 
     /**
@@ -121,10 +137,6 @@ class observer {
         $deadline = self::get_deadline($cm);
 
         if (!$deadline) {
-            debugging(
-                'local_latepenalty: No valid deadline for cmid ' . $cmid,
-                DEBUG_DEVELOPER
-            );
             return;
         }
 
@@ -139,10 +151,6 @@ class observer {
             if (in_array($cm->modname, self::$autogradedmodules)) {
                 $submissiontime = (int) ($eventdata['timecreated'] ?? time());
             } else {
-                debugging(
-                    'local_latepenalty: No submission found for userid ' . $userid . ' cmid ' . $cmid . ', skipping penalty',
-                    DEBUG_DEVELOPER
-                );
                 return;
             }
         }
@@ -167,7 +175,7 @@ class observer {
             return;
         }
 
-        // Get the user's grade.
+        // Get the user's current grade.
         $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $userid]);
         $grade->load_optional_fields();
 
@@ -180,8 +188,12 @@ class observer {
         // Calculate penalty.
         $finalgrade = self::apply_penalty($rawgrade, $dayslate, $rule->daily_penalty, $rule->max_penalty);
 
-        // Update grade if changed.
+        // Apply only when the change is meaningful (avoids spurious DB writes).
         if (abs($finalgrade - $rawgrade) > 0.01) {
+            // Store the bounded value that will appear in other['finalgrade'] of the
+            // user_graded event fired by update_final_grade, so we can skip it.
+            $key = $userid . '_' . $cmid;
+            self::$pendingpenalty[$key] = (float) $gradeitem->bounded_grade($finalgrade);
             $gradeitem->update_final_grade(
                 $userid,
                 $finalgrade,
