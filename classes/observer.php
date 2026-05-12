@@ -111,15 +111,9 @@ class observer {
         }
 
         // Get submission timestamp (when the student submitted, not when graded).
-        $submissiontime = self::get_submission_time($userid, $cm);
-
-        if (!$submissiontime) {
-            debugging(
-                'local_latepenalty: No submission time found for userid ' . $userid . ' cmid ' . $cmid,
-                DEBUG_DEVELOPER
-            );
-            return;
-        }
+        // For auto-graded modules with no explicit submission tracking, fall back to
+        // the grade event timestamp, which is when the activity was completed.
+        $submissiontime = self::get_submission_time($userid, $cm) ?? (int) ($eventdata['timecreated'] ?? time());
 
         // Calculate days late.
         $dayslate = self::calculate_days_late($submissiontime, $deadline);
@@ -175,12 +169,13 @@ class observer {
      * @var array
      */
     private static $deadlinefields = [
-        'assign'    => 'duedate',
-        'quiz'      => 'timeclose',
-        'scorm'     => 'timeclose',
-        'lesson'    => 'deadline',
-        'workshop'  => 'submissionend',
-        'forum'     => 'duedate',
+        'assign'      => 'duedate',
+        'forum'       => 'duedate',
+        'lesson'      => 'deadline',
+        'playergroup' => 'timeclose',
+        'quiz'        => 'timeclose',
+        'scorm'       => 'timeclose',
+        'workshop'    => 'submissionend',
     ];
 
     /**
