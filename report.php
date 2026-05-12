@@ -15,17 +15,33 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Late penalty report for a course.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+require(__DIR__ . '/../../config.php');
 
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026051203;
-$plugin->requires = 2024042200;
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.0';
+use local_latepenalty\report\controller;
+
+$courseid = required_param('courseid', PARAM_INT);
+
+$course = get_course($courseid);
+$context = context_course::instance($courseid);
+
+require_login($course);
+require_capability('local/latepenalty:viewreport', $context);
+
+$PAGE->set_url(new moodle_url('/local/latepenalty/report.php', ['courseid' => $courseid]));
+$PAGE->set_context($context);
+$PAGE->set_title(get_string('report', 'local_latepenalty'));
+$PAGE->set_heading($course->fullname);
+$PAGE->set_pagelayout('incourse');
+
+$controller = new controller($courseid, $context);
+
+echo $OUTPUT->header();
+echo $OUTPUT->render_from_template('local_latepenalty/report', $controller->get_template_context());
+echo $OUTPUT->footer();

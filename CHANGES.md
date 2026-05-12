@@ -2,6 +2,15 @@
 
 All notable changes to the Late Penalty plugin will be documented in this file.
 
+## [1.0.2] - 2026-05-12
+
+### Added
+- Late penalty report: teachers and non-editing teachers can now access a
+  per-course report (via the course navigation menu) showing every student
+  who received a late penalty, with raw grade, discount applied and final
+  grade for each activity
+- New capability `local/latepenalty:viewreport` controls access to the report
+
 ## [1.0.1] - 2026-05-12
 
 ### Added

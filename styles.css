@@ -9,3 +9,10 @@
     padding-block-start: 0.2rem;
     padding-inline-start: 0.25rem;
 }
+
+/**
+ * Discount percentage cell in the penalty report table.
+ */
+.local-latepenalty-discount {
+    color: var(--bs-danger, #dc3545);
+}

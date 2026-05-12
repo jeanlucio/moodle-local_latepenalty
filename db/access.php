@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Capability definitions for the Late Penalty plugin.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -24,8 +24,15 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026051203;
-$plugin->requires = 2024042200;
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.0';
+$capabilities = [
+    'local/latepenalty:viewreport' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype'     => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes'  => [
+            'editingteacher' => CAP_ALLOW,
+            'teacher'        => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
+];

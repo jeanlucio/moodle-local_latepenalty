@@ -124,6 +124,38 @@ function local_latepenalty_coursemodule_validation($data, $files): array {
 }
 
 /**
+ * Extend the course navigation to add the late penalty report link.
+ *
+ * The link appears in the course secondary navigation and is visible only to
+ * users who hold the local/latepenalty:viewreport capability in the course.
+ *
+ * @param navigation_node $navigation The course navigation node.
+ * @param stdClass        $course     The current course.
+ * @param context_course  $context    The course context.
+ * @return void
+ */
+function local_latepenalty_extend_navigation_course(
+    navigation_node $navigation,
+    stdClass $course,
+    context_course $context
+): void {
+    if (!has_capability('local/latepenalty:viewreport', $context)) {
+        return;
+    }
+
+    $url = new moodle_url('/local/latepenalty/report.php', ['courseid' => $course->id]);
+
+    $navigation->add(
+        get_string('report', 'local_latepenalty'),
+        $url,
+        navigation_node::TYPE_CUSTOM,
+        null,
+        'local_latepenalty_report',
+        new pix_icon('i/report', '')
+    );
+}
+
+/**
  * Save late penalty configuration after course module is created or updated.
  *
  * @param stdClass $data Form data object.

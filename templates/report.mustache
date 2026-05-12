@@ -1,0 +1,105 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_latepenalty/report
+
+    Course-level report showing every student who received a late penalty,
+    with the most recent penalty event per student + activity pair.
+
+    Context variables required for this template:
+    * haspenalties - Boolean: true when at least one penalty has been applied.
+    * penalties    - Array of penalty rows: fullname, activity, rawgrade,
+                     discount, finalgrade, grademax, penaltydate.
+
+    Example context (json):
+    {
+        "haspenalties": true,
+        "penalties": [
+            {
+                "fullname": "João Silva",
+                "activity": "Quiz semana 3",
+                "rawgrade": "8,00",
+                "discount": "10,0",
+                "finalgrade": "7,20",
+                "grademax": "10,00",
+                "penaltydate": "7 May 2026, 2:14 PM"
+            },
+            {
+                "fullname": "Maria Souza",
+                "activity": "Tarefa 1",
+                "rawgrade": "9,50",
+                "discount": "15,0",
+                "finalgrade": "8,08",
+                "grademax": "10,00",
+                "penaltydate": "4 May 2026, 9:00 AM"
+            }
+        ]
+    }
+}}
+<div class="local-latepenalty-report mt-4">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary d-flex align-items-center">
+            <i class="fa fa-table me-2 text-white" aria-hidden="true"></i>
+            <h2 class="card-title h5 mb-0 text-white">
+                {{#str}} report, local_latepenalty {{/str}}
+            </h2>
+        </div>
+        <div class="card-body p-0">
+            {{#haspenalties}}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">{{#str}} report_col_student, local_latepenalty {{/str}}</th>
+                            <th scope="col">{{#str}} report_col_activity, local_latepenalty {{/str}}</th>
+                            <th scope="col" class="text-center">
+                                {{#str}} report_col_rawgrade, local_latepenalty {{/str}}
+                            </th>
+                            <th scope="col" class="text-center">
+                                {{#str}} report_col_discount, local_latepenalty {{/str}}
+                            </th>
+                            <th scope="col" class="text-center">
+                                {{#str}} report_col_finalgrade, local_latepenalty {{/str}}
+                            </th>
+                            <th scope="col">{{#str}} report_col_date, local_latepenalty {{/str}}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#penalties}}
+                        <tr>
+                            <td>{{fullname}}</td>
+                            <td>{{activity}}</td>
+                            <td class="text-center">{{rawgrade}} / {{grademax}}</td>
+                            <td class="text-center fw-bold local-latepenalty-discount">
+                                &minus;{{discount}}%
+                            </td>
+                            <td class="text-center">{{finalgrade}} / {{grademax}}</td>
+                            <td>{{penaltydate}}</td>
+                        </tr>
+                        {{/penalties}}
+                    </tbody>
+                </table>
+            </div>
+            {{/haspenalties}}
+            {{^haspenalties}}
+            <div class="p-4">
+                <p class="mb-0">{{#str}} report_empty, local_latepenalty {{/str}}</p>
+            </div>
+            {{/haspenalties}}
+        </div>
+    </div>
+</div>
