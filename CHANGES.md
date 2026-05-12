@@ -2,6 +2,12 @@
 
 All notable changes to the Late Penalty plugin will be documented in this file.
 
+## [1.0.0] - 2026-05-12
+
+### Added
+- Backup and restore support: penalty rules travel with activities on course
+  backup, restore, and duplication
+
 ## [1.0.0-alpha] - 2026-01-01
 
 ### Added
