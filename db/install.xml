@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/latepenalty/db" VERSION="20260101" COMMENT="XMLDB file for Moodle local/latepenalty"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="local_latepenalty_rules" COMMENT="Stores late penalty configuration rules for course modules">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course module ID (course_modules.id)"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the penalty rule is enabled (0=disabled, 1=enabled)"/>
+        <FIELD NAME="daily_penalty" TYPE="number" LENGTH="5" NOTNULL="true" DEFAULT="0.00" DECIMALS="2" SEQUENCE="false" COMMENT="Daily penalty percentage (0.00 to 100.00)"/>
+        <FIELD NAME="max_penalty" TYPE="number" LENGTH="5" NOTNULL="true" DEFAULT="0.00" DECIMALS="2" SEQUENCE="false" COMMENT="Maximum penalty cap percentage (0.00 to 100.00)"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="cmid" TYPE="unique" FIELDS="cmid"/>
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>
