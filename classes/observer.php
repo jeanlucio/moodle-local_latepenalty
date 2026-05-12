@@ -111,9 +111,23 @@ class observer {
         }
 
         // Get submission timestamp (when the student submitted, not when graded).
-        // For auto-graded modules with no explicit submission tracking, fall back to
-        // the grade event timestamp, which is when the activity was completed.
-        $submissiontime = self::get_submission_time($userid, $cm) ?? (int) ($eventdata['timecreated'] ?? time());
+        // For auto-graded modules the grade event itself is the student action, so
+        // use the event timestamp when no explicit submission record exists.
+        // For manually-graded modules (e.g. forum), if no student action is found
+        // there is nothing to measure lateness against — skip the penalty.
+        $submissiontime = self::get_submission_time($userid, $cm);
+
+        if ($submissiontime === null) {
+            if (in_array($cm->modname, self::$autogradedmodules)) {
+                $submissiontime = (int) ($eventdata['timecreated'] ?? time());
+            } else {
+                debugging(
+                    'local_latepenalty: No submission found for userid ' . $userid . ' cmid ' . $cmid . ', skipping penalty',
+                    DEBUG_DEVELOPER
+                );
+                return;
+            }
+        }
 
         // Calculate days late.
         $dayslate = self::calculate_days_late($submissiontime, $deadline);
@@ -162,6 +176,18 @@ class observer {
             );
         }
     }
+
+    /**
+     * Modules where the grade event itself represents the student's action.
+     * For these, the event timestamp is used when no submission record exists.
+     *
+     * @var array
+     */
+    private static $autogradedmodules = [
+        'lesson',
+        'playergroup',
+        'scorm',
+    ];
 
     /**
      * Map of module name to its deadline field in the module table.
@@ -258,6 +284,18 @@ class observer {
                     IGNORE_MISSING
                 );
                 return $row ? (int) $row->timemodified : null;
+
+            case 'forum':
+                $row = $DB->get_record_sql(
+                    "SELECT MAX(p.created) AS lastpost
+                       FROM {forum_posts} p
+                       JOIN {forum_discussions} d ON d.id = p.discussion
+                      WHERE d.forum = :forum
+                        AND p.userid = :userid",
+                    ['forum' => $cm->instance, 'userid' => $userid],
+                    IGNORE_MISSING
+                );
+                return ($row && !empty($row->lastpost)) ? (int) $row->lastpost : null;
 
             default:
                 return null;
