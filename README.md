@@ -27,6 +27,7 @@ Unlike Moodle's native late-submission penalty — which is limited to Assignmen
 * 📝 **Gradebook audit trail:** Every grade modification is recorded in Moodle's standard grade history table.
 * 💾 **Backup and restore:** Penalty rules travel with the activity on course backup, restore, and duplication.
 * 🔔 **Course page notice:** Students see a reminder below each activity showing the deadline and penalty terms before they start.
+* 📊 **Penalty report:** Teachers access a filterable course report listing every grade adjustment applied by the plugin, always available regardless of course format.
 * 🌐 **Bilingual:** Full support for English and Brazilian Portuguese.
 
 ---
@@ -117,6 +118,34 @@ Final Grade = Raw Grade × (1 − Discount / 100)
 
 ---
 
+### 📊 Penalty Report
+
+Teachers and managers with the `local/latepenalty:viewreport` capability can access a **Penalty Report** for each course through the course navigation menu (**Late penalty report** link in the secondary nav).
+
+The report shows every grade adjustment applied by the plugin in that course:
+
+| Column | Description |
+|--------|-------------|
+| **Student** | Full name of the student |
+| **Activity** | Name of the graded activity |
+| **Deadline** | Resolved deadline (completionexpected or module field) |
+| **Raw grade** | Grade before the penalty |
+| **Discount** | Percentage applied |
+| **Final grade** | Grade after the penalty |
+| **Date applied** | Date the penalty was recorded |
+
+The report includes **filters** for student and activity. Only students and activities that have at least one recorded penalty appear in the filter dropdowns — the report is always available regardless of the course format.
+
+---
+
+### ⚠️ Course Format Compatibility
+
+The **course-page notice** (the reminder displayed below each activity before a student starts) works with any course format that uses Moodle's standard activity rendering (`[data-for="cmitem"]` on the activity element), which includes the built-in **Topics**, **Weeks**, and **Single Activity** formats.
+
+Third-party formats that replace the standard module HTML with a custom layout (such as visual trail or board formats) may not display the per-activity notice on the course page. **The penalty calculation, grade history, and the Penalty Report are not affected — only the course-page notice display.**
+
+---
+
 ### 🧪 Automated Tests
 
 Late Penalty ships with **22 PHPUnit unit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
@@ -186,6 +215,7 @@ Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apen
 * 📝 **Histórico de notas:** Toda modificação de nota é registrada na tabela padrão de histórico do Moodle.
 * 💾 **Backup e restauração:** As regras de penalidade viajam junto com a atividade no backup, restauração e duplicação de cursos.
 * 🔔 **Aviso na página do curso:** Os alunos veem um lembrete abaixo de cada atividade com o prazo e as condições da penalidade antes de começar.
+* 📊 **Relatório de penalidades:** Professores acessam um relatório filtrado por curso com cada ajuste de nota aplicado pelo plugin, sempre disponível independentemente do formato de curso.
 * 🌐 **Bilíngue:** Suporte completo para inglês e português do Brasil.
 
 ---
@@ -273,6 +303,34 @@ Nota Final     = Nota Bruta × (1 − Desconto / 100)
 | Oficina     | `submissionend`               |
 | PlayerGroup | `timeclose`                   |
 | Qualquer    | `completionexpected` (prioridade) |
+
+---
+
+### 📊 Relatório de Penalidades
+
+Professores e gestores com a capability `local/latepenalty:viewreport` podem acessar um **Relatório de Penalidades** de cada curso pelo menu de navegação do curso (link **Relatório de penalidade por atraso** no menu secundário).
+
+O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
+
+| Coluna | Descrição |
+|--------|-----------|
+| **Aluno** | Nome completo do aluno |
+| **Atividade** | Nome da atividade avaliada |
+| **Prazo** | Prazo resolvido (completionexpected ou campo do módulo) |
+| **Nota bruta** | Nota antes da penalidade |
+| **Desconto** | Percentual aplicado |
+| **Nota final** | Nota após a penalidade |
+| **Data aplicada** | Data em que a penalidade foi registrada |
+
+O relatório inclui **filtros** por aluno e por atividade. Somente alunos e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
+
+---
+
+### ⚠️ Compatibilidade com Formatos de Curso
+
+O **aviso na página do curso** (o lembrete exibido abaixo de cada atividade antes de o aluno começar) funciona com qualquer formato de curso que utilize a renderização padrão de atividades do Moodle (`[data-for="cmitem"]` no elemento da atividade), o que inclui os formatos nativos **Tópicos**, **Semanas** e **Atividade Única**.
+
+Formatos de terceiros que substituem o HTML padrão dos módulos por um layout próprio (como formatos visuais de trilha ou quadro) podem não exibir o aviso por atividade na página do curso. **O cálculo da penalidade, o histórico de notas e o Relatório de Penalidades não são afetados — apenas a exibição do aviso na página do curso.**
 
 ---
 
