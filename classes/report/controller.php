@@ -133,7 +133,6 @@ class controller {
                 : '';
 
             $deadline = self::resolve_deadline($row);
-            $dateformat = get_string('strftimedatefullshort', 'langconfig');
 
             $penalties[] = [
                 'fullname'           => format_string(
@@ -144,7 +143,7 @@ class controller {
                 'activity'           => $cmname,
                 'hasdeadline'        => $deadline !== null,
                 'completionexpected' => $deadline !== null
-                    ? userdate($deadline, $dateformat)
+                    ? userdate($deadline)
                     : '',
                 'rawgrade'           => format_float($rawgrade, 2),
                 'discount'           => format_float($discount, 1),
