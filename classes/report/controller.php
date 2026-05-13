@@ -42,6 +42,21 @@ class controller {
     private context_course $context;
 
     /**
+     * Deadline field per module type, mirroring the observer's map.
+     *
+     * @var array<string,string>
+     */
+    private static array $deadlinefields = [
+        'assign'      => 'duedate',
+        'forum'       => 'duedate',
+        'lesson'      => 'deadline',
+        'playergroup' => 'timeclose',
+        'quiz'        => 'timeclose',
+        'scorm'       => 'timeclose',
+        'workshop'    => 'submissionend',
+    ];
+
+    /**
      * Constructor.
      *
      * @param int            $courseid The course id.
@@ -62,7 +77,8 @@ class controller {
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
-                       gi.grademax, cm.id AS cmid, cm.completionexpected,
+                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
                        u.middlename, u.alternatename
@@ -116,22 +132,25 @@ class controller {
                 ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
                 : '';
 
+            $deadline = self::resolve_deadline($row);
+            $dateformat = get_string('strftimedatefullshort', 'langconfig');
+
             $penalties[] = [
-                'fullname'            => format_string(
+                'fullname'           => format_string(
                     fullname($fakeuser),
                     true,
                     ['context' => $this->context]
                 ),
-                'activity'            => $cmname,
-                'completionexpected'  => !empty($row->completionexpected)
-                    ? userdate((int) $row->completionexpected, get_string('strftimedatefullshort', 'langconfig'))
+                'activity'           => $cmname,
+                'hasdeadline'        => $deadline !== null,
+                'completionexpected' => $deadline !== null
+                    ? userdate($deadline, $dateformat)
                     : '',
-                'hasdeadline'         => !empty($row->completionexpected),
-                'rawgrade'            => format_float($rawgrade, 2),
-                'discount'            => format_float($discount, 1),
-                'finalgrade'          => format_float($finalgrade, 2),
-                'grademax'            => format_float((float) $row->grademax, 2),
-                'penaltydate'         => userdate((int) $row->timemodified),
+                'rawgrade'           => format_float($rawgrade, 2),
+                'discount'           => format_float($discount, 1),
+                'finalgrade'         => format_float($finalgrade, 2),
+                'grademax'           => format_float((float) $row->grademax, 2),
+                'penaltydate'        => userdate((int) $row->timemodified),
             ];
         }
 
@@ -139,5 +158,31 @@ class controller {
             'penalties'    => $penalties,
             'haspenalties' => !empty($penalties),
         ];
+    }
+
+    /**
+     * Resolve the effective deadline for a grade history row.
+     *
+     * Mirrors the observer logic: completionexpected takes priority; falls back
+     * to the module-specific deadline field (duedate, timeclose, etc.).
+     *
+     * @param \stdClass $row Row from the report query containing completionexpected,
+     *                       itemmodule and iteminstance.
+     * @return int|null Deadline timestamp or null if not determinable.
+     */
+    private static function resolve_deadline(\stdClass $row): ?int {
+        global $DB;
+
+        if (!empty($row->completionexpected)) {
+            return (int) $row->completionexpected;
+        }
+
+        $field = self::$deadlinefields[$row->itemmodule] ?? null;
+        if (!$field) {
+            return null;
+        }
+
+        $value = $DB->get_field($row->itemmodule, $field, ['id' => $row->iteminstance]);
+        return ($value) ? (int) $value : null;
     }
 }
