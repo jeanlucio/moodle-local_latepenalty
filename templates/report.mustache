@@ -21,12 +21,28 @@
     with the most recent penalty event per student + activity pair.
 
     Context variables required for this template:
+    * formaction   - URL for the filter form action.
+    * useroptions  - Array of {value, label, selected} for the student select.
+    * cmoptions    - Array of {value, label, selected} for the activity select.
+    * filteruserid - Currently selected user id (0 = all).
+    * filtercmid   - Currently selected cm id (0 = all).
     * haspenalties - Boolean: true when at least one penalty has been applied.
     * penalties    - Array of penalty rows: fullname, activity, rawgrade,
                      discount, finalgrade, grademax, penaltydate.
 
     Example context (json):
     {
+        "formaction": "/local/latepenalty/report.php?courseid=2",
+        "filteruserid": 0,
+        "filtercmid": 0,
+        "useroptions": [
+            {"value": 0, "label": "All students", "selected": true},
+            {"value": 5, "label": "João Silva", "selected": false}
+        ],
+        "cmoptions": [
+            {"value": 0, "label": "All activities", "selected": true},
+            {"value": 12, "label": "Quiz semana 3", "selected": false}
+        ],
         "haspenalties": true,
         "penalties": [
             {
@@ -55,6 +71,35 @@
     }
 }}
 <div class="local-latepenalty-report mt-4">
+    <form method="get" action="{{formaction}}" class="mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label for="lp-filter-user" class="form-label mb-1">
+                    {{#str}} filter_student, local_latepenalty {{/str}}
+                </label>
+                <select id="lp-filter-user" name="userid" class="form-select form-select-sm">
+                    {{#useroptions}}
+                    <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                    {{/useroptions}}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label for="lp-filter-cm" class="form-label mb-1">
+                    {{#str}} filter_activity, local_latepenalty {{/str}}
+                </label>
+                <select id="lp-filter-cm" name="cmid" class="form-select form-select-sm">
+                    {{#cmoptions}}
+                    <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                    {{/cmoptions}}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    {{#str}} filter_apply, local_latepenalty {{/str}}
+                </button>
+            </div>
+        </div>
+    </form>
     <div class="card shadow-sm border-0">
         <div class="card-header bg-primary d-flex align-items-center">
             <i class="fa fa-table me-2 text-white" aria-hidden="true"></i>

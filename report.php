@@ -27,6 +27,8 @@ require(__DIR__ . '/../../config.php');
 use local_latepenalty\report\controller;
 
 $courseid = required_param('courseid', PARAM_INT);
+$filteruserid = optional_param('userid', 0, PARAM_INT);
+$filtercmid   = optional_param('cmid', 0, PARAM_INT);
 
 $course = get_course($courseid);
 $context = context_course::instance($courseid);
@@ -40,7 +42,7 @@ $PAGE->set_title(get_string('report', 'local_latepenalty'));
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
 
-$controller = new controller($courseid, $context);
+$controller = new controller($courseid, $context, $filteruserid, $filtercmid);
 
 echo $OUTPUT->header();
 echo $OUTPUT->render_from_template('local_latepenalty/report', $controller->get_template_context());
