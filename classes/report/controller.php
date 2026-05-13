@@ -62,7 +62,7 @@ class controller {
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
-                       gi.grademax, cm.id AS cmid,
+                       gi.grademax, cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
                        u.middlename, u.alternatename
@@ -117,17 +117,21 @@ class controller {
                 : '';
 
             $penalties[] = [
-                'fullname'    => format_string(
+                'fullname'            => format_string(
                     fullname($fakeuser),
                     true,
                     ['context' => $this->context]
                 ),
-                'activity'    => $cmname,
-                'rawgrade'    => format_float($rawgrade, 2),
-                'discount'    => format_float($discount, 1),
-                'finalgrade'  => format_float($finalgrade, 2),
-                'grademax'    => format_float((float) $row->grademax, 2),
-                'penaltydate' => userdate((int) $row->timemodified),
+                'activity'            => $cmname,
+                'completionexpected'  => !empty($row->completionexpected)
+                    ? userdate((int) $row->completionexpected, get_string('strftimedatefullshort', 'langconfig'))
+                    : '',
+                'hasdeadline'         => !empty($row->completionexpected),
+                'rawgrade'            => format_float($rawgrade, 2),
+                'discount'            => format_float($discount, 1),
+                'finalgrade'          => format_float($finalgrade, 2),
+                'grademax'            => format_float((float) $row->grademax, 2),
+                'penaltydate'         => userdate((int) $row->timemodified),
             ];
         }
 

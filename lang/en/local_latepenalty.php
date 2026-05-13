@@ -39,6 +39,7 @@ $string['privacy:metadata'] = 'The Late Penalty plugin does not store any person
 $string['report'] = 'Late penalty report';
 $string['report_col_activity'] = 'Activity';
 $string['report_col_date'] = 'Penalty applied';
+$string['report_col_deadline'] = 'Deadline';
 $string['report_col_discount'] = 'Discount';
 $string['report_col_finalgrade'] = 'Final grade';
 $string['report_col_rawgrade'] = 'Raw grade';

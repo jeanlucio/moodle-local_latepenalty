@@ -32,6 +32,8 @@
             {
                 "fullname": "João Silva",
                 "activity": "Quiz semana 3",
+                "hasdeadline": true,
+                "completionexpected": "7 May 2026",
                 "rawgrade": "8,00",
                 "discount": "10,0",
                 "finalgrade": "7,20",
@@ -41,6 +43,8 @@
             {
                 "fullname": "Maria Souza",
                 "activity": "Tarefa 1",
+                "hasdeadline": false,
+                "completionexpected": "",
                 "rawgrade": "9,50",
                 "discount": "15,0",
                 "finalgrade": "8,08",
@@ -66,6 +70,7 @@
                         <tr>
                             <th scope="col">{{#str}} report_col_student, local_latepenalty {{/str}}</th>
                             <th scope="col">{{#str}} report_col_activity, local_latepenalty {{/str}}</th>
+                            <th scope="col">{{#str}} report_col_deadline, local_latepenalty {{/str}}</th>
                             <th scope="col" class="text-center">
                                 {{#str}} report_col_rawgrade, local_latepenalty {{/str}}
                             </th>
@@ -83,6 +88,7 @@
                         <tr>
                             <td>{{fullname}}</td>
                             <td>{{activity}}</td>
+                            <td>{{#hasdeadline}}{{completionexpected}}{{/hasdeadline}}{{^hasdeadline}}&mdash;{{/hasdeadline}}</td>
                             <td class="text-center">{{rawgrade}} / {{grademax}}</td>
                             <td class="text-center fw-bold local-latepenalty-discount">
                                 &minus;{{discount}}%
