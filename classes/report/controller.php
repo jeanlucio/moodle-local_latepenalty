@@ -250,7 +250,7 @@ class controller {
     }
 
     /**
-     * Build the list of activities that have an enabled rule in this course,
+     * Build the list of activities that have at least one penalty recorded in this course,
      * for the activity filter select.
      *
      * @return array Array of {value, label, selected} objects.
@@ -258,15 +258,17 @@ class controller {
     private function build_cm_options(): array {
         global $DB;
 
-        $sql = "SELECT cm.id, gi.itemname
-                  FROM {local_latepenalty_rules} r
-                  JOIN {course_modules} cm ON cm.id = r.cmid AND cm.course = :courseid
-                  JOIN {modules} mod ON mod.id = cm.module
-                  JOIN {grade_items} gi ON gi.itemmodule = mod.name
-                                      AND gi.iteminstance = cm.instance
-                                      AND gi.courseid = :courseid2
-                                      AND gi.itemtype = 'mod'
-                 WHERE r.enabled = 1
+        $sql = "SELECT DISTINCT cm.id, gi.itemname
+                  FROM {grade_grades_history} ggh
+                  JOIN {grade_items} gi ON gi.id = ggh.itemid
+                                       AND gi.itemtype = 'mod'
+                                       AND gi.courseid = :courseid
+                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {course_modules} cm ON cm.instance = gi.iteminstance
+                                          AND cm.course = :courseid2
+                                          AND cm.module = mod.id
+                  JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
+                 WHERE ggh.source = 'local_latepenalty'
                  ORDER BY gi.itemname";
 
         $rows = $DB->get_records_sql($sql, [
