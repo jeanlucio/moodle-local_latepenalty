@@ -187,10 +187,8 @@ class controller {
         return [
             'penalties'    => $penalties,
             'haspenalties' => !empty($penalties),
-            'formaction'   => (new \moodle_url(
-                '/local/latepenalty/report.php',
-                ['courseid' => $this->courseid]
-            ))->out(false),
+            'formaction'   => (new \moodle_url('/local/latepenalty/report.php'))->out(false),
+            'courseid'     => $this->courseid,
             'useroptions'  => $this->build_user_options(),
             'cmoptions'    => $this->build_cm_options(),
             'filteruserid' => $this->filteruserid,

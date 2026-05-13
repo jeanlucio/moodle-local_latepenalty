@@ -21,7 +21,8 @@
     with the most recent penalty event per student + activity pair.
 
     Context variables required for this template:
-    * formaction   - URL for the filter form action.
+    * formaction   - URL for the filter form action (no query string).
+ * courseid     - Course ID, sent as hidden field to preserve it across filter submissions.
     * useroptions  - Array of {value, label, selected} for the student select.
     * cmoptions    - Array of {value, label, selected} for the activity select.
     * filteruserid - Currently selected user id (0 = all).
@@ -32,7 +33,8 @@
 
     Example context (json):
     {
-        "formaction": "/local/latepenalty/report.php?courseid=2",
+        "formaction": "/local/latepenalty/report.php",
+        "courseid": 2,
         "filteruserid": 0,
         "filtercmid": 0,
         "useroptions": [
@@ -93,6 +95,7 @@
                     {{/cmoptions}}
                 </select>
             </div>
+            <input type="hidden" name="courseid" value="{{courseid}}">
             <div class="col-auto">
                 <button type="submit" class="btn btn-secondary btn-sm">
                     {{#str}} filter_apply, local_latepenalty {{/str}}
