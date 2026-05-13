@@ -46,20 +46,31 @@ class hook_listener {
     /**
      * Inject late-penalty notices into the course page.
      *
-     * Called by the before_course_viewed hook in course/view.php, before
-     * $OUTPUT->header() is invoked.  Embeds per-activity notice strings via
-     * js_call_amd so the AMD module can inject them into the DOM without an
-     * extra AJAX round-trip.
+     * Called by the before_standard_footer_html_generation hook, which fires
+     * after the course content is fully rendered. Queuing the AMD call here
+     * ensures it runs after the courseformat reactive components have
+     * initialised, preventing race conditions in view mode.
      *
-     * @param \core_course\hook\before_course_viewed $hook The hook instance.
+     * Handles both course/view.php (pagetype course-view-*) and
+     * course/section.php (pagetype course-view-section-*).
+     *
+     * @param \core\hook\output\before_standard_footer_html_generation $hook The hook instance.
      * @return void
      */
     public static function inject_course_notices(
-        \core_course\hook\before_course_viewed $hook
+        \core\hook\output\before_standard_footer_html_generation $hook
     ): void {
         global $DB, $PAGE;
 
-        $courseid = (int) $hook->course->id;
+        if (!isloggedin() || isguestuser()) {
+            return;
+        }
+
+        if (!str_starts_with($PAGE->pagetype, 'course-view-')) {
+            return;
+        }
+
+        $courseid = (int) $PAGE->course->id;
 
         // Load all enabled rules for modules in this course in a single query.
         $sql = "SELECT r.cmid, r.daily_penalty, r.max_penalty,
@@ -102,6 +113,57 @@ class hook_listener {
         }
 
         $PAGE->requires->js_call_amd('local_latepenalty/courseinfo', 'init', [$notices]);
+    }
+
+    /**
+     * Inject a late-penalty notice into an activity page header.
+     *
+     * Called by the before_http_headers hook on every page load. Checks
+     * whether the current page is an activity page with an enabled penalty
+     * rule, then registers an AMD call to insert the notice inside the
+     * standard activity-information block.
+     *
+     * @param \core\hook\output\before_http_headers $hook The hook instance.
+     * @return void
+     */
+    public static function inject_activity_notice(
+        \core\hook\output\before_http_headers $hook
+    ): void {
+        global $DB, $PAGE;
+
+        if (!isloggedin() || isguestuser()) {
+            return;
+        }
+
+        $cm = $PAGE->cm;
+        if (!$cm) {
+            return;
+        }
+
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cm->id, 'enabled' => 1]);
+        if (!$rule) {
+            return;
+        }
+
+        $record = (object) [
+            'completionexpected' => $cm->completionexpected ?? 0,
+            'instance'           => $cm->instance,
+            'modname'            => $cm->modname,
+        ];
+
+        $deadline = self::resolve_deadline($record);
+        if (!$deadline) {
+            return;
+        }
+
+        $dateformat = get_string('strftimedatefullshort', 'langconfig');
+        $notice = get_string('courseinfo_notice', 'local_latepenalty', (object) [
+            'deadline' => userdate($deadline, $dateformat),
+            'daily'    => (string) (float) $rule->daily_penalty,
+            'max'      => (string) (float) $rule->max_penalty,
+        ]);
+
+        $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
     }
 
     /**

@@ -1,7 +1,47 @@
 /**
- * Late-penalty notice shown on the course page below each affected activity.
- *
- * Scoped to the plugin class so it does not leak into other components.
+ * CSS ::after fallback badge — shown only before the real badge span is
+ * injected (i.e. before data-lp-injected is set on the li during reactive
+ * courseformat adoption). Suppressed once the span is in place.
+ */
+li[data-lp-penalty]:not([data-lp-injected]) .activityname::after {
+    content: "Penalidade por atraso";
+    display: inline-block;
+    background-color: transparent;
+    color: var(--bs-warning-text-emphasis, #664d03);
+    border: 1.5px solid var(--bs-warning, #ffc107);
+    font-size: 0.7em;
+    font-weight: 600;
+    padding: 0.15em 0.5em;
+    border-radius: 0.25rem;
+    margin-inline-start: 0.5rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: help;
+}
+
+/**
+ * Real badge span — injected after reactive adoption; serves as both
+ * the visual badge and the Bootstrap tooltip anchor.
+ */
+.local-latepenalty-badge {
+    display: inline-block;
+    position: relative;
+    z-index: 2;
+    background-color: transparent;
+    color: var(--bs-warning-text-emphasis, #664d03);
+    border: 1.5px solid var(--bs-warning, #ffc107);
+    font-size: 0.7em;
+    font-weight: 600;
+    padding: 0.15em 0.5em;
+    border-radius: 0.25rem;
+    margin-inline-start: 0.5rem;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: help;
+}
+
+/**
+ * Notice shown inside the activity page header.
  */
 .local-latepenalty-notice {
     color: var(--bs-secondary-color, #6c757d);

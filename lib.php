@@ -32,20 +32,30 @@
 function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform): void {
     global $DB;
 
-    $mform->addElement(
+    // Skip resources — they have no submission or grade.
+    $modname = $formwrapper->get_current()->modulename ?? '';
+    if (!$modname) {
+        return;
+    }
+    $archetype = plugin_supports('mod', $modname, FEATURE_MOD_ARCHETYPE, MOD_ARCHETYPE_OTHER);
+    if ($archetype === MOD_ARCHETYPE_RESOURCE) {
+        return;
+    }
+
+    $headerel = $mform->addElement(
         'header',
         'latepenaltyheader',
         get_string('latepenalty', 'local_latepenalty')
     );
 
-    $mform->addElement(
+    $enabledel = $mform->addElement(
         'advcheckbox',
         'latepenalty_enabled',
         get_string('latepenalty_enabled', 'local_latepenalty')
     );
     $mform->setType('latepenalty_enabled', PARAM_INT);
 
-    $mform->addElement(
+    $dailyel = $mform->addElement(
         'text',
         'latepenalty_daily',
         get_string('latepenalty_daily', 'local_latepenalty'),
@@ -55,7 +65,7 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setDefault('latepenalty_daily', 0.00);
     $mform->hideIf('latepenalty_daily', 'latepenalty_enabled', 'notchecked');
 
-    $mform->addElement(
+    $maxel = $mform->addElement(
         'text',
         'latepenalty_max',
         get_string('latepenalty_max', 'local_latepenalty'),
@@ -64,6 +74,24 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setType('latepenalty_max', PARAM_FLOAT);
     $mform->setDefault('latepenalty_max', 0.00);
     $mform->hideIf('latepenalty_max', 'latepenalty_enabled', 'notchecked');
+
+    // Move the section to appear right after the completion section.
+    // Elements are added to the end by the callback; reorder them before
+    // the first anchor found (tags or competencies follow completion).
+    $anchors = ['tagshdr', 'competencieshdr'];
+    foreach ($anchors as $anchor) {
+        if ($mform->elementExists($anchor)) {
+            $mform->removeElement('latepenaltyheader');
+            $mform->removeElement('latepenalty_enabled');
+            $mform->removeElement('latepenalty_daily');
+            $mform->removeElement('latepenalty_max');
+            $mform->insertElementBefore($headerel, $anchor);
+            $mform->insertElementBefore($enabledel, $anchor);
+            $mform->insertElementBefore($dailyel, $anchor);
+            $mform->insertElementBefore($maxel, $anchor);
+            break;
+        }
+    }
 
     // Load existing values if editing.
     if (!empty($formwrapper->get_current()->coursemodule)) {

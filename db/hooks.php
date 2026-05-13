@@ -26,7 +26,11 @@ defined('MOODLE_INTERNAL') || die();
 
 $callbacks = [
     [
-        'hook'     => \core_course\hook\before_course_viewed::class,
+        'hook'     => \core\hook\output\before_standard_footer_html_generation::class,
         'callback' => \local_latepenalty\hook_listener::class . '::inject_course_notices',
+    ],
+    [
+        'hook'     => \core\hook\output\before_http_headers::class,
+        'callback' => \local_latepenalty\hook_listener::class . '::inject_activity_notice',
     ],
 ];
