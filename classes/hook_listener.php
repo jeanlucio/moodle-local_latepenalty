@@ -122,9 +122,15 @@ class hook_listener {
 
             $override = $useroverrides[(int) $record->cmid] ?? null;
 
-            $deadline = ($override && $override->deadline !== null)
-                ? (int) $override->deadline
-                : self::resolve_deadline($record);
+            if ($override && $override->deadline !== null) {
+                $deadline = (int) $override->deadline;
+            } else {
+                $deadline = penalty_helper::get_module_user_deadline(
+                    $record->modname,
+                    (int) $record->instance,
+                    (int) $USER->id
+                ) ?? self::resolve_deadline($record);
+            }
             if (!$deadline) {
                 continue;
             }
@@ -210,9 +216,15 @@ class hook_listener {
             ['cmid' => $cm->id, 'userid' => (int) $USER->id]
         );
 
-        $deadline = ($override && $override->deadline !== null)
-            ? (int) $override->deadline
-            : self::resolve_deadline($record);
+        if ($override && $override->deadline !== null) {
+            $deadline = (int) $override->deadline;
+        } else {
+            $deadline = penalty_helper::get_module_user_deadline(
+                $cm->modname,
+                (int) $cm->instance,
+                (int) $USER->id
+            ) ?? self::resolve_deadline($record);
+        }
         if (!$deadline) {
             return;
         }

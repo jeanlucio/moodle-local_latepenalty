@@ -138,9 +138,12 @@ class observer {
         // Resolve effective deadline and rates, respecting any per-user override.
         $override = penalty_helper::get_override($cmid, $userid);
 
-        $deadline = ($override && $override->deadline !== null)
-            ? (int) $override->deadline
-            : penalty_helper::get_deadline($cm);
+        if ($override && $override->deadline !== null) {
+            $deadline = (int) $override->deadline;
+        } else {
+            $deadline = penalty_helper::get_module_user_deadline($cm->modname, $cm->instance, $userid)
+                ?? penalty_helper::get_deadline($cm);
+        }
 
         if (!$deadline) {
             return;

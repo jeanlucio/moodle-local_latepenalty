@@ -20,7 +20,7 @@ Unlike Moodle's native late-submission penalty — which is limited to Assignmen
 ### ✨ Features
 
 * 📋 **Universal activity support:** Works with every activity type that uses the Moodle Gradebook, not just Assignments.
-* 📅 **Flexible deadline resolution:** Uses the `completionexpected` date on the course module first; falls back to the module-specific deadline field (`duedate`, `timeclose`, `deadline`, `submissionend`).
+* 📅 **Flexible deadline resolution:** Resolves the effective deadline through a four-level priority chain: plugin per-user override → module-native user/group override (Assignment extensions and overrides, Quiz overrides, Lesson overrides) → `completionexpected` → module deadline field.
 * 📉 **Progressive daily penalty:** Configurable percentage deducted per day late (e.g., 5% per day).
 * 🔒 **Maximum penalty cap:** Deduction never exceeds the configured cap (e.g., 50% maximum), and the final grade is always ≥ 0.
 * 🔄 **Event-driven, zero polling:** Reacts to `user_graded` events in real time — no cron jobs, no scheduled tasks.
@@ -89,7 +89,11 @@ The maximum penalty must be greater than or equal to the daily penalty.
 1. Teacher enables the penalty rule and sets the daily rate and cap when creating/editing the activity.
 2. Student submits the activity after the deadline.
 3. Moodle fires a `user_graded` event; the plugin observer intercepts it.
-4. The plugin resolves the deadline (from `completionexpected` or the module's own deadline field).
+4. The plugin resolves the **effective deadline** for that student through the following priority chain:
+   1. Plugin per-user override (`local_latepenalty_overrides.deadline`)
+   2. Module-native user or group override (Assignment extension/override, Quiz override, Lesson override)
+   3. `completionexpected` on the course module
+   4. Module deadline field (`assign.duedate`, `quiz.timeclose`, etc.)
 5. Days late are calculated and the discount is applied.
 6. The adjusted grade is written back to the Gradebook via the standard grade API.
 7. On the course page, each affected activity shows a contextual status badge: grey with the deadline when on time, yellow with the accumulated penalty when overdue, or red when the maximum is reached. The tooltip adapts accordingly. Both badge and activity-page notice disappear once the student completes the activity.
@@ -106,18 +110,32 @@ Discount   = min(Days Late × Daily Rate, Maximum Cap)
 Final Grade = Raw Grade × (1 − Discount / 100)
 ```
 
-#### Supported Activity Types and Deadline Fields
+#### Deadline Priority Chain
 
-| Activity    | Deadline field resolved      |
+For each student, the effective deadline is resolved in this order (first match wins):
+
+| Priority | Source | Applies to |
+|---|---|---|
+| 1 | Plugin per-user override (`local_latepenalty_overrides`) | All modules |
+| 2 | Module-native user override | Assignment (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Quiz (`quiz_overrides.timeclose`), Lesson (`lesson_overrides.deadline`) |
+| 3 | `completionexpected` on the course module | All modules |
+| 4 | Module deadline field | See table below |
+
+For group overrides at level 2, the **most favourable (latest) deadline** among all of the student's groups is used, mirroring Moodle's native behaviour.
+
+If a teacher sets both a plugin override and a native module override for the same student, the **plugin override takes precedence** (it was set explicitly for penalty purposes).
+
+#### Module Deadline Fields (level 4 fallback)
+
+| Activity    | Deadline field               |
 |-------------|------------------------------|
-| Assignment  | `duedate`                    |
-| Forum       | `duedate`                    |
-| Lesson      | `deadline`                   |
-| Quiz        | `timeclose`                  |
-| SCORM       | `timeclose`                  |
-| Workshop    | `submissionend`              |
-| PlayerGroup | `timeclose`                  |
-| Any type    | `completionexpected` (priority) |
+| Assignment  | `assign.duedate`             |
+| Forum       | `forum.duedate`              |
+| Lesson      | `lesson.deadline`            |
+| Quiz        | `quiz.timeclose`             |
+| SCORM       | `scorm.timeclose`            |
+| Workshop    | `workshop.submissionend`     |
+| PlayerGroup | `playergroup.timeclose`      |
 
 ---
 
@@ -168,7 +186,7 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **29 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **38 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
@@ -176,7 +194,9 @@ Late Penalty ships with **29 PHPUnit tests** that run on every CI push across th
 | `apply_penalty()` | Discount formula, edge cases (0% rate, 100% cap, grade already 0) |
 | `get_submission_time()` | Forum with no posts; individual assignment submission; no submission; team submission (userid = 0) |
 | Observer chain | No rule, disabled rule, no deadline, on-time, 1 day late, 2 days late, capped at max, deadline from module field, team submission penalty |
+| Observer — per-user overrides | Custom deadline (shifts or removes lateness), custom daily rate, custom max cap, waived penalty (daily = 0), all-null override inherits rule |
 | Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
+| Recalculation — per-user overrides | Override deadline, override daily rate, override max cap each take precedence over new rule parameters |
 
 Run them locally with:
 
@@ -230,7 +250,7 @@ Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apen
 ### ✨ Funcionalidades
 
 * 📋 **Suporte universal:** Funciona com qualquer tipo de atividade que use o Livro de Notas do Moodle, não apenas Tarefas.
-* 📅 **Resolução flexível de prazo:** Usa primeiro a data de `completionexpected` do módulo de curso; depois recorre ao campo de prazo específico do módulo (`duedate`, `timeclose`, `deadline`, `submissionend`).
+* 📅 **Resolução flexível de prazo:** Resolve o prazo efetivo por uma cadeia de prioridade de quatro níveis: sobreposição por aluno do plugin → override/extensão nativo do módulo (Tarefa, Questionário, Lição) → `completionexpected` → campo de prazo do módulo.
 * 📉 **Penalidade diária progressiva:** Percentual configurável por dia de atraso (ex.: 5% ao dia).
 * 🔒 **Limite máximo de penalidade:** O desconto nunca excede o teto configurado (ex.: 50% no máximo) e a nota final é sempre ≥ 0.
 * 🔄 **Orientado a eventos, sem polling:** Reage a eventos `user_graded` em tempo real — sem cron jobs ou tarefas agendadas.
@@ -299,7 +319,11 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 1. O professor ativa a regra e define o desconto diário e o limite máximo ao criar/editar a atividade.
 2. O aluno entrega a atividade após o prazo.
 3. O Moodle dispara um evento `user_graded`; o observer do plugin o intercepta.
-4. O plugin resolve o prazo (a partir de `completionexpected` ou do campo de prazo do módulo).
+4. O plugin resolve o **prazo efetivo** para aquele aluno pela seguinte cadeia de prioridade:
+   1. Sobreposição por aluno do plugin (`local_latepenalty_overrides.deadline`)
+   2. Override/extensão nativo do módulo por usuário ou grupo (extensão/override de Tarefa, override de Questionário, override de Lição)
+   3. `completionexpected` no módulo de curso
+   4. Campo de prazo do módulo (`assign.duedate`, `quiz.timeclose`, etc.)
 5. Os dias de atraso são calculados e o desconto é aplicado.
 6. A nota ajustada é registrada de volta no Livro de Notas via API padrão de notas.
 7. Na página do curso, cada atividade afetada exibe um badge de status contextual: cinza com o prazo quando no tempo, amarelo com a penalidade acumulada quando em atraso, ou vermelho ao atingir o máximo. O tooltip adapta o texto a cada estado. O badge e o aviso na página da atividade desaparecem após o aluno concluir a atividade.
@@ -316,18 +340,32 @@ Desconto       = min(Dias de Atraso × Taxa Diária, Limite Máximo)
 Nota Final     = Nota Bruta × (1 − Desconto / 100)
 ```
 
-#### Tipos de Atividade Suportados e Campos de Prazo
+#### Cadeia de Prioridade de Prazo
 
-| Atividade   | Campo de prazo resolvido      |
-|-------------|-------------------------------|
-| Tarefa      | `duedate`                     |
-| Fórum       | `duedate`                     |
-| Lição       | `deadline`                    |
-| Questionário | `timeclose`                  |
-| SCORM       | `timeclose`                   |
-| Oficina     | `submissionend`               |
-| PlayerGroup | `timeclose`                   |
-| Qualquer    | `completionexpected` (prioridade) |
+Para cada aluno, o prazo efetivo é resolvido nesta ordem (o primeiro que corresponder é usado):
+
+| Prioridade | Fonte | Aplica-se a |
+|---|---|---|
+| 1 | Sobreposição por aluno do plugin (`local_latepenalty_overrides`) | Todos os módulos |
+| 2 | Override nativo do módulo por usuário | Tarefa (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Questionário (`quiz_overrides.timeclose`), Lição (`lesson_overrides.deadline`) |
+| 3 | `completionexpected` no módulo de curso | Todos os módulos |
+| 4 | Campo de prazo do módulo | Ver tabela abaixo |
+
+Para overrides de grupo no nível 2, o **prazo mais favorável (mais tardio)** entre todos os grupos do aluno é utilizado, espelhando o comportamento nativo do Moodle.
+
+Se o professor configurar tanto um override do plugin quanto um override nativo do módulo para o mesmo aluno, o **override do plugin tem prioridade** (foi configurado explicitamente para fins de penalidade).
+
+#### Campos de Prazo dos Módulos (fallback nível 4)
+
+| Atividade   | Campo de prazo               |
+|-------------|------------------------------|
+| Tarefa      | `assign.duedate`             |
+| Fórum       | `forum.duedate`              |
+| Lição       | `lesson.deadline`            |
+| Questionário | `quiz.timeclose`            |
+| SCORM       | `scorm.timeclose`            |
+| Oficina     | `workshop.submissionend`     |
+| PlayerGroup | `playergroup.timeclose`      |
 
 ---
 
@@ -378,7 +416,7 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **29 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **38 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
@@ -386,7 +424,9 @@ O Late Penalty inclui **29 testes PHPUnit** executados em todo push de CI na mat
 | `apply_penalty()` | Fórmula de desconto, casos extremos (taxa 0%, limite 100%, nota já em 0) |
 | `get_submission_time()` | Fórum sem postagens; entrega individual; sem entrega; entrega em grupo (userid = 0) |
 | Cadeia do observer | Sem regra, regra desabilitada, sem prazo, no prazo, 1 dia, 2 dias, limitado ao máximo, prazo do campo do módulo, penalidade em entrega em grupo |
+| Observer — sobreposições por aluno | Prazo customizado (desloca ou remove atraso), taxa diária customizada, teto customizado, penalidade isenta (taxa = 0), override nulo herda a regra |
 | Recálculo | Prazo estendido reduz penalidade, prazo estendido restaura nota no prazo, mudança de taxa recalcula, aluno no prazo não é afetado |
+| Recálculo — sobreposições por aluno | Override de prazo, taxa e teto têm prioridade sobre os novos parâmetros da regra |
 
 Para executar localmente:
 

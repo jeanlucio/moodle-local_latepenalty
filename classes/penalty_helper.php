@@ -178,6 +178,135 @@ class penalty_helper {
     }
 
     /**
+     * Get the effective deadline for a specific user considering module-native overrides.
+     *
+     * Reads the module's own override/extension tables before falling back to the
+     * global activity deadline. Returns null for modules that have no native
+     * per-user override system (forum, workshop, scorm, playergroup).
+     *
+     * Priority within each module:
+     *  - assign: extensiondue (assign_user_flags) → user override → best group override
+     *  - quiz:   user override → best group override
+     *  - lesson: user override → best group override
+     *
+     * "Best" group override = the latest (most favourable) deadline among all groups
+     * the user belongs to, mirroring Moodle's native behaviour.
+     *
+     * @param string $modname    Module name (e.g. 'assign', 'quiz').
+     * @param int    $instanceid Module instance ID.
+     * @param int    $userid     User ID.
+     * @return int|null Effective deadline timestamp, or null if no native override exists.
+     */
+    public static function get_module_user_deadline(string $modname, int $instanceid, int $userid): ?int {
+        switch ($modname) {
+            case 'assign':
+                return self::get_assign_user_deadline($instanceid, $userid);
+            case 'quiz':
+                return self::get_quiz_user_deadline($instanceid, $userid);
+            case 'lesson':
+                return self::get_lesson_user_deadline($instanceid, $userid);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Resolve the effective deadline for a student in an Assignment.
+     *
+     * @param int $assignid Assignment instance ID.
+     * @param int $userid   User ID.
+     * @return int|null Effective deadline or null.
+     */
+    private static function get_assign_user_deadline(int $assignid, int $userid): ?int {
+        global $DB;
+
+        // Individual extension granted by the teacher (highest priority).
+        $flags = $DB->get_record('assign_user_flags', ['assignment' => $assignid, 'userid' => $userid], 'extensiondue');
+        if ($flags && !empty($flags->extensiondue)) {
+            return (int) $flags->extensiondue;
+        }
+
+        // User-specific due date override.
+        $row = $DB->get_record('assign_overrides', ['assignid' => $assignid, 'userid' => $userid], 'duedate');
+        if ($row && !empty($row->duedate)) {
+            return (int) $row->duedate;
+        }
+
+        // Best (latest) group override.
+        $row = $DB->get_record_sql(
+            "SELECT MAX(ao.duedate) AS duedate
+               FROM {assign_overrides} ao
+               JOIN {groups_members} gm ON gm.groupid = ao.groupid
+              WHERE ao.assignid = :assignid
+                AND gm.userid = :userid
+                AND ao.duedate > 0",
+            ['assignid' => $assignid, 'userid' => $userid],
+            IGNORE_MISSING
+        );
+        return ($row && !empty($row->duedate)) ? (int) $row->duedate : null;
+    }
+
+    /**
+     * Resolve the effective closing time for a student in a Quiz.
+     *
+     * @param int $quizid Quiz instance ID.
+     * @param int $userid User ID.
+     * @return int|null Effective deadline or null.
+     */
+    private static function get_quiz_user_deadline(int $quizid, int $userid): ?int {
+        global $DB;
+
+        // User-specific timeclose override.
+        $row = $DB->get_record('quiz_overrides', ['quiz' => $quizid, 'userid' => $userid], 'timeclose');
+        if ($row && !empty($row->timeclose)) {
+            return (int) $row->timeclose;
+        }
+
+        // Best (latest) group override.
+        $row = $DB->get_record_sql(
+            "SELECT MAX(qo.timeclose) AS timeclose
+               FROM {quiz_overrides} qo
+               JOIN {groups_members} gm ON gm.groupid = qo.groupid
+              WHERE qo.quiz = :quizid
+                AND gm.userid = :userid
+                AND qo.timeclose > 0",
+            ['quizid' => $quizid, 'userid' => $userid],
+            IGNORE_MISSING
+        );
+        return ($row && !empty($row->timeclose)) ? (int) $row->timeclose : null;
+    }
+
+    /**
+     * Resolve the effective deadline for a student in a Lesson.
+     *
+     * @param int $lessonid Lesson instance ID.
+     * @param int $userid   User ID.
+     * @return int|null Effective deadline or null.
+     */
+    private static function get_lesson_user_deadline(int $lessonid, int $userid): ?int {
+        global $DB;
+
+        // User-specific deadline override.
+        $row = $DB->get_record('lesson_overrides', ['lessonid' => $lessonid, 'userid' => $userid], 'deadline');
+        if ($row && !empty($row->deadline)) {
+            return (int) $row->deadline;
+        }
+
+        // Best (latest) group override.
+        $row = $DB->get_record_sql(
+            "SELECT MAX(lo.deadline) AS deadline
+               FROM {lesson_overrides} lo
+               JOIN {groups_members} gm ON gm.groupid = lo.groupid
+              WHERE lo.lessonid = :lessonid
+                AND gm.userid = :userid
+                AND lo.deadline > 0",
+            ['lessonid' => $lessonid, 'userid' => $userid],
+            IGNORE_MISSING
+        );
+        return ($row && !empty($row->deadline)) ? (int) $row->deadline : null;
+    }
+
+    /**
      * Get the per-user override record for a course module, if one exists.
      *
      * @param int $cmid   Course module ID.

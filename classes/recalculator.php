@@ -98,9 +98,15 @@ class recalculator {
 
             // Resolve effective deadline and rates for this student.
             $override = $overridesbyuserid[$userid] ?? null;
-            $effectivedeadline = ($override && $override->deadline !== null)
-                ? (int) $override->deadline
-                : $newdeadline;
+            if ($override && $override->deadline !== null) {
+                $effectivedeadline = (int) $override->deadline;
+            } else {
+                $effectivedeadline = penalty_helper::get_module_user_deadline(
+                    $cm->modname,
+                    $cm->instance,
+                    $userid
+                ) ?? $newdeadline;
+            }
             $effectivedaily = ($override && $override->daily_penalty !== null)
                 ? (float) $override->daily_penalty
                 : $daily;
