@@ -56,7 +56,7 @@ Análise realizada em maio de 2026 com base no código-fonte do Moodle 5.2.
 | **Prazo individual via override** (professor dá extensão a um aluno específico no Assign) | ✅ Lê `override_exists()` e `extensionduedate` | ❌ Ignora — penaliza com prazo geral | Alto — injustiça com o aluno |
 | **Nota manualmente sobrescrita** pelo professor no livro de notas | ✅ Pula (`grade->overridden`) | ❌ Aplica penalidade sobre a nota sobrescrita | Médio |
 | **Nota bloqueada** (`locked`) | ✅ Pula | ❌ Tenta aplicar | Baixo — grade_item recusa o update |
-| **Submissão em grupo** (team submission do Assign) | ✅ Usa `get_group_submission()` | ❌ Não tratado | Médio (se usado) |
+| **Submissão em grupo** (team submission do Assign) | ✅ Usa `get_group_submission()` | ✅ Detecta `userid = 0` e busca pelo groupid do aluno | — |
 | **Nota zero** (grademin) | ✅ Pula | ⚠️ Aplica, mas 0 × X = 0 (inócuo) | Nenhum |
 | **Preview** (calcular sem aplicar) | ✅ | ❌ | Funcionalidade ausente |
 

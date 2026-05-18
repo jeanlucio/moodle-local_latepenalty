@@ -341,9 +341,40 @@ final class observer_test extends advanced_testcase {
         $student = $this->getDataGenerator()->create_user();
         $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
 
-        $cm = (object) ['modname' => 'assign', 'instance' => $assign->id];
+        $cm = (object) ['modname' => 'assign', 'instance' => $assign->id, 'course' => $course->id];
 
         self::assertNull($this->submission_time($student->id, $cm));
+    }
+
+    /**
+     * Assign team submission (userid = 0, groupid = X) returns the group submission timestamp.
+     */
+    public function test_assign_team_submission_time_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student->id]);
+
+        $expected = mktime(14, 30, 0, 5, 11, 2026);
+        $DB->insert_record('assign_submission', (object) [
+            'assignment'    => $assign->id,
+            'userid'        => 0,
+            'groupid'       => $group->id,
+            'timecreated'   => $expected,
+            'timemodified'  => $expected,
+            'status'        => 'submitted',
+            'attemptnumber' => 0,
+            'latest'        => 1,
+        ]);
+
+        $cm = (object) ['modname' => 'assign', 'instance' => $assign->id, 'course' => $course->id];
+
+        self::assertSame($expected, $this->submission_time($student->id, $cm));
     }
 
     // Full observer chain: integration tests via assign.
@@ -521,6 +552,68 @@ final class observer_test extends advanced_testcase {
             (float) $grade->finalgrade,
             0.01,
             'Penalty should apply when deadline is read from assign.duedate (completionexpected=0).'
+        );
+    }
+
+    /**
+     * Team submission 1 day late → 10% penalty applied through the full observer chain.
+     *
+     * The assign is configured with teamsubmission = 1. The submission record has
+     * userid = 0 and groupid = <group>. The plugin must resolve the group submission
+     * timestamp and penalise the student accordingly.
+     */
+    public function test_team_submission_penalty_applied(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student->id]);
+
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course'         => $course->id,
+            'grade'          => 100,
+            'duedate'        => 0,
+            'teamsubmission' => 1,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+
+        $submissiontime = $deadline + DAYSECS;
+        $DB->insert_record('assign_submission', (object) [
+            'assignment'    => $assign->id,
+            'userid'        => 0,
+            'groupid'       => $group->id,
+            'timecreated'   => $submissiontime,
+            'timemodified'  => $submissiontime,
+            'status'        => 'submitted',
+            'attemptnumber' => 0,
+            'latest'        => 1,
+        ]);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'assign',
+            'iteminstance' => $assign->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_final_grade($student->id, 100.0, 'test');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        self::assertEqualsWithDelta(
+            90.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'Penalty must apply when submission is a group record (userid = 0).'
         );
     }
 

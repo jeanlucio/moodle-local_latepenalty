@@ -96,6 +96,8 @@ The maximum penalty must be greater than or equal to the daily penalty.
 
 > **Note — manual grading without a submission:** The penalty is based on the student's **submission timestamp**, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
 
+> **Note — Assignment team (group) submissions:** When an Assignment is configured for team submissions with *Require all team members to submit* **disabled**, Moodle stores a single submission record for the whole group (`userid = 0`). The plugin automatically detects this case, looks up the student's groups, and uses the **group submission timestamp** as the basis for penalty calculation for every group member. When *Require all team members to submit* is **enabled**, Moodle records an individual submission per member and each student's own submission time is used.
+
 #### Calculation Formula
 
 ```
@@ -166,20 +168,22 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **22 PHPUnit unit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **29 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
 | `calculate_days_late()` | Timestamp arithmetic — on-time, exactly 1 day, fractional days rounded up |
 | `apply_penalty()` | Discount formula, edge cases (0% rate, 100% cap, grade already 0) |
-| `get_submission_time()` | Forum with no posts returns null; assignment with submission returns timestamp |
-| Observer chain | No rule, disabled rule, no deadline, on-time (no change), 1 day late, 2 days late, penalty capped at max |
+| `get_submission_time()` | Forum with no posts; individual assignment submission; no submission; team submission (userid = 0) |
+| Observer chain | No rule, disabled rule, no deadline, on-time, 1 day late, 2 days late, capped at max, deadline from module field, team submission penalty |
+| Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
 
 Run them locally with:
 
 ```bash
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
+vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
 ```
 
 ---
@@ -302,6 +306,8 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 
 > **Observação — avaliação sem entrega:** A penalidade é baseada no **timestamp de entrega do aluno**, não no momento em que o professor avalia. Se um professor atribuir nota a um aluno que nunca entregou (ex.: Fórum em que o aluno não fez nenhuma postagem), não existe registro de entrega e o plugin ignora a penalidade. Isso é intencional: sem entrega, não há atraso a medir.
 
+> **Observação — Tarefas com entrega em grupo:** Quando uma Tarefa é configurada para entregas em grupo com *Exigir que todos os membros do grupo façam a entrega* **desativado**, o Moodle registra uma única entrega para o grupo inteiro (`userid = 0`). O plugin detecta automaticamente esse caso, identifica os grupos do aluno e usa o **timestamp de entrega do grupo** como base para o cálculo da penalidade de todos os membros. Quando a opção está **ativada**, o Moodle registra uma entrega individual por membro e o timestamp de cada aluno é usado.
+
 #### Fórmula de Cálculo
 
 ```
@@ -372,20 +378,22 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **22 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **29 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
 | `calculate_days_late()` | Aritmética de timestamps — no prazo, exatamente 1 dia, dias fracionados arredondados para cima |
 | `apply_penalty()` | Fórmula de desconto, casos extremos (taxa 0%, limite 100%, nota já em 0) |
-| `get_submission_time()` | Fórum sem postagens retorna null; Tarefa com entrega retorna timestamp |
-| Cadeia do observer | Sem regra, regra desabilitada, sem prazo, no prazo (sem alteração), 1 dia de atraso, 2 dias de atraso, penalidade limitada ao máximo |
+| `get_submission_time()` | Fórum sem postagens; entrega individual; sem entrega; entrega em grupo (userid = 0) |
+| Cadeia do observer | Sem regra, regra desabilitada, sem prazo, no prazo, 1 dia, 2 dias, limitado ao máximo, prazo do campo do módulo, penalidade em entrega em grupo |
+| Recálculo | Prazo estendido reduz penalidade, prazo estendido restaura nota no prazo, mudança de taxa recalcula, aluno no prazo não é afetado |
 
 Para executar localmente:
 
 ```bash
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
+vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
 ```
 
 ---

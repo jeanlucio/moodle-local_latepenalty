@@ -107,6 +107,32 @@ class penalty_helper {
                     ['assignment' => $cm->instance, 'userid' => $userid],
                     IGNORE_MISSING
                 );
+                if ($row) {
+                    return (int) $row->timemodified;
+                }
+
+                // Fall back to team submission: userid = 0, keyed by groupid.
+                $courseid = (int) ($cm->course ?? 0);
+                if (!$courseid) {
+                    return null;
+                }
+                $usergroups = groups_get_user_groups($courseid, $userid);
+                $groupids = array_values($usergroups[0] ?? []);
+                if (empty($groupids)) {
+                    return null;
+                }
+                [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'grp');
+                $row = $DB->get_record_sql(
+                    "SELECT timemodified
+                       FROM {assign_submission}
+                      WHERE assignment = :assignment
+                        AND userid = 0
+                        AND status = 'submitted'
+                        AND groupid $insql
+                   ORDER BY timemodified DESC",
+                    array_merge(['assignment' => $cm->instance], $inparams),
+                    IGNORE_MISSING
+                );
                 return $row ? (int) $row->timemodified : null;
 
             case 'quiz':
