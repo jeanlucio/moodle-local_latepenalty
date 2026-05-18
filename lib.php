@@ -75,6 +75,24 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setDefault('latepenalty_max', 0.00);
     $mform->hideIf('latepenalty_max', 'latepenalty_enabled', 'notchecked');
 
+    $recalcdeadlineel = $mform->addElement(
+        'advcheckbox',
+        'latepenalty_recalc_deadline',
+        get_string('latepenalty_recalc_deadline', 'local_latepenalty')
+    );
+    $mform->setType('latepenalty_recalc_deadline', PARAM_INT);
+    $mform->setDefault('latepenalty_recalc_deadline', 1);
+    $mform->hideIf('latepenalty_recalc_deadline', 'latepenalty_enabled', 'notchecked');
+
+    $recalcrateel = $mform->addElement(
+        'advcheckbox',
+        'latepenalty_recalc_rate',
+        get_string('latepenalty_recalc_rate', 'local_latepenalty')
+    );
+    $mform->setType('latepenalty_recalc_rate', PARAM_INT);
+    $mform->setDefault('latepenalty_recalc_rate', 1);
+    $mform->hideIf('latepenalty_recalc_rate', 'latepenalty_enabled', 'notchecked');
+
     // Move the section to appear right after the completion section.
     // Elements are added to the end by the callback; reorder them before
     // the first anchor found (tags or competencies follow completion).
@@ -85,10 +103,14 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
             $mform->removeElement('latepenalty_enabled');
             $mform->removeElement('latepenalty_daily');
             $mform->removeElement('latepenalty_max');
+            $mform->removeElement('latepenalty_recalc_deadline');
+            $mform->removeElement('latepenalty_recalc_rate');
             $mform->insertElementBefore($headerel, $anchor);
             $mform->insertElementBefore($enabledel, $anchor);
             $mform->insertElementBefore($dailyel, $anchor);
             $mform->insertElementBefore($maxel, $anchor);
+            $mform->insertElementBefore($recalcdeadlineel, $anchor);
+            $mform->insertElementBefore($recalcrateel, $anchor);
             break;
         }
     }
@@ -102,6 +124,8 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
             $mform->setDefault('latepenalty_enabled', $existing->enabled);
             $mform->setDefault('latepenalty_daily', $existing->daily_penalty);
             $mform->setDefault('latepenalty_max', $existing->max_penalty);
+            $mform->setDefault('latepenalty_recalc_deadline', $existing->recalc_on_deadline ?? 1);
+            $mform->setDefault('latepenalty_recalc_rate', $existing->recalc_on_rate ?? 1);
         }
     }
 }
@@ -193,21 +217,49 @@ function local_latepenalty_extend_navigation_course(
 function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdClass $course): stdClass {
     global $DB;
 
-    // Ensure coursemodule ID exists.
     if (!isset($data->coursemodule) || empty($data->coursemodule)) {
         return $data;
     }
 
-    $cmid = $data->coursemodule;
+    $cmid = (int) $data->coursemodule;
 
     $record = new stdClass();
     $record->cmid = $cmid;
     $record->enabled = !empty($data->latepenalty_enabled) ? 1 : 0;
     $record->daily_penalty = isset($data->latepenalty_daily) ? (float) $data->latepenalty_daily : 0.00;
     $record->max_penalty = isset($data->latepenalty_max) ? (float) $data->latepenalty_max : 0.00;
+    $record->recalc_on_deadline = !empty($data->latepenalty_recalc_deadline) ? 1 : 0;
+    $record->recalc_on_rate = !empty($data->latepenalty_recalc_rate) ? 1 : 0;
 
-    // Check if record already exists.
     $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
+
+    // Resolve the current (post-save) deadline from the module.
+    $cm          = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
+    $newdeadline = \local_latepenalty\penalty_helper::get_deadline($cm) ?? 0;
+
+    if ($existing && $record->enabled && $existing->enabled) {
+        $deadlinechanged = $newdeadline && (int) $existing->last_deadline !== $newdeadline;
+        $ratechanged     = (
+            abs((float) $existing->daily_penalty - $record->daily_penalty) > 0.001 ||
+            abs((float) $existing->max_penalty   - $record->max_penalty)   > 0.001
+        );
+
+        $shouldrecalc = (
+            ($deadlinechanged && $record->recalc_on_deadline) ||
+            ($ratechanged     && $record->recalc_on_rate)
+        );
+
+        if ($shouldrecalc) {
+            \local_latepenalty\recalculator::recalculate(
+                $cmid,
+                $newdeadline ?: (int) $existing->last_deadline,
+                $record->daily_penalty,
+                $record->max_penalty
+            );
+        }
+    }
+
+    $record->last_deadline = $newdeadline;
 
     if ($existing) {
         $record->id = $existing->id;
