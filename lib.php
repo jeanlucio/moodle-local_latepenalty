@@ -239,9 +239,9 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
 
     if ($existing && $record->enabled && $existing->enabled) {
         $deadlinechanged = $newdeadline && (int) $existing->last_deadline !== $newdeadline;
-        $ratechanged     = (
+        $ratechanged = (
             abs((float) $existing->daily_penalty - $record->daily_penalty) > 0.001 ||
-            abs((float) $existing->max_penalty   - $record->max_penalty)   > 0.001
+            abs((float) $existing->max_penalty - $record->max_penalty) > 0.001
         );
 
         $shouldrecalc = (

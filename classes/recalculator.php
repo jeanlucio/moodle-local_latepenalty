@@ -58,10 +58,10 @@ class recalculator {
                   FROM {grade_grades_history} ggh
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
-                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
                                           AND cm.id = :cmid
-                                          AND cm.module = mod.id
+                                          AND cm.module = m.id
                  WHERE ggh.source = 'local_latepenalty'
                  ORDER BY ggh.timemodified DESC";
 
