@@ -83,21 +83,26 @@ class override_form extends \moodleform {
         );
         $mform->setType('deadline', PARAM_INT);
 
-        $mform->addElement(
-            'text',
-            'daily_penalty',
-            get_string('override_daily', 'local_latepenalty'),
-            ['size' => 10]
-        );
-        $mform->setType('daily_penalty', PARAM_RAW);
+        $rule             = $data['rule'] ?? null;
+        $dailyplaceholder = $rule ? (string) $rule->daily_penalty : '';
+        $maxplaceholder   = $rule ? (string) $rule->max_penalty : '';
+        $enablelabel      = get_string('enable', 'moodle');
 
-        $mform->addElement(
-            'text',
-            'max_penalty',
-            get_string('override_max', 'local_latepenalty'),
-            ['size' => 10]
-        );
-        $mform->setType('max_penalty', PARAM_RAW);
+        // Daily penalty: checkbox + text, mirroring the optional date_time_selector pattern.
+        $dailygroup   = [];
+        $dailygroup[] = $mform->createElement('advcheckbox', 'enable', '', $enablelabel);
+        $dailygroup[] = $mform->createElement('text', 'value', '', ['size' => 10, 'placeholder' => $dailyplaceholder]);
+        $mform->addGroup($dailygroup, 'daily_grp', get_string('override_daily', 'local_latepenalty'), ' ');
+        $mform->disabledIf('daily_grp[value]', 'daily_grp[enable]', 'notchecked');
+        $mform->setType('daily_grp[value]', PARAM_RAW);
+
+        // Max penalty: checkbox + text, same pattern.
+        $maxgroup   = [];
+        $maxgroup[] = $mform->createElement('advcheckbox', 'enable', '', $enablelabel);
+        $maxgroup[] = $mform->createElement('text', 'value', '', ['size' => 10, 'placeholder' => $maxplaceholder]);
+        $mform->addGroup($maxgroup, 'max_grp', get_string('override_max', 'local_latepenalty'), ' ');
+        $mform->disabledIf('max_grp[value]', 'max_grp[enable]', 'notchecked');
+        $mform->setType('max_grp[value]', PARAM_RAW);
 
         $mform->addElement(
             'static',
@@ -119,20 +124,28 @@ class override_form extends \moodleform {
     public function validation($data, $files): array {
         $errors = parent::validation($data, $files);
 
-        $daily = trim((string) ($data['daily_penalty'] ?? ''));
-        $max   = trim((string) ($data['max_penalty'] ?? ''));
+        $dailygrp    = $data['daily_grp'] ?? [];
+        $maxgrp      = $data['max_grp'] ?? [];
+        $enabledaily = !empty($dailygrp['enable']);
+        $enablemax = !empty($maxgrp['enable']);
+        $daily = $enabledaily ? trim((string) ($dailygrp['value'] ?? '')) : '';
+        $max = $enablemax ? trim((string) ($maxgrp['value'] ?? '')) : '';
 
-        if ($daily !== '' && (!is_numeric($daily) || (float) $daily < 0 || (float) $daily > 100)) {
-            $errors['daily_penalty'] = get_string('error_daily_range', 'local_latepenalty');
+        if ($enabledaily && $daily === '') {
+            $errors['daily_grp'] = get_string('required');
+        } else if ($daily !== '' && (!is_numeric($daily) || (float) $daily < 0 || (float) $daily > 100)) {
+            $errors['daily_grp'] = get_string('error_daily_range', 'local_latepenalty');
         }
 
-        if ($max !== '' && (!is_numeric($max) || (float) $max < 0 || (float) $max > 100)) {
-            $errors['max_penalty'] = get_string('error_max_range', 'local_latepenalty');
+        if ($enablemax && $max === '') {
+            $errors['max_grp'] = get_string('required');
+        } else if ($max !== '' && (!is_numeric($max) || (float) $max < 0 || (float) $max > 100)) {
+            $errors['max_grp'] = get_string('error_max_range', 'local_latepenalty');
         }
 
         if ($daily !== '' && $max !== '' && is_numeric($daily) && is_numeric($max)) {
             if ((float) $daily > (float) $max) {
-                $errors['max_penalty'] = get_string('error_max_less_than_daily', 'local_latepenalty');
+                $errors['max_grp'] = get_string('error_max_less_than_daily', 'local_latepenalty');
             }
         }
 

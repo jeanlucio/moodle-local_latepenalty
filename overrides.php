@@ -164,8 +164,10 @@ if ($action === 'add' || $action === 'edit') {
     }
 
     if ($formdata = $form->get_data()) {
-        $dailyraw = trim((string) ($formdata->daily_penalty ?? ''));
-        $maxraw   = trim((string) ($formdata->max_penalty ?? ''));
+        $dailygrp = (array) ($formdata->daily_grp ?? []);
+        $maxgrp   = (array) ($formdata->max_grp ?? []);
+        $dailyraw = !empty($dailygrp['enable']) ? trim((string) ($dailygrp['value'] ?? '')) : '';
+        $maxraw = !empty($maxgrp['enable']) ? trim((string) ($maxgrp['value'] ?? '')) : '';
 
         $record               = new stdClass();
         $record->cmid         = $cmid;
@@ -192,19 +194,21 @@ if ($action === 'add' || $action === 'edit') {
     }
 
     if ($editingoverride) {
-        $dailydisplay = ($editingoverride->daily_penalty !== null)
-            ? (string) $editingoverride->daily_penalty
-            : '';
-        $maxdisplay = ($editingoverride->max_penalty !== null)
-            ? (string) $editingoverride->max_penalty
-            : '';
         $form->set_data((object) [
-            'cmid'          => $cmid,
-            'overrideid'    => $overrideid,
-            'userid'        => $editingoverride->userid,
-            'deadline'      => $editingoverride->deadline ?? 0,
-            'daily_penalty' => $dailydisplay,
-            'max_penalty'   => $maxdisplay,
+            'cmid'       => $cmid,
+            'overrideid' => $overrideid,
+            'userid'     => $editingoverride->userid,
+            'deadline'   => $editingoverride->deadline ?? 0,
+            'daily_grp'  => [
+                'enable' => ($editingoverride->daily_penalty !== null) ? 1 : 0,
+                'value'  => ($editingoverride->daily_penalty !== null)
+                    ? (string) $editingoverride->daily_penalty : '',
+            ],
+            'max_grp'    => [
+                'enable' => ($editingoverride->max_penalty !== null) ? 1 : 0,
+                'value'  => ($editingoverride->max_penalty !== null)
+                    ? (string) $editingoverride->max_penalty : '',
+            ],
         ]);
     }
 
