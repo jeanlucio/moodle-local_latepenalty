@@ -23,6 +23,8 @@
  *  - get_submission_time(): forum with no posts returns null
  *  - Full observer chain via assign: no rule, rule disabled, no deadline,
  *    on-time, 1 day late, 2 days late, penalty capped at max
+ *  - Per-user override: custom deadline, custom daily rate, custom max cap,
+ *    penalty waived (daily = 0), all-null override inherits rule
  *
  * @package    local_latepenalty
  * @category   test
@@ -203,6 +205,39 @@ final class observer_test extends advanced_testcase {
                 'recalc_on_deadline'  => 1,
                 'recalc_on_rate'      => 1,
                 'last_deadline'       => 0,
+            ]);
+        }
+    }
+
+    /**
+     * Insert or update a per-user penalty override for the given course module.
+     *
+     * @param int        $cmid     Course module ID.
+     * @param int        $userid   User ID.
+     * @param int|null   $deadline Custom deadline timestamp; null = inherit from activity.
+     * @param float|null $daily    Custom daily penalty percentage; null = inherit from rule.
+     * @param float|null $max      Custom maximum penalty percentage; null = inherit from rule.
+     * @return void
+     */
+    private function upsert_override(int $cmid, int $userid, ?int $deadline, ?float $daily, ?float $max): void {
+        global $DB;
+
+        $existing = $DB->get_record('local_latepenalty_overrides', ['cmid' => $cmid, 'userid' => $userid]);
+        if ($existing) {
+            $existing->deadline      = $deadline;
+            $existing->daily_penalty = $daily;
+            $existing->max_penalty   = $max;
+            $existing->timemodified  = time();
+            $DB->update_record('local_latepenalty_overrides', $existing);
+        } else {
+            $DB->insert_record('local_latepenalty_overrides', (object) [
+                'cmid'         => $cmid,
+                'userid'       => $userid,
+                'deadline'     => $deadline,
+                'daily_penalty' => $daily,
+                'max_penalty'  => $max,
+                'timecreated'  => time(),
+                'timemodified' => time(),
             ]);
         }
     }
@@ -615,6 +650,75 @@ final class observer_test extends advanced_testcase {
             0.01,
             'Penalty must apply when submission is a group record (userid = 0).'
         );
+    }
+
+    // Override scenarios: observer must respect per-user overrides.
+
+    /**
+     * Override deadline shifts lateness: student 3 days late by rule, 2 days late by override.
+     *
+     * Rule deadline is 5 days ago. Override deadline = rule + 1 day (4 days ago).
+     * Student submitted at rule + 3 days (2 days ago) → 2 days late → 20% off: 100 → 80.
+     */
+    public function test_override_deadline_reduces_lateness(): void {
+        $s = $this->make_scenario(3 * DAYSECS);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, $s['deadline'] + DAYSECS, null, null);
+        self::assertEqualsWithDelta(80.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * Override deadline makes an otherwise-late submission on time.
+     *
+     * Rule deadline is 5 days ago. Student submitted 1 second after it (1-day penalty).
+     * Override extends deadline by 2 days → student is now on time → grade unchanged.
+     */
+    public function test_override_deadline_makes_ontime(): void {
+        $s = $this->make_scenario(1);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, $s['deadline'] + 2 * DAYSECS, null, null);
+        self::assertEqualsWithDelta(100.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * Override daily rate: student 1 day late, override 5%/day instead of rule's 10%.
+     *
+     * 1 × 5% = 5% off → 95.
+     */
+    public function test_override_daily_rate(): void {
+        $s = $this->make_scenario(DAYSECS);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, 5.0, null);
+        self::assertEqualsWithDelta(95.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * Override max cap: student 10 days late at 10%/day, override caps penalty at 20%.
+     *
+     * Without override: 10 × 10% = 100% → capped at 50% → 50.
+     * With override max = 20%: 100% → capped at 20% → 80.
+     */
+    public function test_override_max_penalty(): void {
+        $s = $this->make_scenario(10 * DAYSECS);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, null, 20.0);
+        self::assertEqualsWithDelta(80.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * Override with daily_penalty = 0 waives the penalty entirely.
+     */
+    public function test_override_waives_penalty(): void {
+        $s = $this->make_scenario(DAYSECS);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, 0.0, null);
+        self::assertEqualsWithDelta(100.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * Override with all null fields inherits rule values — identical to no override.
+     *
+     * Rule: 10%/day, max 50%. 1 day late → 90.
+     */
+    public function test_override_null_fields_inherit_rule(): void {
+        $s = $this->make_scenario(DAYSECS);
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, null, null);
+        self::assertEqualsWithDelta(90.0, $this->grade_and_read($s, 100.0), 0.01);
     }
 
     /**

@@ -22,6 +22,7 @@
  *  - Extended deadline past submission restores the raw grade
  *  - Changed daily rate recalculates the penalty
  *  - Students with no penalty history record are left untouched
+ *  - Per-user override: override deadline, override daily rate, override max cap
  *
  * @package    local_latepenalty
  * @category   test
@@ -173,6 +174,39 @@ final class recalculator_test extends advanced_testcase {
         return (float) ($grade->finalgrade ?? 0.0);
     }
 
+    /**
+     * Insert or update a per-user penalty override for the given course module.
+     *
+     * @param int        $cmid     Course module ID.
+     * @param int        $userid   User ID.
+     * @param int|null   $deadline Custom deadline timestamp; null = inherit from activity.
+     * @param float|null $daily    Custom daily penalty percentage; null = inherit from rule.
+     * @param float|null $max      Custom maximum penalty percentage; null = inherit from rule.
+     * @return void
+     */
+    private function upsert_override(int $cmid, int $userid, ?int $deadline, ?float $daily, ?float $max): void {
+        global $DB;
+
+        $existing = $DB->get_record('local_latepenalty_overrides', ['cmid' => $cmid, 'userid' => $userid]);
+        if ($existing) {
+            $existing->deadline      = $deadline;
+            $existing->daily_penalty = $daily;
+            $existing->max_penalty   = $max;
+            $existing->timemodified  = time();
+            $DB->update_record('local_latepenalty_overrides', $existing);
+        } else {
+            $DB->insert_record('local_latepenalty_overrides', (object) [
+                'cmid'         => $cmid,
+                'userid'       => $userid,
+                'deadline'     => $deadline,
+                'daily_penalty' => $daily,
+                'max_penalty'  => $max,
+                'timecreated'  => time(),
+                'timemodified' => time(),
+            ]);
+        }
+    }
+
     // Tests.
 
     /**
@@ -220,6 +254,61 @@ final class recalculator_test extends advanced_testcase {
         recalculator::recalculate($s['assign']->cmid, $s['deadline'], 5.0, 50.0);
 
         self::assertEqualsWithDelta(90.0, $this->read_final_grade($s), 0.01);
+    }
+
+    // Override scenarios: recalculator must respect per-user overrides.
+
+    /**
+     * Recalculation uses override deadline instead of the new rule deadline.
+     *
+     * Student submitted at rule_deadline + 3 days. Override deadline = rule_deadline + 1 day,
+     * so student is 2 days late relative to override. Recalculate passes new rule deadline
+     * = rule_deadline + 2 days; without override that yields 1 day late (90), but the
+     * override locks the effective deadline at +1 day → 2 days late → 20% off → 80.
+     */
+    public function test_recalculate_respects_override_deadline(): void {
+        $s = $this->make_scenario(3 * DAYSECS);
+        $this->grade_via_module($s, 100.0);
+
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, $s['deadline'] + DAYSECS, null, null);
+
+        recalculator::recalculate($s['assign']->cmid, $s['deadline'] + 2 * DAYSECS, 10.0, 50.0);
+
+        self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
+    }
+
+    /**
+     * Recalculation uses override daily rate instead of the new rule rate.
+     *
+     * Student 2 days late. Override daily = 5%/day. Recalculate with rule rate = 15%/day;
+     * the override yields 2 × 5% = 10% off → 90 (not 2 × 15% = 30% off → 70).
+     */
+    public function test_recalculate_respects_override_daily_rate(): void {
+        $s = $this->make_scenario(2 * DAYSECS);
+        $this->grade_via_module($s, 100.0);
+
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, 5.0, null);
+
+        recalculator::recalculate($s['assign']->cmid, $s['deadline'], 15.0, 50.0);
+
+        self::assertEqualsWithDelta(90.0, $this->read_final_grade($s), 0.01);
+    }
+
+    /**
+     * Recalculation uses override max cap instead of the new rule max.
+     *
+     * Student 10 days late at 10%/day. Override max = 20%. Recalculate with rule max = 80%;
+     * the override caps the penalty at 20% → 80 (not 80% off → 20).
+     */
+    public function test_recalculate_respects_override_max(): void {
+        $s = $this->make_scenario(10 * DAYSECS);
+        $this->grade_via_module($s, 100.0);
+
+        $this->upsert_override($s['assign']->cmid, $s['student']->id, null, null, 20.0);
+
+        recalculator::recalculate($s['assign']->cmid, $s['deadline'], 10.0, 80.0);
+
+        self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
     }
 
     /**

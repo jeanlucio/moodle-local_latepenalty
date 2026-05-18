@@ -86,13 +86,11 @@ class recalculator {
 
         $isautograded = in_array($cm->modname, penalty_helper::$autogradedmodules);
 
-        // Load all per-user overrides for this cmid in a single query.
-        $overridesbyuserid = $DB->get_records(
-            'local_latepenalty_overrides',
-            ['cmid' => $cmid],
-            '',
-            'userid, deadline, daily_penalty, max_penalty'
-        );
+        // Load all per-user overrides for this cmid in a single query, keyed by userid.
+        $overridesbyuserid = [];
+        foreach ($DB->get_records('local_latepenalty_overrides', ['cmid' => $cmid]) as $override) {
+            $overridesbyuserid[(int) $override->userid] = $override;
+        }
 
         foreach ($students as $student) {
             $userid   = (int) $student->userid;
