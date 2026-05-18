@@ -59,6 +59,7 @@ $string['override_delete'] = 'Delete';
 $string['override_deleted'] = 'Override deleted successfully.';
 $string['override_edit'] = 'Edit';
 $string['override_empty'] = 'No overrides have been set for this activity.';
+$string['override_error_nothing_enabled'] = 'Enable at least one field to create an override.';
 $string['override_hint'] = 'Leave a field blank to inherit the activity\'s configured value.';
 $string['override_inherit'] = 'Activity default';
 $string['override_max'] = 'Maximum penalty (%)';

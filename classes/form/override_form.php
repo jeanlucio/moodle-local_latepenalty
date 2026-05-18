@@ -131,6 +131,11 @@ class override_form extends \moodleform {
         $daily = $enabledaily ? trim((string) ($dailygrp['value'] ?? '')) : '';
         $max = $enablemax ? trim((string) ($maxgrp['value'] ?? '')) : '';
 
+        $deadlineenabled = !empty($data['deadline']);
+        if (!$deadlineenabled && !$enabledaily && !$enablemax) {
+            $errors['daily_grp'] = get_string('override_error_nothing_enabled', 'local_latepenalty');
+        }
+
         if ($enabledaily && $daily === '') {
             $errors['daily_grp'] = get_string('required');
         } else if ($daily !== '' && (!is_numeric($daily) || (float) $daily < 0 || (float) $daily > 100)) {
