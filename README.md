@@ -186,7 +186,7 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **38 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **46 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
@@ -195,6 +195,7 @@ Late Penalty ships with **38 PHPUnit tests** that run on every CI push across th
 | `get_submission_time()` | Forum with no posts; individual assignment submission; no submission; team submission (userid = 0) |
 | Observer chain | No rule, disabled rule, no deadline, on-time, 1 day late, 2 days late, capped at max, deadline from module field, team submission penalty |
 | Observer — per-user overrides | Custom deadline (shifts or removes lateness), custom daily rate, custom max cap, waived penalty (daily = 0), all-null override inherits rule |
+| `get_module_user_deadline()` | Assign extension, assign user override, assign group override, quiz user override, lesson user override, unknown module → null, no override → null, full-chain integration with extension |
 | Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
 | Recalculation — per-user overrides | Override deadline, override daily rate, override max cap each take precedence over new rule parameters |
 
@@ -416,7 +417,7 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **38 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **46 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
@@ -425,6 +426,7 @@ O Late Penalty inclui **38 testes PHPUnit** executados em todo push de CI na mat
 | `get_submission_time()` | Fórum sem postagens; entrega individual; sem entrega; entrega em grupo (userid = 0) |
 | Cadeia do observer | Sem regra, regra desabilitada, sem prazo, no prazo, 1 dia, 2 dias, limitado ao máximo, prazo do campo do módulo, penalidade em entrega em grupo |
 | Observer — sobreposições por aluno | Prazo customizado (desloca ou remove atraso), taxa diária customizada, teto customizado, penalidade isenta (taxa = 0), override nulo herda a regra |
+| `get_module_user_deadline()` | Extensão assign, override de usuário assign, override de grupo assign, override de usuário quiz, override de usuário lesson, módulo desconhecido → null, sem override → null, integração completa com extensão |
 | Recálculo | Prazo estendido reduz penalidade, prazo estendido restaura nota no prazo, mudança de taxa recalcula, aluno no prazo não é afetado |
 | Recálculo — sobreposições por aluno | Override de prazo, taxa e teto têm prioridade sobre os novos parâmetros da regra |
 

@@ -25,6 +25,9 @@
  *    on-time, 1 day late, 2 days late, penalty capped at max
  *  - Per-user override: custom deadline, custom daily rate, custom max cap,
  *    penalty waived (daily = 0), all-null override inherits rule
+ *  - get_module_user_deadline(): assign extension, assign/quiz/lesson overrides
+ *    (user and group), unknown module, no override, and a full-chain integration
+ *    test confirming the extension shifts the effective deadline in the observer
  *
  * @package    local_latepenalty
  * @category   test
@@ -240,6 +243,18 @@ final class observer_test extends advanced_testcase {
                 'timemodified' => time(),
             ]);
         }
+    }
+
+    /**
+     * Delegate to penalty_helper::get_module_user_deadline().
+     *
+     * @param string $modname    Module name.
+     * @param int    $instanceid Module instance ID.
+     * @param int    $userid     User ID.
+     * @return int|null Effective deadline or null.
+     */
+    private function module_user_deadline(string $modname, int $instanceid, int $userid): ?int {
+        return penalty_helper::get_module_user_deadline($modname, $instanceid, $userid);
     }
 
     // Tests for calculate_days_late: pure unit tests (no DB required).
@@ -719,6 +734,213 @@ final class observer_test extends advanced_testcase {
         $s = $this->make_scenario(DAYSECS);
         $this->upsert_override($s['assign']->cmid, $s['student']->id, null, null, null);
         self::assertEqualsWithDelta(90.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    // Tests for get_module_user_deadline().
+
+    /**
+     * assign_user_flags.extensiondue is returned as the user's effective deadline.
+     */
+    public function test_module_user_deadline_assign_extension_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+
+        $expected = time() + 7 * DAYSECS;
+        $DB->insert_record('assign_user_flags', (object) [
+            'assignment'      => $assign->id,
+            'userid'          => $student->id,
+            'locked'          => 0,
+            'mailed'          => 0,
+            'extensiondue'    => $expected,
+            'workflowstate'   => '',
+            'allocatedmarker' => 0,
+        ]);
+
+        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
+    }
+
+    /**
+     * assign_overrides.duedate keyed by userid is returned when no extension exists.
+     */
+    public function test_module_user_deadline_assign_user_override_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+
+        $expected = time() + 3 * DAYSECS;
+        $DB->insert_record('assign_overrides', (object) [
+            'assignid' => $assign->id,
+            'userid'   => $student->id,
+            'groupid'  => null,
+            'duedate'  => $expected,
+        ]);
+
+        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
+    }
+
+    /**
+     * assign_overrides group deadline is returned when student belongs to the overridden group.
+     */
+    public function test_module_user_deadline_assign_group_override_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student->id]);
+
+        $expected = time() + 4 * DAYSECS;
+        $DB->insert_record('assign_overrides', (object) [
+            'assignid' => $assign->id,
+            'groupid'  => $group->id,
+            'userid'   => null,
+            'duedate'  => $expected,
+        ]);
+
+        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
+    }
+
+    /**
+     * quiz_overrides.timeclose keyed by userid is returned as the effective quiz deadline.
+     */
+    public function test_module_user_deadline_quiz_user_override_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $quiz    = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+
+        $expected = time() + 5 * DAYSECS;
+        $DB->insert_record('quiz_overrides', (object) [
+            'quiz'      => $quiz->id,
+            'userid'    => $student->id,
+            'groupid'   => null,
+            'timeclose' => $expected,
+        ]);
+
+        self::assertSame($expected, $this->module_user_deadline('quiz', $quiz->id, $student->id));
+    }
+
+    /**
+     * lesson_overrides.deadline keyed by userid is returned as the effective lesson deadline.
+     */
+    public function test_module_user_deadline_lesson_user_override_returned(): void {
+        global $DB;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $lesson  = $this->getDataGenerator()->create_module('lesson', ['course' => $course->id]);
+
+        $expected = time() + 6 * DAYSECS;
+        $DB->insert_record('lesson_overrides', (object) [
+            'lessonid' => $lesson->id,
+            'userid'   => $student->id,
+            'groupid'  => null,
+            'deadline' => $expected,
+        ]);
+
+        self::assertSame($expected, $this->module_user_deadline('lesson', $lesson->id, $student->id));
+    }
+
+    /**
+     * Modules without a native override system (e.g. forum) always return null.
+     */
+    public function test_module_user_deadline_unknown_module_returns_null(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $forum  = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
+        $user   = $this->getDataGenerator()->create_user();
+
+        self::assertNull($this->module_user_deadline('forum', $forum->id, $user->id));
+    }
+
+    /**
+     * Assign with no extension or override records returns null.
+     */
+    public function test_module_user_deadline_no_override_returns_null(): void {
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+
+        self::assertNull($this->module_user_deadline('assign', $assign->id, $student->id));
+    }
+
+    /**
+     * Full observer chain: assign extension shifts the effective deadline.
+     *
+     * Global deadline = 5 days ago. Extension = +1 day. Student submits 3 days
+     * after the global deadline (= 2 days after the extended deadline).
+     * Expected: 2 days × 10%/day = 20% → grade 80 (not 30% → 70 without extension).
+     */
+    public function test_assign_extension_shifts_effective_deadline(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course'  => $course->id,
+            'grade'   => 100,
+            'duedate' => $deadline,
+        ]);
+
+        // Completionexpected = 0 forces the fallback chain through get_module_user_deadline().
+        $DB->set_field('course_modules', 'completionexpected', 0, ['id' => $assign->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+
+        $submissiontime = $deadline + 3 * DAYSECS;
+        $DB->insert_record('assign_submission', (object) [
+            'assignment'    => $assign->id,
+            'userid'        => $student->id,
+            'timecreated'   => $submissiontime,
+            'timemodified'  => $submissiontime,
+            'status'        => 'submitted',
+            'groupid'       => 0,
+            'attemptnumber' => 0,
+            'latest'        => 1,
+        ]);
+
+        // Teacher grants a 1-day extension: effective deadline = deadline + 1 day.
+        $DB->insert_record('assign_user_flags', (object) [
+            'assignment'      => $assign->id,
+            'userid'          => $student->id,
+            'locked'          => 0,
+            'mailed'          => 0,
+            'extensiondue'    => $deadline + DAYSECS,
+            'workflowstate'   => '',
+            'allocatedmarker' => 0,
+        ]);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'assign',
+            'iteminstance' => $assign->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/assign');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        // With extension: 2 days late × 10% = 20% → 80. Without: 30% → 70.
+        self::assertEqualsWithDelta(
+            80.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'Observer must respect assign_user_flags.extensiondue as the effective deadline.'
+        );
     }
 
     /**
