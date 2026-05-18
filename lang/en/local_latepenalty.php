@@ -25,7 +25,12 @@
 defined('MOODLE_INTERNAL') || die();
 // phpcs:disable moodle.Files.LineLength
 
+$string['badge_ontime'] = 'Deadline: {$a->date}';
+$string['badge_penalty'] = 'Penalty: {$a->pct}%';
+$string['badge_penalty_max'] = 'Penalty: {$a->pct}% (max)';
 $string['courseinfo_notice'] = 'This activity must be completed by {$a->deadline}. A penalty of {$a->daily}% per day will be applied, up to a maximum of {$a->max}%.';
+$string['courseinfo_notice_overdue'] = 'The deadline for this activity was {$a->deadline}. Accumulated penalty: {$a->pct}% ({$a->daily}% per day · maximum of {$a->max}%).';
+$string['courseinfo_notice_overdue_max'] = 'The deadline for this activity was {$a->deadline}. A penalty of {$a->max}% (max) is being applied.';
 $string['error_daily_range'] = 'Daily penalty must be between 0% and 100%';
 $string['error_max_less_than_daily'] = 'Maximum penalty cannot be less than daily penalty';
 $string['error_max_range'] = 'Maximum penalty must be between 0% and 100%';

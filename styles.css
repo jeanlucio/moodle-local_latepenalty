@@ -2,13 +2,14 @@
  * CSS ::after fallback badge — shown only before the real badge span is
  * injected (i.e. before data-lp-injected is set on the li during reactive
  * courseformat adoption). Suppressed once the span is in place.
+ * Label and colour come from data attributes set by courseinfo.js.
  */
 li[data-lp-penalty]:not([data-lp-injected]) .activityname::after {
-    content: "Penalidade por atraso";
+    content: attr(data-lp-label);
     display: inline-block;
     background-color: transparent;
-    color: var(--bs-warning-text-emphasis, #664d03);
-    border: 1.5px solid var(--bs-warning, #ffc107);
+    color: var(--bs-secondary-color, #6c757d);
+    border: 1.5px solid var(--bs-secondary, #6c757d);
     font-size: 0.7em;
     font-weight: 600;
     padding: 0.15em 0.5em;
@@ -19,17 +20,30 @@ li[data-lp-penalty]:not([data-lp-injected]) .activityname::after {
     cursor: help;
 }
 
+li[data-lp-state="warning"]:not([data-lp-injected]) .activityname::after {
+    background-color: var(--bs-warning, #ffc107);
+    color: #000;
+    border-color: var(--bs-warning, #ffc107);
+}
+
+li[data-lp-state="danger"]:not([data-lp-injected]) .activityname::after {
+    background-color: var(--bs-danger, #dc3545);
+    color: #fff;
+    border-color: var(--bs-danger, #dc3545);
+}
+
 /**
  * Real badge span — injected after reactive adoption; serves as both
  * the visual badge and the Bootstrap tooltip anchor.
+ * Base style is the neutral/ontime state (within deadline).
  */
 .local-latepenalty-badge {
     display: inline-block;
     position: relative;
     z-index: 2;
     background-color: transparent;
-    color: var(--bs-warning-text-emphasis, #664d03);
-    border: 1.5px solid var(--bs-warning, #ffc107);
+    color: var(--bs-secondary-color, #6c757d);
+    border: 1.5px solid var(--bs-secondary, #6c757d);
     font-size: 0.7em;
     font-weight: 600;
     padding: 0.15em 0.5em;
@@ -38,6 +52,18 @@ li[data-lp-penalty]:not([data-lp-injected]) .activityname::after {
     vertical-align: middle;
     white-space: nowrap;
     cursor: help;
+}
+
+.local-latepenalty-badge.local-latepenalty-badge--warning {
+    background-color: var(--bs-warning, #ffc107);
+    color: #000;
+    border-color: var(--bs-warning, #ffc107);
+}
+
+.local-latepenalty-badge.local-latepenalty-badge--danger {
+    background-color: var(--bs-danger, #dc3545);
+    color: #fff;
+    border-color: var(--bs-danger, #dc3545);
 }
 
 /**

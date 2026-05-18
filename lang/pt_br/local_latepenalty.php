@@ -25,7 +25,12 @@
 defined('MOODLE_INTERNAL') || die();
 // phpcs:disable moodle.Files.LineLength
 
+$string['badge_ontime'] = 'Entrega: {$a->date}';
+$string['badge_penalty'] = 'Penalidade: {$a->pct}%';
+$string['badge_penalty_max'] = 'Penalidade: {$a->pct}% (máx)';
 $string['courseinfo_notice'] = 'Esta atividade precisa ser realizada até {$a->deadline}. Uma penalidade de {$a->daily}% será aplicada por dia de atraso até o limite de {$a->max}%.';
+$string['courseinfo_notice_overdue'] = 'O prazo de entrega desta atividade venceu em {$a->deadline}. Penalidade acumulada: {$a->pct}% ({$a->daily}% por dia · limite de {$a->max}%).';
+$string['courseinfo_notice_overdue_max'] = 'O prazo de entrega desta atividade venceu em {$a->deadline}. Uma penalidade de {$a->max}% (máx) está sendo aplicada.';
 $string['error_daily_range'] = 'O desconto diário deve estar entre 0% e 100%';
 $string['error_max_less_than_daily'] = 'O desconto diário não pode exceder o limite máximo';
 $string['error_max_range'] = 'O limite máximo deve estar entre 0% e 100%';

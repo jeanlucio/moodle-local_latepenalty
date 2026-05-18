@@ -60,7 +60,7 @@ class hook_listener {
     public static function inject_course_notices(
         \core\hook\output\before_standard_footer_html_generation $hook
     ): void {
-        global $DB, $PAGE;
+        global $DB, $PAGE, $USER;
 
         if (!isloggedin() || isguestuser()) {
             return;
@@ -86,25 +86,40 @@ class hook_listener {
             return;
         }
 
+        // Load cmids already completed by this user to suppress their badges.
+        $completedsql = "SELECT cmc.coursemoduleid
+                           FROM {course_modules_completion} cmc
+                           JOIN {course_modules} cm ON cm.id = cmc.coursemoduleid
+                          WHERE cm.course = :courseid
+                            AND cmc.userid = :userid
+                            AND cmc.completionstate >= 1";
+        $completedrows = $DB->get_records_sql($completedsql, ['courseid' => $courseid, 'userid' => (int) $USER->id]);
+        $completedcmids = array_flip(array_column($completedrows, 'coursemoduleid'));
+
         $dateformat = get_string('strftimedatefullshort', 'langconfig');
+        $now = time();
         $notices = [];
 
         foreach ($records as $record) {
+            if (isset($completedcmids[(int) $record->cmid])) {
+                continue;
+            }
+
             $deadline = self::resolve_deadline($record);
             if (!$deadline) {
                 continue;
             }
 
-            $daily = (string) (float) $record->daily_penalty;
-            $max   = (string) (float) $record->max_penalty;
+            $daily = (float) $record->daily_penalty;
+            $max   = (float) $record->max_penalty;
+
+            [$badgelabel, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, $now, $dateformat);
 
             $notices[] = [
-                'cmid'   => (int) $record->cmid,
-                'notice' => get_string('courseinfo_notice', 'local_latepenalty', (object) [
-                    'deadline' => userdate($deadline, $dateformat),
-                    'daily'    => $daily,
-                    'max'      => $max,
-                ]),
+                'cmid'       => (int) $record->cmid,
+                'notice'     => $notice,
+                'badgelabel' => $badgelabel,
+                'badgestate' => $badgestate,
             ];
         }
 
@@ -129,7 +144,7 @@ class hook_listener {
     public static function inject_activity_notice(
         \core\hook\output\before_http_headers $hook
     ): void {
-        global $DB, $PAGE;
+        global $DB, $PAGE, $USER;
 
         if (!isloggedin() || isguestuser()) {
             return;
@@ -145,6 +160,16 @@ class hook_listener {
             return;
         }
 
+        // Suppress notice once the student has completed the activity.
+        $completed = $DB->get_field(
+            'course_modules_completion',
+            'completionstate',
+            ['coursemoduleid' => $cm->id, 'userid' => (int) $USER->id]
+        );
+        if ($completed !== false && (int) $completed >= 1) {
+            return;
+        }
+
         $record = (object) [
             'completionexpected' => $cm->completionexpected ?? 0,
             'instance'           => $cm->instance,
@@ -157,13 +182,62 @@ class hook_listener {
         }
 
         $dateformat = get_string('strftimedatefullshort', 'langconfig');
-        $notice = get_string('courseinfo_notice', 'local_latepenalty', (object) [
-            'deadline' => userdate($deadline, $dateformat),
-            'daily'    => (string) (float) $rule->daily_penalty,
-            'max'      => (string) (float) $rule->max_penalty,
-        ]);
+        $daily = (float) $rule->daily_penalty;
+        $max   = (float) $rule->max_penalty;
+        [, , $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
 
         $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
+    }
+
+    /**
+     * Compute the badge label, CSS state, and tooltip notice for a given deadline and penalty rule.
+     *
+     * @param int    $deadline   Unix timestamp of the activity deadline.
+     * @param float  $daily      Daily penalty percentage.
+     * @param float  $max        Maximum penalty percentage.
+     * @param int    $now        Current Unix timestamp.
+     * @param string $dateformat Moodle date format string.
+     * @return array{string, string, string} [badgelabel, badgestate, notice] where state is ontime|warning|danger.
+     */
+    private static function compute_badge(
+        int $deadline,
+        float $daily,
+        float $max,
+        int $now,
+        string $dateformat
+    ): array {
+        $datestr = userdate($deadline, $dateformat);
+
+        if ($deadline > $now) {
+            $label  = get_string('badge_ontime', 'local_latepenalty', ['date' => $datestr]);
+            $notice = get_string('courseinfo_notice', 'local_latepenalty', (object) [
+                'deadline' => $datestr,
+                'daily'    => (string) $daily,
+                'max'      => (string) $max,
+            ]);
+            return [$label, 'ontime', $notice];
+        }
+
+        $daysoverdue = (int) ceil(($now - $deadline) / DAYSECS);
+        $penalty = min($daysoverdue * $daily, $max);
+
+        if ($penalty >= $max) {
+            $label  = get_string('badge_penalty_max', 'local_latepenalty', ['pct' => $max]);
+            $notice = get_string('courseinfo_notice_overdue_max', 'local_latepenalty', (object) [
+                'deadline' => $datestr,
+                'max'      => (string) $max,
+            ]);
+            return [$label, 'danger', $notice];
+        }
+
+        $label  = get_string('badge_penalty', 'local_latepenalty', ['pct' => $penalty]);
+        $notice = get_string('courseinfo_notice_overdue', 'local_latepenalty', (object) [
+            'deadline' => $datestr,
+            'pct'      => (string) $penalty,
+            'daily'    => (string) $daily,
+            'max'      => (string) $max,
+        ]);
+        return [$label, 'warning', $notice];
     }
 
     /**

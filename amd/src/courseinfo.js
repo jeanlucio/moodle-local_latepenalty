@@ -42,13 +42,15 @@ import Tooltip from 'theme_boost/bootstrap/tooltip';
 /**
  * Mark an activity list item and inject the badge+tooltip span when safe.
  *
- * @param {HTMLElement} el     The `li#module-{cmid}` element.
- * @param {string}      notice Full penalty details for the tooltip.
+ * @param {HTMLElement}                                              el   The `li#module-{cmid}` element.
+ * @param {{notice: string, badgelabel: string, badgestate: string}} item Penalty data for this activity.
  */
-const markItem = (el, notice) => {
-    // Always mark for the CSS ::after fallback badge.
+const markItem = (el, item) => {
+    // Always mark for the CSS ::after fallback badge (uses data attributes for label and colour).
     if (!el.hasAttribute('data-lp-penalty')) {
         el.setAttribute('data-lp-penalty', '1');
+        el.setAttribute('data-lp-label', item.badgelabel);
+        el.setAttribute('data-lp-state', item.badgestate);
     }
 
     // Inject the real badge span with tooltip.
@@ -60,12 +62,12 @@ const markItem = (el, notice) => {
     }
 
     const badge = document.createElement('span');
-    badge.className = 'local-latepenalty-badge';
-    badge.textContent = 'Penalidade por atraso';
+    badge.className = `local-latepenalty-badge local-latepenalty-badge--${item.badgestate}`;
+    badge.textContent = item.badgelabel;
     badge.setAttribute('data-bs-toggle', 'tooltip');
     badge.setAttribute('data-bs-placement', 'bottom');
-    badge.setAttribute('data-bs-title', notice);
-    badge.setAttribute('title', notice);
+    badge.setAttribute('data-bs-title', item.notice);
+    badge.setAttribute('title', item.notice);
 
     actname.appendChild(badge);
     Tooltip.getOrCreateInstance(badge);
@@ -77,17 +79,17 @@ const markItem = (el, notice) => {
 /**
  * Inject penalty badges into the course activity list.
  *
- * @param {Array<{cmid: number, notice: string}>} notices One entry per activity with an enabled rule and a deadline.
+ * @param {Array<{cmid: number, notice: string, badgelabel: string, badgestate: string}>} notices One entry per activity.
  */
 export const init = (notices) => {
-    /** @type {Map<number, string>} */
-    const noticeMap = new Map(notices.map(({cmid, notice}) => [cmid, notice]));
+    /** @type {Map<number, {notice: string, badgelabel: string, badgestate: string}>} */
+    const noticeMap = new Map(notices.map(item => [item.cmid, item]));
 
     const tryMarkAll = () => {
-        noticeMap.forEach((notice, cmid) => {
+        noticeMap.forEach((item, cmid) => {
             const el = document.getElementById(`module-${cmid}`);
             if (el) {
-                markItem(el, notice);
+                markItem(el, item);
             }
         });
     };
