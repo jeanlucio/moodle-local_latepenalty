@@ -26,7 +26,7 @@ Unlike Moodle's native late-submission penalty — which is limited to Assignmen
 * 🔄 **Event-driven, zero polling:** Reacts to `user_graded` events in real time — no cron jobs, no scheduled tasks.
 * 📝 **Gradebook audit trail:** Every grade modification is recorded in Moodle's standard grade history table.
 * 💾 **Backup and restore:** Penalty rules travel with the activity on course backup, restore, and duplication.
-* 🔔 **Course page notice:** Students see a reminder below each activity showing the deadline and penalty terms before they start.
+* 🔔 **Dynamic status badge:** Each activity on the course page shows a contextual badge — grey with the deadline when on time, yellow with the accumulated penalty when overdue, and red when the maximum is reached. Tooltip text adapts to each state. Badge and notice disappear automatically once the student completes the activity.
 * 📊 **Penalty report:** Teachers access a filterable course report listing every grade adjustment applied by the plugin, always available regardless of course format.
 * 🌐 **Bilingual:** Full support for English and Brazilian Portuguese.
 
@@ -91,7 +91,7 @@ The maximum penalty must be greater than or equal to the daily penalty.
 4. The plugin resolves the deadline (from `completionexpected` or the module's own deadline field).
 5. Days late are calculated and the discount is applied.
 6. The adjusted grade is written back to the Gradebook via the standard grade API.
-7. On the course page, a notice is displayed below each affected activity so students know the penalty terms.
+7. On the course page, each affected activity shows a contextual status badge: grey with the deadline when on time, yellow with the accumulated penalty when overdue, or red when the maximum is reached. The tooltip adapts accordingly. Both badge and activity-page notice disappear once the student completes the activity.
 
 > **Note — manual grading without a submission:** The penalty is based on the student's **submission timestamp**, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
 
@@ -214,7 +214,7 @@ Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apen
 * 🔄 **Orientado a eventos, sem polling:** Reage a eventos `user_graded` em tempo real — sem cron jobs ou tarefas agendadas.
 * 📝 **Histórico de notas:** Toda modificação de nota é registrada na tabela padrão de histórico do Moodle.
 * 💾 **Backup e restauração:** As regras de penalidade viajam junto com a atividade no backup, restauração e duplicação de cursos.
-* 🔔 **Aviso na página do curso:** Os alunos veem um lembrete abaixo de cada atividade com o prazo e as condições da penalidade antes de começar.
+* 🔔 **Badge de status dinâmico:** Cada atividade na página do curso exibe um badge contextual — cinza com o prazo quando dentro do tempo, amarelo com a penalidade acumulada quando em atraso, e vermelho ao atingir o limite máximo. O tooltip adapta o texto a cada estado. O badge e o aviso desaparecem automaticamente após o aluno concluir a atividade.
 * 📊 **Relatório de penalidades:** Professores acessam um relatório filtrado por curso com cada ajuste de nota aplicado pelo plugin, sempre disponível independentemente do formato de curso.
 * 🌐 **Bilíngue:** Suporte completo para inglês e português do Brasil.
 
@@ -279,7 +279,7 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 4. O plugin resolve o prazo (a partir de `completionexpected` ou do campo de prazo do módulo).
 5. Os dias de atraso são calculados e o desconto é aplicado.
 6. A nota ajustada é registrada de volta no Livro de Notas via API padrão de notas.
-7. Na página do curso, um aviso é exibido abaixo de cada atividade afetada para que os alunos conheçam as condições da penalidade.
+7. Na página do curso, cada atividade afetada exibe um badge de status contextual: cinza com o prazo quando no tempo, amarelo com a penalidade acumulada quando em atraso, ou vermelho ao atingir o máximo. O tooltip adapta o texto a cada estado. O badge e o aviso na página da atividade desaparecem após o aluno concluir a atividade.
 
 > **Observação — avaliação sem entrega:** A penalidade é baseada no **timestamp de entrega do aluno**, não no momento em que o professor avalia. Se um professor atribuir nota a um aluno que nunca entregou (ex.: Fórum em que o aluno não fez nenhuma postagem), não existe registro de entrega e o plugin ignora a penalidade. Isso é intencional: sem entrega, não há atraso a medir.
 
