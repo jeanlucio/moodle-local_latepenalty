@@ -200,14 +200,22 @@ class observer {
             return;
         }
 
+        if (!empty($grade->locked) || !empty($gradeitem->locked)) {
+            return;
+        }
+
         if (empty($grade->finalgrade)) {
             return;
         }
 
         $rawgrade = $grade->finalgrade;
 
+        if ($rawgrade <= (float) $gradeitem->grademin) {
+            return;
+        }
+
         // Calculate penalty.
-        $finalgrade = penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max);
+        $finalgrade = penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max, (float) $gradeitem->grademin);
 
         // Apply only when the change is meaningful (avoids spurious DB writes).
         if (abs($finalgrade - $rawgrade) > 0.01) {

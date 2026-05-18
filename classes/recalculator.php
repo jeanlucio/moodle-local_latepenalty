@@ -142,19 +142,33 @@ class recalculator {
                 continue;
             }
 
-            $dayslate = penalty_helper::calculate_days_late($submissiontime, $effectivedeadline);
-
-            $newfinalgrade = ($dayslate <= 0)
-                ? $rawgrade
-                : penalty_helper::apply_penalty($rawgrade, $dayslate, $effectivedaily, $effectivemax);
-
             $gradeitem = \grade_item::fetch(['id' => (int) $student->itemid]);
             if (!$gradeitem) {
                 continue;
             }
 
+            if ($rawgrade <= (float) $gradeitem->grademin) {
+                continue;
+            }
+
             $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $userid]);
             $grade->load_optional_fields();
+
+            if (!empty($grade->overridden) || !empty($grade->locked) || !empty($gradeitem->locked)) {
+                continue;
+            }
+
+            $dayslate = penalty_helper::calculate_days_late($submissiontime, $effectivedeadline);
+
+            $newfinalgrade = ($dayslate <= 0)
+                ? $rawgrade
+                : penalty_helper::apply_penalty(
+                    $rawgrade,
+                    $dayslate,
+                    $effectivedaily,
+                    $effectivemax,
+                    (float) $gradeitem->grademin
+                );
 
             $currentgrade = (float) ($grade->finalgrade ?? 0);
             if (abs($newfinalgrade - $currentgrade) < 0.01) {

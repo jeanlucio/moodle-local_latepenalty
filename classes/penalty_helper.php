@@ -185,7 +185,7 @@ class penalty_helper {
      * per-user override system (forum, workshop, scorm, playergroup).
      *
      * Priority within each module:
-     *  - assign: extensiondue (assign_user_flags) → user override → best group override
+     *  - assign: user override → best group override (via assign_overrides)
      *  - quiz:   user override → best group override
      *  - lesson: user override → best group override
      *
@@ -213,6 +213,9 @@ class penalty_helper {
     /**
      * Resolve the effective deadline for a student in an Assignment.
      *
+     * In Moodle 5.2+, individual extensions are stored as user-specific records in
+     * assign_overrides (the assign_user_flags.extensiondue column was removed).
+     *
      * @param int $assignid Assignment instance ID.
      * @param int $userid   User ID.
      * @return int|null Effective deadline or null.
@@ -220,13 +223,7 @@ class penalty_helper {
     private static function get_assign_user_deadline(int $assignid, int $userid): ?int {
         global $DB;
 
-        // Individual extension granted by the teacher (highest priority).
-        $flags = $DB->get_record('assign_user_flags', ['assignment' => $assignid, 'userid' => $userid], 'extensiondue');
-        if ($flags && !empty($flags->extensiondue)) {
-            return (int) $flags->extensiondue;
-        }
-
-        // User-specific due date override.
+        // User-specific due date override (covers both scheduled overrides and teacher-granted extensions).
         $row = $DB->get_record('assign_overrides', ['assignid' => $assignid, 'userid' => $userid], 'duedate');
         if ($row && !empty($row->duedate)) {
             return (int) $row->duedate;
@@ -336,21 +333,23 @@ class penalty_helper {
     /**
      * Apply the late penalty to a raw grade.
      *
-     * @param float $rawgrade    Original grade before penalty.
-     * @param int   $dayslate    Number of days late.
+     * @param float $rawgrade     Original grade before penalty.
+     * @param int   $dayslate     Number of days late.
      * @param float $dailypenalty Daily penalty percentage (0–100).
-     * @param float $maxpenalty  Maximum penalty cap percentage (0–100).
-     * @return float Final grade after penalty (never below 0).
+     * @param float $maxpenalty   Maximum penalty cap percentage (0–100).
+     * @param float $grademin     Minimum allowed grade (floor). Defaults to 0.
+     * @return float Final grade after penalty (never below $grademin).
      */
     public static function apply_penalty(
         float $rawgrade,
         int $dayslate,
         float $dailypenalty,
-        float $maxpenalty
+        float $maxpenalty,
+        float $grademin = 0.0
     ): float {
         $discountpct = min($dayslate * $dailypenalty, $maxpenalty);
         $finalgrade  = $rawgrade * (1.0 - $discountpct / 100.0);
 
-        return max(0.0, $finalgrade);
+        return max($grademin, $finalgrade);
     }
 }

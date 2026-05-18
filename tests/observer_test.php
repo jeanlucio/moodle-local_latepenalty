@@ -739,30 +739,6 @@ final class observer_test extends advanced_testcase {
     // Tests for get_module_user_deadline().
 
     /**
-     * assign_user_flags.extensiondue is returned as the user's effective deadline.
-     */
-    public function test_module_user_deadline_assign_extension_returned(): void {
-        global $DB;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
-
-        $expected = time() + 7 * DAYSECS;
-        $DB->insert_record('assign_user_flags', (object) [
-            'assignment'      => $assign->id,
-            'userid'          => $student->id,
-            'locked'          => 0,
-            'mailed'          => 0,
-            'extensiondue'    => $expected,
-            'workflowstate'   => '',
-            'allocatedmarker' => 0,
-        ]);
-
-        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
-    }
-
-    /**
      * assign_overrides.duedate keyed by userid is returned when no extension exists.
      */
     public function test_module_user_deadline_assign_user_override_returned(): void {
@@ -835,6 +811,8 @@ final class observer_test extends advanced_testcase {
     public function test_module_user_deadline_lesson_user_override_returned(): void {
         global $DB;
 
+        $this->setAdminUser();
+
         $course  = $this->getDataGenerator()->create_course();
         $student = $this->getDataGenerator()->create_user();
         $lesson  = $this->getDataGenerator()->create_module('lesson', ['course' => $course->id]);
@@ -875,8 +853,11 @@ final class observer_test extends advanced_testcase {
     /**
      * Full observer chain: assign extension shifts the effective deadline.
      *
-     * Global deadline = 5 days ago. Extension = +1 day. Student submits 3 days
-     * after the global deadline (= 2 days after the extended deadline).
+     * In Moodle 5.2+, teacher-granted extensions are stored as user-specific records
+     * in assign_overrides (assign_user_flags.extensiondue was removed).
+     *
+     * Global deadline = 5 days ago. Extension = +1 day (via assign_overrides). Student
+     * submits 3 days after the global deadline (= 2 days after the extended deadline).
      * Expected: 2 days × 10%/day = 20% → grade 80 (not 30% → 70 without extension).
      */
     public function test_assign_extension_shifts_effective_deadline(): void {
@@ -912,15 +893,12 @@ final class observer_test extends advanced_testcase {
             'latest'        => 1,
         ]);
 
-        // Teacher grants a 1-day extension: effective deadline = deadline + 1 day.
-        $DB->insert_record('assign_user_flags', (object) [
-            'assignment'      => $assign->id,
-            'userid'          => $student->id,
-            'locked'          => 0,
-            'mailed'          => 0,
-            'extensiondue'    => $deadline + DAYSECS,
-            'workflowstate'   => '',
-            'allocatedmarker' => 0,
+        // Teacher grants a 1-day extension via assign_overrides (Moodle 5.2+).
+        $DB->insert_record('assign_overrides', (object) [
+            'assignid' => $assign->id,
+            'userid'   => $student->id,
+            'groupid'  => null,
+            'duedate'  => $deadline + DAYSECS,
         ]);
 
         $gradeitem = grade_item::fetch([
@@ -939,7 +917,7 @@ final class observer_test extends advanced_testcase {
             80.0,
             (float) $grade->finalgrade,
             0.01,
-            'Observer must respect assign_user_flags.extensiondue as the effective deadline.'
+            'Observer must respect the assign_overrides user record as the effective deadline.'
         );
     }
 
