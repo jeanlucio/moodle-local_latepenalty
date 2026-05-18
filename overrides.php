@@ -114,11 +114,15 @@ if ($action === 'add' || $action === 'edit') {
 
     if ($action === 'add') {
         $coursecontext = context_course::instance($cm->course);
+        $namefields = 'u.id, ' . implode(', ', array_map(
+            static fn(string $f): string => "u.$f",
+            \core_user\fields::get_name_fields()
+        ));
         $enrolled = get_enrolled_users(
             $coursecontext,
             '',
             0,
-            'u.id, u.firstname, u.lastname',
+            $namefields,
             'u.lastname ASC, u.firstname ASC'
         );
 
