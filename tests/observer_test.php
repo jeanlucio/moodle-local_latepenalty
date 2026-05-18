@@ -37,9 +37,10 @@ use grade_grade;
 use grade_item;
 
 /**
- * Tests for local_latepenalty\observer.
+ * Tests for local_latepenalty\observer and \local_latepenalty\penalty_helper.
  *
  * @covers \local_latepenalty\observer
+ * @covers \local_latepenalty\penalty_helper
  */
 final class observer_test extends advanced_testcase {
     #[\Override]
@@ -48,23 +49,21 @@ final class observer_test extends advanced_testcase {
         $this->resetAfterTest();
     }
 
-    // Helpers: reflection wrappers for private static methods.
+    // Helpers: thin wrappers around penalty_helper public methods.
 
     /**
-     * Call observer::calculate_days_late() via reflection.
+     * Delegate to penalty_helper::calculate_days_late().
      *
      * @param int $submissiontime
      * @param int $deadline
      * @return int
      */
     private function days_late(int $submissiontime, int $deadline): int {
-        $m = new \ReflectionMethod(observer::class, 'calculate_days_late');
-        $m->setAccessible(true);
-        return (int) $m->invoke(null, $submissiontime, $deadline);
+        return penalty_helper::calculate_days_late($submissiontime, $deadline);
     }
 
     /**
-     * Call observer::apply_penalty() via reflection.
+     * Delegate to penalty_helper::apply_penalty().
      *
      * @param float $rawgrade
      * @param int $dayslate
@@ -73,22 +72,18 @@ final class observer_test extends advanced_testcase {
      * @return float
      */
     private function apply(float $rawgrade, int $dayslate, float $daily, float $max): float {
-        $m = new \ReflectionMethod(observer::class, 'apply_penalty');
-        $m->setAccessible(true);
-        return (float) $m->invoke(null, $rawgrade, $dayslate, $daily, $max);
+        return penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max);
     }
 
     /**
-     * Call observer::get_submission_time() via reflection.
+     * Delegate to penalty_helper::get_submission_time().
      *
      * @param int $userid
      * @param \stdClass $cm
      * @return int|null
      */
     private function submission_time(int $userid, \stdClass $cm): ?int {
-        $m = new \ReflectionMethod(observer::class, 'get_submission_time');
-        $m->setAccessible(true);
-        return $m->invoke(null, $userid, $cm);
+        return penalty_helper::get_submission_time($userid, $cm);
     }
 
     // Helpers: integration test infrastructure.
@@ -193,16 +188,21 @@ final class observer_test extends advanced_testcase {
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
         if ($existing) {
-            $existing->enabled       = $enabled ? 1 : 0;
-            $existing->daily_penalty = $daily;
-            $existing->max_penalty   = $max;
+            $existing->enabled              = $enabled ? 1 : 0;
+            $existing->daily_penalty        = $daily;
+            $existing->max_penalty          = $max;
+            $existing->recalc_on_deadline   = 1;
+            $existing->recalc_on_rate       = 1;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {
             $DB->insert_record('local_latepenalty_rules', (object) [
-                'cmid'          => $cmid,
-                'enabled'       => $enabled ? 1 : 0,
-                'daily_penalty' => $daily,
-                'max_penalty'   => $max,
+                'cmid'                => $cmid,
+                'enabled'             => $enabled ? 1 : 0,
+                'daily_penalty'       => $daily,
+                'max_penalty'         => $max,
+                'recalc_on_deadline'  => 1,
+                'recalc_on_rate'      => 1,
+                'last_deadline'       => 0,
             ]);
         }
     }
@@ -464,6 +464,64 @@ final class observer_test extends advanced_testcase {
     public function test_penalty_capped_at_max_fifty_percent(): void {
         $s = $this->make_scenario(10 * DAYSECS);
         self::assertEqualsWithDelta(50.0, $this->grade_and_read($s, 100.0), 0.01);
+    }
+
+    /**
+     * When completionexpected is 0, penalty_helper falls back to assign.duedate.
+     *
+     * This exercises the module-specific deadline field path in penalty_helper::get_deadline().
+     */
+    public function test_deadline_resolved_from_module_duedate(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course'  => $course->id,
+            'grade'   => 100,
+            'duedate' => $deadline,
+        ]);
+
+        // Setting completionexpected = 0 forces the fallback to assign.duedate.
+        $DB->set_field('course_modules', 'completionexpected', 0, ['id' => $assign->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+
+        $submissiontime = $deadline + DAYSECS;
+        $DB->insert_record('assign_submission', (object) [
+            'assignment'    => $assign->id,
+            'userid'        => $student->id,
+            'timecreated'   => $submissiontime,
+            'timemodified'  => $submissiontime,
+            'status'        => 'submitted',
+            'groupid'       => 0,
+            'attemptnumber' => 0,
+            'latest'        => 1,
+        ]);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'assign',
+            'iteminstance' => $assign->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_final_grade($student->id, 100.0, 'test');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        // 1 day late at 10%/day → 90.
+        self::assertEqualsWithDelta(
+            90.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'Penalty should apply when deadline is read from assign.duedate (completionexpected=0).'
+        );
     }
 
     /**
