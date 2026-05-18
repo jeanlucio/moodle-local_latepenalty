@@ -238,7 +238,11 @@ if (empty($overrides)) {
     // Load all user records in a single query.
     $userids = array_map('intval', array_column($overrides, 'userid'));
     [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
-    $users = $DB->get_records_sql("SELECT id, firstname, lastname FROM {user} WHERE id $insql", $inparams);
+    $namefields = implode(', ', \core_user\fields::get_name_fields());
+    $users = $DB->get_records_sql(
+        "SELECT id, $namefields FROM {user} WHERE id $insql",
+        $inparams
+    );
 
     $dateformat = get_string('strftimedatefullshort', 'langconfig');
     $inherit    = get_string('override_inherit', 'local_latepenalty');
