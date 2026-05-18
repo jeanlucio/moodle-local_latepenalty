@@ -2,6 +2,37 @@
 
 All notable changes to the Late Penalty plugin will be documented in this file.
 
+## [1.2.0] - 2026-05-19
+
+### Added
+- Per-student penalty overrides: teachers can set a custom deadline, daily rate,
+  and maximum cap for individual students via a new Overrides page
+- New capability `local/latepenalty:manageoverrides` controls access to overrides
+- Penalty recalculator: when a rule's deadline, daily rate, or maximum changes,
+  the plugin re-applies the penalty to all students already graded under the old rule
+- Module-native override support: the effective deadline now considers user and group
+  overrides set directly in the activity (assign, quiz, lesson), giving the latest
+  date across all sources
+- Full Privacy API implementation: the plugin now declares personal data stored in
+  `local_latepenalty_overrides` and supports GDPR export and deletion
+
+### Fixed
+- Moodle 5.2 compatibility: individual assignment extensions now read from
+  `assign_overrides` (the `assign_user_flags.extensiondue` column was removed in 5.2)
+- Locked grade guard: the observer and recalculator skip activities where the
+  grade item or the student's grade record is locked
+- Grademin floor: penalties are no longer applied when the raw grade is already at
+  `grademin`; calculated grades are floored to `grademin` rather than zero
+
+## [1.1.0] - 2026-05-13
+
+### Added
+- Per-student penalty overrides: teachers can set a custom deadline, daily rate,
+  and maximum cap for individual students via a new Overrides page
+- Penalty recalculator triggered when a rule's deadline, daily rate, or max changes
+- Module-native override support: the effective deadline considers user and group
+  overrides from assign, quiz, and lesson activities
+
 ## [1.0.2] - 2026-05-12
 
 ### Added
