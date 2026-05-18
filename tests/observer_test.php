@@ -163,7 +163,7 @@ final class observer_test extends advanced_testcase {
      * @return float The final grade stored in the gradebook after observer ran.
      */
     private function grade_and_read(array $s, float $rawgrade): float {
-        $s['gradeitem']->update_final_grade($s['student']->id, $rawgrade, 'test');
+        $s['gradeitem']->update_raw_grade($s['student']->id, $rawgrade, 'mod/assign');
 
         $grade = new grade_grade(['itemid' => $s['gradeitem']->id, 'userid' => $s['student']->id]);
         $grade->load_optional_fields();
@@ -404,7 +404,7 @@ final class observer_test extends advanced_testcase {
             'itemtype' => 'mod', 'itemmodule' => 'assign',
             'iteminstance' => $assign->id, 'courseid' => $course->id,
         ]);
-        $gradeitem->update_final_grade($student->id, 80.0, 'test');
+        $gradeitem->update_raw_grade($student->id, 80.0, 'mod/assign');
 
         $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
         $grade->load_optional_fields();
@@ -449,7 +449,7 @@ final class observer_test extends advanced_testcase {
             'itemtype' => 'mod', 'itemmodule' => 'assign',
             'iteminstance' => $assign->id, 'courseid' => $course->id,
         ]);
-        $gradeitem->update_final_grade($student->id, 80.0, 'test');
+        $gradeitem->update_raw_grade($student->id, 80.0, 'mod/assign');
 
         $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
         $grade->load_optional_fields();
@@ -541,7 +541,7 @@ final class observer_test extends advanced_testcase {
             'iteminstance' => $assign->id,
             'courseid'     => $course->id,
         ]);
-        $gradeitem->update_final_grade($student->id, 100.0, 'test');
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/assign');
 
         $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
         $grade->load_optional_fields();
@@ -604,7 +604,7 @@ final class observer_test extends advanced_testcase {
             'iteminstance' => $assign->id,
             'courseid'     => $course->id,
         ]);
-        $gradeitem->update_final_grade($student->id, 100.0, 'test');
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/assign');
 
         $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
         $grade->load_optional_fields();
