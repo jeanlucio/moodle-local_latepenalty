@@ -25,6 +25,15 @@
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
+    'local/latepenalty:manageoverrides' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype'     => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes'  => [
+            'editingteacher' => CAP_ALLOW,
+            'manager'        => CAP_ALLOW,
+        ],
+    ],
     'local/latepenalty:viewreport' => [
         'riskbitmask' => RISK_PERSONAL,
         'captype'     => 'read',

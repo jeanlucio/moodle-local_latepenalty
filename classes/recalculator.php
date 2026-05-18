@@ -86,9 +86,33 @@ class recalculator {
 
         $isautograded = in_array($cm->modname, penalty_helper::$autogradedmodules);
 
+        // Load all per-user overrides for this cmid in a single query.
+        $overridesbyuserid = $DB->get_records(
+            'local_latepenalty_overrides',
+            ['cmid' => $cmid],
+            '',
+            'userid, deadline, daily_penalty, max_penalty'
+        );
+
         foreach ($students as $student) {
             $userid   = (int) $student->userid;
             $rawgrade = (float) $student->rawgrade;
+
+            // Resolve effective deadline and rates for this student.
+            $override = $overridesbyuserid[$userid] ?? null;
+            $effectivedeadline = ($override && $override->deadline !== null)
+                ? (int) $override->deadline
+                : $newdeadline;
+            $effectivedaily = ($override && $override->daily_penalty !== null)
+                ? (float) $override->daily_penalty
+                : $daily;
+            $effectivemax = ($override && $override->max_penalty !== null)
+                ? (float) $override->max_penalty
+                : $max;
+
+            if (!$effectivedeadline) {
+                continue;
+            }
 
             if ($isautograded) {
                 // For auto-graded modules there is no submission record, but the
@@ -114,11 +138,11 @@ class recalculator {
                 continue;
             }
 
-            $dayslate = penalty_helper::calculate_days_late($submissiontime, $newdeadline);
+            $dayslate = penalty_helper::calculate_days_late($submissiontime, $effectivedeadline);
 
             $newfinalgrade = ($dayslate <= 0)
                 ? $rawgrade
-                : penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max);
+                : penalty_helper::apply_penalty($rawgrade, $dayslate, $effectivedaily, $effectivemax);
 
             $gradeitem = \grade_item::fetch(['id' => (int) $student->itemid]);
             if (!$gradeitem) {

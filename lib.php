@@ -176,6 +176,51 @@ function local_latepenalty_coursemodule_validation($data, $files): array {
 }
 
 /**
+ * Add a Late Penalty Overrides link to the activity settings navigation.
+ *
+ * Appears in the gear/settings menu of any activity whose penalty rule is
+ * enabled, visible only to users who hold manageoverrides in that context.
+ *
+ * @param settings_navigation $settingsnav The settings navigation tree.
+ * @param context             $context     Current page context.
+ * @return void
+ */
+function local_latepenalty_extend_settings_navigation(
+    settings_navigation $settingsnav,
+    context $context
+): void {
+    global $DB;
+
+    if (!$context instanceof context_module) {
+        return;
+    }
+
+    if (!has_capability('local/latepenalty:manageoverrides', $context)) {
+        return;
+    }
+
+    $cmid = $context->instanceid;
+    if (!$DB->record_exists('local_latepenalty_rules', ['cmid' => $cmid, 'enabled' => 1])) {
+        return;
+    }
+
+    $node = $settingsnav->find('modulesettings', navigation_node::TYPE_SETTING);
+    if (!$node) {
+        return;
+    }
+
+    $url = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid]);
+    $node->add(
+        get_string('overrides', 'local_latepenalty'),
+        $url,
+        navigation_node::TYPE_SETTING,
+        null,
+        'local_latepenalty_overrides',
+        new pix_icon('i/override', '')
+    );
+}
+
+/**
  * Extend the course navigation to add the late penalty report link.
  *
  * The link appears in the course secondary navigation and is visible only to

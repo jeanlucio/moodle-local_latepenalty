@@ -135,12 +135,24 @@ class observer {
         // Get course module details.
         $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
 
-        // Get deadline (completionexpected or timeclose).
-        $deadline = penalty_helper::get_deadline($cm);
+        // Resolve effective deadline and rates, respecting any per-user override.
+        $override = penalty_helper::get_override($cmid, $userid);
+
+        $deadline = ($override && $override->deadline !== null)
+            ? (int) $override->deadline
+            : penalty_helper::get_deadline($cm);
 
         if (!$deadline) {
             return;
         }
+
+        $daily = ($override && $override->daily_penalty !== null)
+            ? (float) $override->daily_penalty
+            : (float) $rule->daily_penalty;
+
+        $max = ($override && $override->max_penalty !== null)
+            ? (float) $override->max_penalty
+            : (float) $rule->max_penalty;
 
         // Get submission timestamp (when the student submitted, not when graded).
         // For auto-graded modules the grade event itself is the student action, so
@@ -192,7 +204,7 @@ class observer {
         $rawgrade = $grade->finalgrade;
 
         // Calculate penalty.
-        $finalgrade = penalty_helper::apply_penalty($rawgrade, $dayslate, $rule->daily_penalty, $rule->max_penalty);
+        $finalgrade = penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max);
 
         // Apply only when the change is meaningful (avoids spurious DB writes).
         if (abs($finalgrade - $rawgrade) > 0.01) {

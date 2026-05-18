@@ -178,6 +178,18 @@ class penalty_helper {
     }
 
     /**
+     * Get the per-user override record for a course module, if one exists.
+     *
+     * @param int $cmid   Course module ID.
+     * @param int $userid User ID.
+     * @return \stdClass|null Override record or null if none exists.
+     */
+    public static function get_override(int $cmid, int $userid): ?\stdClass {
+        global $DB;
+        return $DB->get_record('local_latepenalty_overrides', ['cmid' => $cmid, 'userid' => $userid]) ?: null;
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

@@ -41,7 +41,51 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
                 'local_latepenalty_rule',
                 $this->get_pathfor('/rule')
             ),
+            new restore_path_element(
+                'local_latepenalty_override',
+                $this->get_pathfor('/overrides/override')
+            ),
         ];
+    }
+
+    /**
+     * Process one override record from the backup XML.
+     *
+     * Maps the backed-up userid to the restored user ID. Records whose user
+     * was not included in the restore are silently skipped.
+     *
+     * @param array $data Raw element data from the XML.
+     * @return void
+     */
+    public function process_local_latepenalty_override(array $data): void {
+        global $DB;
+
+        $data = (object) $data;
+
+        $data->userid = (int) $this->get_mappingid('user', $data->userid);
+        if (!$data->userid) {
+            return;
+        }
+
+        $data->cmid = $this->task->get_moduleid();
+
+        $existing = $DB->get_record(
+            'local_latepenalty_overrides',
+            ['cmid' => $data->cmid, 'userid' => $data->userid]
+        );
+
+        if ($existing) {
+            $existing->deadline = $data->deadline ?? null;
+            $existing->daily_penalty = $data->daily_penalty ?? null;
+            $existing->max_penalty = $data->max_penalty ?? null;
+            $existing->timemodified = time();
+            $DB->update_record('local_latepenalty_overrides', $existing);
+        } else {
+            unset($data->id);
+            $data->timecreated = time();
+            $data->timemodified = time();
+            $DB->insert_record('local_latepenalty_overrides', $data);
+        }
     }
 
     /**
@@ -66,11 +110,11 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {
-            $existing->enabled              = $data->enabled;
-            $existing->daily_penalty        = $data->daily_penalty;
-            $existing->max_penalty          = $data->max_penalty;
-            $existing->recalc_on_deadline   = $data->recalc_on_deadline ?? 1;
-            $existing->recalc_on_rate       = $data->recalc_on_rate ?? 1;
+            $existing->enabled = $data->enabled;
+            $existing->daily_penalty = $data->daily_penalty;
+            $existing->max_penalty = $data->max_penalty;
+            $existing->recalc_on_deadline = $data->recalc_on_deadline ?? 1;
+            $existing->recalc_on_rate = $data->recalc_on_rate ?? 1;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {
             unset($data->id);

@@ -100,20 +100,49 @@ class hook_listener {
         $now = time();
         $notices = [];
 
+        // Load all per-user overrides for this user in this course (single query).
+        $overridessql = "SELECT o.cmid, o.deadline, o.daily_penalty, o.max_penalty
+                           FROM {local_latepenalty_overrides} o
+                           JOIN {course_modules} cm ON cm.id = o.cmid
+                          WHERE cm.course = :courseid
+                            AND o.userid = :userid";
+        $useroverriderows = $DB->get_records_sql($overridessql, [
+            'courseid' => $courseid,
+            'userid'   => (int) $USER->id,
+        ]);
+        $useroverrides = [];
+        foreach ($useroverriderows as $o) {
+            $useroverrides[(int) $o->cmid] = $o;
+        }
+
         foreach ($records as $record) {
             if (isset($completedcmids[(int) $record->cmid])) {
                 continue;
             }
 
-            $deadline = self::resolve_deadline($record);
+            $override = $useroverrides[(int) $record->cmid] ?? null;
+
+            $deadline = ($override && $override->deadline !== null)
+                ? (int) $override->deadline
+                : self::resolve_deadline($record);
             if (!$deadline) {
                 continue;
             }
 
-            $daily = (float) $record->daily_penalty;
-            $max   = (float) $record->max_penalty;
+            $daily = ($override && $override->daily_penalty !== null)
+                ? (float) $override->daily_penalty
+                : (float) $record->daily_penalty;
+            $max = ($override && $override->max_penalty !== null)
+                ? (float) $override->max_penalty
+                : (float) $record->max_penalty;
 
-            [$badgelabel, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, $now, $dateformat);
+            [$badgelabel, $badgestate, $notice] = self::compute_badge(
+                $deadline,
+                $daily,
+                $max,
+                $now,
+                $dateformat
+            );
 
             $notices[] = [
                 'cmid'       => (int) $record->cmid,
@@ -176,14 +205,25 @@ class hook_listener {
             'modname'            => $cm->modname,
         ];
 
-        $deadline = self::resolve_deadline($record);
+        $override = $DB->get_record(
+            'local_latepenalty_overrides',
+            ['cmid' => $cm->id, 'userid' => (int) $USER->id]
+        );
+
+        $deadline = ($override && $override->deadline !== null)
+            ? (int) $override->deadline
+            : self::resolve_deadline($record);
         if (!$deadline) {
             return;
         }
 
         $dateformat = get_string('strftimedatefullshort', 'langconfig');
-        $daily = (float) $rule->daily_penalty;
-        $max   = (float) $rule->max_penalty;
+        $daily = ($override && $override->daily_penalty !== null)
+            ? (float) $override->daily_penalty
+            : (float) $rule->daily_penalty;
+        $max = ($override && $override->max_penalty !== null)
+            ? (float) $override->max_penalty
+            : (float) $rule->max_penalty;
         [, , $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
 
         $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
