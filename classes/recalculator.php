@@ -154,7 +154,7 @@ class recalculator {
             $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $userid]);
             $grade->load_optional_fields();
 
-            if (!empty($grade->overridden) || !empty($grade->locked) || !empty($gradeitem->locked)) {
+            if (!empty($grade->locked) || !empty($gradeitem->locked)) {
                 continue;
             }
 
