@@ -66,9 +66,11 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {
-            $existing->enabled       = $data->enabled;
-            $existing->daily_penalty = $data->daily_penalty;
-            $existing->max_penalty   = $data->max_penalty;
+            $existing->enabled              = $data->enabled;
+            $existing->daily_penalty        = $data->daily_penalty;
+            $existing->max_penalty          = $data->max_penalty;
+            $existing->recalc_on_deadline   = $data->recalc_on_deadline ?? 1;
+            $existing->recalc_on_rate       = $data->recalc_on_rate ?? 1;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {
             unset($data->id);
