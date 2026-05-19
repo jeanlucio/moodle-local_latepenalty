@@ -97,6 +97,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: moodle-plugin-ci phpunit
 
+      - name: Behat features
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci behat --auto-rerun 1
+
       - name: Mark cancelled jobs as failed
         if: ${{ cancelled() }}
         run: exit 1
