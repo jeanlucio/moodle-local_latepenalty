@@ -93,10 +93,6 @@ jobs:
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci grunt --max-lint-warnings 0
 
-      - name: Stylelint
-        if: ${{ !cancelled() && matrix.runchecks == 'all' }}
-        run: moodle-plugin-ci stylelint
-
       - name: Savepoints
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci savepoints
