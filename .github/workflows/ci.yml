@@ -86,7 +86,7 @@ jobs:
         run: moodle-plugin-ci phpdoc --max-warnings 0
 
       - name: Validating
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci validate
 
       - name: Check upgrade savepoints
