@@ -667,6 +667,81 @@ final class observer_test extends advanced_testcase {
         );
     }
 
+    // Full observer chain: integration test via quiz.
+
+    /**
+     * Full observer chain via quiz: attempt finishes 1 day late → 10% penalty applied.
+     *
+     * Simulates the quiz grading path: inserts a finished quiz_attempts record with
+     * timefinish = deadline + 1 day, then submits the grade via update_raw_grade()
+     * (matching how the quiz module calls grade_update internally). Verifies the
+     * observer reads quiz_attempts.timefinish as submission time and applies the penalty.
+     */
+    public function test_quiz_one_day_late_applies_penalty(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $quiz = $this->getDataGenerator()->create_module('quiz', [
+            'course'    => $course->id,
+            'grade'     => 100,
+            'timeclose' => 0,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $quiz->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($quiz->cmid, true, 10.0, 50.0);
+
+        $submissiontime = $deadline + DAYSECS;
+
+        // Create question_usages record to satisfy quiz_attempts.uniqueid FK constraint.
+        $modulecontext = \context_module::instance($quiz->cmid);
+        $qubaid = $DB->insert_record('question_usages', (object) [
+            'contextid'          => $modulecontext->id,
+            'component'          => 'mod_quiz',
+            'preferredbehaviour' => 'deferredfeedback',
+        ]);
+
+        $DB->insert_record('quiz_attempts', (object) [
+            'quiz'         => $quiz->id,
+            'userid'       => $student->id,
+            'attempt'      => 1,
+            'uniqueid'     => $qubaid,
+            'layout'       => '',
+            'currentpage'  => 0,
+            'preview'      => 0,
+            'state'        => 'finished',
+            'timestart'    => $submissiontime - 3600,
+            'timefinish'   => $submissiontime,
+            'timemodified' => $submissiontime,
+            'sumgrades'    => 10.0,
+        ]);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'quiz',
+            'iteminstance' => $quiz->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/quiz');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        // 1 day late at 10%/day → 10% off → 90.
+        self::assertEqualsWithDelta(
+            90.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'Quiz: 1 day late at 10%/day must reduce grade from 100 to 90.'
+        );
+    }
+
     // Override scenarios: observer must respect per-user overrides.
 
     /**
