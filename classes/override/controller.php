@@ -39,7 +39,6 @@ use stdClass;
  * @package local_latepenalty\override
  */
 class controller {
-
     /** @var int Course module ID. */
     private int $cmid;
 

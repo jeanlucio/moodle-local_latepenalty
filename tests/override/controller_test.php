@@ -179,6 +179,7 @@ final class controller_test extends advanced_testcase {
     public function test_render_list_shows_notification_when_empty(): void {
         global $OUTPUT;
 
+        $this->setAdminUser();
         $s    = $this->make_scenario();
         $ctrl = $this->make_controller($s, 'list');
         $ctrl->process();
@@ -198,6 +199,7 @@ final class controller_test extends advanced_testcase {
     public function test_render_list_shows_student_name_and_penalties(): void {
         global $OUTPUT;
 
+        $this->setAdminUser();
         $s = $this->make_scenario();
         $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, null, 5.5, null);
 
@@ -219,6 +221,7 @@ final class controller_test extends advanced_testcase {
     public function test_render_list_always_includes_add_button(): void {
         global $OUTPUT;
 
+        $this->setAdminUser();
         $s    = $this->make_scenario();
         $ctrl = $this->make_controller($s, 'list');
         $ctrl->process();
