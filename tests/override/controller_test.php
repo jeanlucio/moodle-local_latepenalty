@@ -177,14 +177,14 @@ final class controller_test extends advanced_testcase {
      * When no overrides exist, render() returns the empty-state notification.
      */
     public function test_render_list_shows_notification_when_empty(): void {
-        global $OUTPUT;
+        global $PAGE;
 
         $this->setAdminUser();
         $s    = $this->make_scenario();
         $ctrl = $this->make_controller($s, 'list');
         $ctrl->process();
 
-        $html = $ctrl->render($OUTPUT);
+        $html = $ctrl->render($PAGE->get_renderer('core'));
 
         self::assertStringContainsString(
             get_string('override_empty', 'local_latepenalty'),
@@ -197,7 +197,7 @@ final class controller_test extends advanced_testcase {
      * Null penalty fields are shown as the "inherit" placeholder string.
      */
     public function test_render_list_shows_student_name_and_penalties(): void {
-        global $OUTPUT;
+        global $PAGE;
 
         $this->setAdminUser();
         $s = $this->make_scenario();
@@ -205,7 +205,7 @@ final class controller_test extends advanced_testcase {
 
         $ctrl = $this->make_controller($s, 'list');
         $ctrl->process();
-        $html = $ctrl->render($OUTPUT);
+        $html = $ctrl->render($PAGE->get_renderer('core'));
 
         self::assertStringContainsString(fullname($s['student']), $html);
         self::assertStringContainsString('5.5%', $html);
@@ -219,14 +219,14 @@ final class controller_test extends advanced_testcase {
      * render() always includes an "add override" button whether the list is empty or not.
      */
     public function test_render_list_always_includes_add_button(): void {
-        global $OUTPUT;
+        global $PAGE;
 
         $this->setAdminUser();
         $s    = $this->make_scenario();
         $ctrl = $this->make_controller($s, 'list');
         $ctrl->process();
 
-        $html = $ctrl->render($OUTPUT);
+        $html = $ctrl->render($PAGE->get_renderer('core'));
 
         self::assertStringContainsString('action=add', $html);
     }
