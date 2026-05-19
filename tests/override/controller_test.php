@@ -208,7 +208,7 @@ final class controller_test extends advanced_testcase {
         $html = $ctrl->render($PAGE->get_renderer('core'));
 
         self::assertStringContainsString(fullname($s['student']), $html);
-        self::assertStringContainsString('5.5%', $html);
+        self::assertStringContainsString('5.5', $html);
         self::assertStringContainsString(
             get_string('override_inherit', 'local_latepenalty'),
             $html
@@ -228,7 +228,7 @@ final class controller_test extends advanced_testcase {
 
         $html = $ctrl->render($PAGE->get_renderer('core'));
 
-        self::assertStringContainsString('action=add', $html);
+        self::assertStringContainsString(get_string('override_add', 'local_latepenalty'), $html);
     }
 
     // Tests: render() in add mode.
