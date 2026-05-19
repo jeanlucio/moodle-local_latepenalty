@@ -97,6 +97,10 @@ jobs:
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci stylelint
 
+      - name: Savepoints
+        if: ${{ !cancelled() && matrix.runchecks == 'all' }}
+        run: moodle-plugin-ci savepoints
+
       - name: PHPUnit tests
         if: ${{ !cancelled() }}
         run: moodle-plugin-ci phpunit
