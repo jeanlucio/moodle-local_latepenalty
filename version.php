@@ -29,4 +29,4 @@ $plugin->version = 2026051900;
 $plugin->requires = 2024042200;
 $plugin->supported = [405, 502];
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.2.0';
+$plugin->release = 'v1.0.0';
