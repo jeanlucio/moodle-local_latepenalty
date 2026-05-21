@@ -301,10 +301,11 @@ class controller {
      * Resolve the effective deadline for a grade history row.
      *
      * Mirrors the observer logic: completionexpected takes priority; falls back
-     * to the module-specific deadline field (duedate, timeclose, etc.).
+     * to the module-specific deadline field (assign.duedate, forum.duedate).
      *
-     * @param \stdClass $row Row from the report query containing completionexpected,
-     *                       itemmodule and iteminstance.
+     * @param \stdClass $row            Row from the report query containing completionexpected,
+     *                                  itemmodule and iteminstance.
+     * @param array     $moduledeadlines Pre-loaded map of modname → instanceid → deadline timestamp.
      * @return int|null Deadline timestamp or null if not determinable.
      */
     private static function resolve_deadline(\stdClass $row, array $moduledeadlines): ?int {
