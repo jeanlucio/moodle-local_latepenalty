@@ -16,21 +16,13 @@
 /**
  * Course page late-penalty badge injector.
  *
- * Two-phase strategy:
+ * Injects a <span> badge inside .activityname for each activity that has an
+ * active penalty rule. The badge also acts as the Bootstrap tooltip anchor.
  *
- * Phase 1 — before reactive adoption:
- *   Sets `data-lp-penalty` on the `li` so the CSS ::after pseudo-element
- *   renders the badge immediately. No DOM injection inside the reactive
- *   subtree at this stage (would be wiped during adoption).
- *
- * Phase 2 — after reactive adoption (data-indexed set by courseformat):
- *   Injects a visible <span> badge inside .activityname. The span is both
- *   the visual badge and the Bootstrap tooltip anchor (it has a hover area,
- *   unlike a pseudo-element). Sets `data-lp-injected` on the `li` to
- *   suppress the CSS ::after fallback so the badge appears only once.
- *
- * For non-reactive formats (e.g. Tiles popup — no data-for="cmitem"),
- * phase 2 runs immediately.
+ * A MutationObserver keeps the badge alive when the courseformat reactive
+ * component re-renders the li contents (Moodle 4.5). A final setTimeout
+ * retry covers late adoptions that produce mutations not caught by the
+ * observer in the same tick.
  *
  * @module     local_latepenalty/courseinfo
  * @copyright  2026 Jean Lúcio
@@ -40,24 +32,33 @@
 import Tooltip from 'theme_boost/bootstrap/tooltip';
 
 /**
- * Mark an activity list item and inject the badge+tooltip span when safe.
+ * Find the activity li element for a given cmid.
  *
- * @param {HTMLElement}                                              el   The `li#module-{cmid}` element.
+ * Tries id="module-{cmid}" first, then falls back to the data-for/data-id
+ * attributes set by the courseformat reactive component. The fallback covers
+ * Moodle 4.5 where some reactive re-renders may temporarily drop the id.
+ *
+ * @param {number} cmid The course module ID.
+ * @returns {HTMLElement|null}
+ */
+const findCmElement = (cmid) => document.getElementById(`module-${cmid}`)
+    ?? document.querySelector(`[data-for="cmitem"][data-id="${cmid}"]`);
+
+/**
+ * Inject a penalty badge into an activity list item.
+ *
+ * Safe to call multiple times: returns immediately if the badge already exists.
+ *
+ * @param {HTMLElement}                                              el   The activity li element.
  * @param {{notice: string, badgelabel: string, badgestate: string}} item Penalty data for this activity.
  */
 const markItem = (el, item) => {
-    // Always mark for the CSS ::after fallback badge (uses data attributes for label and colour).
-    if (!el.hasAttribute('data-lp-penalty')) {
-        el.setAttribute('data-lp-penalty', '1');
-        el.setAttribute('data-lp-label', item.badgelabel);
-        el.setAttribute('data-lp-state', item.badgestate);
+    const actname = el.querySelector('.activityname');
+    if (!actname) {
+        return;
     }
 
-    // Inject the real badge span with tooltip.
-    // Guard is on the span inside .activityname (not on the li) so re-injection
-    // happens whenever the courseformat reactive renderer wipes .activityname.
-    const actname = el.querySelector('.activityname');
-    if (!actname || actname.querySelector('.local-latepenalty-badge')) {
+    if (actname.querySelector('.local-latepenalty-badge')) {
         return;
     }
 
@@ -70,10 +71,11 @@ const markItem = (el, item) => {
     badge.setAttribute('title', item.notice);
 
     actname.appendChild(badge);
-    Tooltip.getOrCreateInstance(badge);
-
-    // Suppress CSS ::after once the real span is in place.
-    el.setAttribute('data-lp-injected', '1');
+    if (typeof Tooltip.getOrCreateInstance === 'function') {
+        Tooltip.getOrCreateInstance(badge);
+    } else {
+        new Tooltip(badge);
+    }
 };
 
 /**
@@ -82,12 +84,15 @@ const markItem = (el, item) => {
  * @param {Array<{cmid: number, notice: string, badgelabel: string, badgestate: string}>} notices One entry per activity.
  */
 export const init = (notices) => {
+    // Diagnosis: expose received cmids on body so DevTools can confirm PHP output.
+    document.body.dataset.lpCmids = notices.map(n => n.cmid).join(',');
+
     /** @type {Map<number, {notice: string, badgelabel: string, badgestate: string}>} */
     const noticeMap = new Map(notices.map(item => [item.cmid, item]));
 
     const tryMarkAll = () => {
         noticeMap.forEach((item, cmid) => {
-            const el = document.getElementById(`module-${cmid}`);
+            const el = findCmElement(cmid);
             if (el) {
                 markItem(el, item);
             }
@@ -96,7 +101,28 @@ export const init = (notices) => {
 
     tryMarkAll();
 
-    // Watch for dynamically rendered content (Tiles popup, reactive courseformat).
-    const observer = new MutationObserver(tryMarkAll);
+    // Re-inject after the courseformat reactive re-renders activity li items.
+    // Only fire tryMarkAll when a cmitem or activity-card node is added/removed —
+    // not when we ourselves insert a badge span — to avoid ping-pong loops with
+    // the Moodle 4.5 reactive renderer.
+    const observer = new MutationObserver((mutations) => {
+        const relevant = mutations.some(m => {
+            const nodes = [...m.addedNodes, ...m.removedNodes];
+            return nodes.some(n => {
+                if (n.nodeType !== 1) {
+                    return false;
+                }
+                return n.matches('[data-for="cmitem"]')
+                    || n.matches('[data-region="activity-card"]')
+                    || n.querySelector?.('[data-for="cmitem"]');
+            });
+        });
+        if (relevant) {
+            tryMarkAll();
+        }
+    });
     observer.observe(document.body, {childList: true, subtree: true});
+
+    // Belt-and-suspenders retry for Moodle 4.5 late reactive adoption.
+    setTimeout(tryMarkAll, 500);
 };
