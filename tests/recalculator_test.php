@@ -376,6 +376,17 @@ final class recalculator_test extends advanced_testcase {
         $grade->load_optional_fields();
         self::assertEqualsWithDelta(50.0, (float) $grade->finalgrade, 0.01, 'Initial penalty must be 50%.');
 
+        // Pin the non-latepenalty history timestamp so the recalculator always resolves
+        // exactly 5 days late regardless of wall-clock drift between test steps in CI.
+        // (deadline + 5·86400 − 1 → ceil(4.999…) = 5 days.)
+        $DB->set_field_select(
+            'grade_grades_history',
+            'timemodified',
+            $deadline + 5 * DAYSECS - 1,
+            "itemid = :itemid AND userid = :userid AND source != 'local_latepenalty'",
+            ['itemid' => $gradeitem->id, 'userid' => $student->id]
+        );
+
         // Recalculate at 5%/day: 5 × 5% = 25% off → 75.
         recalculator::recalculate($h5p->cmid, $deadline, 5.0, 50.0);
 
