@@ -276,22 +276,23 @@ final class controller_test extends advanced_testcase {
 
         $this->setAdminUser();
 
-        $s = $this->make_scenario();
+        $s        = $this->make_scenario();
         $intruder = $this->getDataGenerator()->create_user();
-        $ctrl = $this->make_controller($s, 'add');
+        $ctrl     = $this->make_controller($s, 'add');
 
-        $this->expectException(\moodle_exception::class);
-        $this->expectExceptionCode('invaliduser');
-
+        $caught = null;
         try {
-            $this->invoke_save_override($ctrl, (object) [
-                'userid' => $intruder->id,
-            ]);
-        } finally {
-            self::assertFalse(
-                $DB->record_exists('local_latepenalty_overrides', ['cmid' => $s['cm']->id, 'userid' => $intruder->id])
-            );
+            $this->invoke_save_override($ctrl, (object) ['userid' => $intruder->id]);
+        } catch (\moodle_exception $e) {
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'moodle_exception must be thrown for an unenrolled user.');
+        self::assertSame('invaliduser', $caught->errorcode);
+        self::assertFalse(
+            $DB->record_exists('local_latepenalty_overrides', ['cmid' => $s['cm']->id, 'userid' => $intruder->id]),
+            'No override record must be created for an unenrolled user.'
+        );
     }
 
     /**
