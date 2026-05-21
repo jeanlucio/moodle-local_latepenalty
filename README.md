@@ -187,7 +187,7 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **55 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **59 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
@@ -202,6 +202,7 @@ Late Penalty ships with **55 PHPUnit tests** that run on every CI push across th
 | Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
 | Recalculation — per-user overrides | Override deadline, override daily rate, override max cap each take precedence over new rule parameters |
 | Recalculation — h5pactivity | Rate change recalculates penalty from `grade_grades_history` timestamp |
+| Override controller | Render list (empty state, student name and penalties, always includes add button); render add (no students when all covered); save add rejects unenrolled user; save edit preserves original user; delete removes record on confirm, leaves record without confirm, does not affect foreign override |
 
 Run them locally with:
 
@@ -209,6 +210,7 @@ Run them locally with:
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
 vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
+vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
 ```
 
 ---
@@ -422,7 +424,7 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **55 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **59 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
@@ -437,6 +439,7 @@ O Late Penalty inclui **55 testes PHPUnit** executados em todo push de CI na mat
 | Recálculo | Prazo estendido reduz penalidade, prazo estendido restaura nota no prazo, mudança de taxa recalcula, aluno no prazo não é afetado |
 | Recálculo — sobreposições por aluno | Override de prazo, taxa e teto têm prioridade sobre os novos parâmetros da regra |
 | Recálculo — h5pactivity | Mudança de taxa recalcula penalidade a partir do timestamp do `grade_grades_history` |
+| Controller de sobreposições | Exibição da lista (estado vazio, nome do aluno e penalidades, sempre exibe botão adicionar); exibição do formulário de adição (sem alunos quando todos já cobertos); salvar adição rejeita aluno não matriculado; salvar edição preserva usuário original; exclusão remove o registro com confirmação, mantém sem confirmação, não afeta override de outro aluno |
 
 Para executar localmente:
 
@@ -444,6 +447,7 @@ Para executar localmente:
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
 vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
+vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
 ```
 
 ---
