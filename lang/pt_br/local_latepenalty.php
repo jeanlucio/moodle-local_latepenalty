@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Strings de idioma em Português Brasileiro para o plugin Late Penalty.
+ * Brazilian Portuguese strings for Late Penalty.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
