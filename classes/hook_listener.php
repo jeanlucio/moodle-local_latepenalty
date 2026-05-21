@@ -31,16 +31,13 @@ class hook_listener {
     /**
      * Map of module name to the field that holds its deadline timestamp.
      *
+     * Mirrors penalty_helper::$deadlinefields — only soft-deadline modules.
+     *
      * @var array<string, string>
      */
     private static array $deadlinefields = [
-        'assign'      => 'duedate',
-        'forum'       => 'duedate',
-        'lesson'      => 'deadline',
-        'playergroup' => 'timeclose',
-        'quiz'        => 'timeclose',
-        'scorm'       => 'timeclose',
-        'workshop'    => 'submissionend',
+        'assign' => 'duedate',
+        'forum'  => 'duedate',
     ];
 
     /**
@@ -320,11 +317,6 @@ class hook_listener {
 
         self::load_activity_deadline_module('assign', $instancesbymodule, $cmidbyinstance, $deadlines);
         self::load_activity_deadline_module('forum', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('lesson', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('playergroup', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('quiz', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('scorm', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('workshop', $instancesbymodule, $cmidbyinstance, $deadlines);
 
         return $deadlines;
     }

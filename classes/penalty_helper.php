@@ -31,16 +31,21 @@ class penalty_helper {
     /**
      * Map of module name to its deadline field in the module table.
      *
+     * Only modules whose deadline field is a SOFT deadline are listed here —
+     * i.e. the module itself does not block submissions after that date, so a
+     * student can genuinely submit late and incur a penalty.
+     *
+     * Modules with hard deadlines (quiz, lesson, scorm, workshop, playergroup)
+     * are intentionally absent: once their timeclose/deadline passes, the
+     * module blocks access entirely, making late submissions impossible and the
+     * penalty unreachable. Those modules should use completionexpected as the
+     * deadline (set before the hard close), which is always checked first.
+     *
      * @var array<string, string>
      */
     public static array $deadlinefields = [
-        'assign'      => 'duedate',
-        'forum'       => 'duedate',
-        'lesson'      => 'deadline',
-        'playergroup' => 'timeclose',
-        'quiz'        => 'timeclose',
-        'scorm'       => 'timeclose',
-        'workshop'    => 'submissionend',
+        'assign' => 'duedate',
+        'forum'  => 'duedate',
     ];
 
     /**
