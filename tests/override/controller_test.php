@@ -281,7 +281,7 @@ final class controller_test extends advanced_testcase {
         $ctrl = $this->make_controller($s, 'add');
 
         $this->expectException(\moodle_exception::class);
-        $this->expectExceptionMessage(get_string('invaliduser'));
+        $this->expectExceptionCode('invaliduser');
 
         try {
             $this->invoke_save_override($ctrl, (object) [
