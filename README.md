@@ -177,7 +177,24 @@ Two independent checkboxes appear in the Late Penalty section of the activity fo
 
 ---
 
-### ⚠️ Course Format Compatibility
+### 🔁 Penalty Recalculation on Override Save / Delete
+
+When a teacher **creates, edits, or deletes** a per-user override, the affected student's final grade is recalculated immediately using the new effective deadline and rates.
+
+This recalculation uses a dedicated path (`recalculate_for_student()`) that works directly from `grade_grades.rawgrade`, independently of whether the student was previously penalised by this plugin. This makes the recalculation work correctly in two additional scenarios:
+
+| Scenario | How it is handled |
+|---|---|
+| **Grade set via course restore** | Restore writes `source = 'restore'` to `grade_grades_history`. `recalculate_for_student()` uses `rawgrade` from `grade_grades` directly (not from penalty history), so restored grades are updated correctly. |
+| **No prior penalty history** | If the student's grade was never touched by this plugin (e.g. the activity was added to the rule after the student was graded), the method still applies or removes the penalty based on the current `rawgrade` and the new effective deadline. |
+
+#### Teacher-edit protection
+
+If a teacher manually edits a student's grade **after** this plugin last wrote it, the subsequent override change will **not** overwrite the teacher's value. The guard compares the most recent `local_latepenalty` history timestamp against the most recent non-plugin history timestamp — the student is skipped when the teacher's edit is newer.
+
+This protection is active only when a prior plugin write exists. When no plugin history entry is found, the grade is treated as the unmodified original and is always eligible for recalculation.
+
+---
 
 The **course-page notice** (the reminder displayed below each activity before a student starts) works with any course format that uses Moodle's standard activity rendering (`[data-for="cmitem"]` on the activity element), which includes the built-in **Topics**, **Weeks**, and **Single Activity** formats.
 
@@ -415,7 +432,24 @@ Dois checkboxes independentes aparecem na seção Late Penalty do formulário da
 
 ---
 
-### ⚠️ Compatibilidade com Formatos de Curso
+### 🔁 Recálculo de Penalidades ao Salvar ou Excluir Sobreposição
+
+Quando o professor **cria, edita ou exclui** uma sobreposição por aluno, a nota final do aluno afetado é recalculada imediatamente com o novo prazo efetivo e as novas taxas.
+
+Esse recálculo utiliza um caminho dedicado (`recalculate_for_student()`) que trabalha diretamente com `grade_grades.rawgrade`, independentemente de o aluno já ter sido penalizado pelo plugin. Isso garante o funcionamento correto em dois cenários adicionais:
+
+| Cenário | Como é tratado |
+|---|---|
+| **Nota definida via restauração de curso** | A restauração grava `source = 'restore'` em `grade_grades_history`. O `recalculate_for_student()` usa o `rawgrade` diretamente de `grade_grades` (não do histórico de penalidades), por isso notas restauradas são atualizadas corretamente. |
+| **Sem histórico de penalidade anterior** | Se a nota do aluno nunca foi tocada pelo plugin (por exemplo, a atividade foi adicionada à regra depois que o aluno já havia sido avaliado), o método ainda aplica ou remove a penalidade com base no `rawgrade` atual e no novo prazo efetivo. |
+
+#### Proteção contra edição manual do professor
+
+Se o professor editar manualmente a nota de um aluno **após** o plugin ter gravado a penalidade, uma alteração posterior na sobreposição **não** sobrescreverá o valor definido pelo professor. A verificação compara o timestamp mais recente de `local_latepenalty` no histórico com o timestamp mais recente de outras origens — o aluno é ignorado quando a edição do professor for mais recente.
+
+Essa proteção só é ativada quando existe uma gravação anterior do plugin. Quando não há nenhum registro do plugin no histórico, a nota é tratada como o original inalterado e sempre poderá ser recalculada.
+
+---
 
 O **aviso na página do curso** (o lembrete exibido abaixo de cada atividade antes de o aluno começar) funciona com qualquer formato de curso que utilize a renderização padrão de atividades do Moodle (`[data-for="cmitem"]` no elemento da atividade), o que inclui os formatos nativos **Tópicos**, **Semanas** e **Atividade Única**.
 
