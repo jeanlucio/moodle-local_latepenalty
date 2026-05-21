@@ -304,6 +304,264 @@ class penalty_helper {
     }
 
     /**
+     * Bulk-load submission times for multiple users in a single course module.
+     *
+     * Replaces N individual get_submission_time() calls with at most two queries
+     * per module type. Returns null for users without a qualifying submission.
+     *
+     * @param int[]     $userids Array of user IDs.
+     * @param \stdClass $cm      Course module object.
+     * @return array<int, int|null> Map of userid → submission timestamp (null if not found).
+     */
+    public static function get_submission_times_bulk(array $userids, \stdClass $cm): array {
+        global $DB;
+
+        if (empty($userids)) {
+            return [];
+        }
+
+        $result = array_fill_keys($userids, null);
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+
+        switch ($cm->modname) {
+            case 'assign':
+                $rows = $DB->get_records_sql(
+                    "SELECT userid, MAX(timemodified) AS timemodified
+                       FROM {assign_submission}
+                      WHERE assignment = :assignment
+                        AND userid $insql
+                        AND status = 'submitted'
+                   GROUP BY userid",
+                    array_merge(['assignment' => $cm->instance], $inparams)
+                );
+                foreach ($rows as $row) {
+                    $result[(int) $row->userid] = (int) $row->timemodified;
+                }
+
+                // Group submission fallback for users without an individual submission.
+                $missingids = array_keys(array_filter($result, fn($v) => $v === null));
+                if (!empty($missingids)) {
+                    [$missingsql, $missingparams] = $DB->get_in_or_equal(
+                        $missingids,
+                        SQL_PARAMS_NAMED,
+                        'mu'
+                    );
+                    $grouprows = $DB->get_records_sql(
+                        "SELECT gm.userid, MAX(s.timemodified) AS timemodified
+                           FROM {groups_members} gm
+                           JOIN {assign_submission} s ON s.groupid = gm.groupid
+                          WHERE gm.userid $missingsql
+                            AND s.assignment = :assignment
+                            AND s.userid = 0
+                            AND s.status = 'submitted'
+                       GROUP BY gm.userid",
+                        array_merge(['assignment' => $cm->instance], $missingparams)
+                    );
+                    foreach ($grouprows as $grow) {
+                        $result[(int) $grow->userid] = (int) $grow->timemodified;
+                    }
+                }
+                break;
+
+            case 'quiz':
+                $rows = $DB->get_records_sql(
+                    "SELECT userid, MAX(timefinish) AS timefinish
+                       FROM {quiz_attempts}
+                      WHERE quiz = :quiz
+                        AND userid $insql
+                        AND state = 'finished'
+                   GROUP BY userid",
+                    array_merge(['quiz' => $cm->instance], $inparams)
+                );
+                foreach ($rows as $row) {
+                    if (!empty($row->timefinish)) {
+                        $result[(int) $row->userid] = (int) $row->timefinish;
+                    }
+                }
+                break;
+
+            case 'workshop':
+                $rows = $DB->get_records_sql(
+                    "SELECT authorid AS userid, MAX(timemodified) AS timemodified
+                       FROM {workshop_submissions}
+                      WHERE workshopid = :workshopid
+                        AND authorid $insql
+                   GROUP BY authorid",
+                    array_merge(['workshopid' => $cm->instance], $inparams)
+                );
+                foreach ($rows as $row) {
+                    $result[(int) $row->userid] = (int) $row->timemodified;
+                }
+                break;
+
+            case 'forum':
+                $rows = $DB->get_records_sql(
+                    "SELECT p.userid, MAX(p.created) AS lastpost
+                       FROM {forum_posts} p
+                       JOIN {forum_discussions} d ON d.id = p.discussion
+                      WHERE d.forum = :forum
+                        AND p.userid $insql
+                   GROUP BY p.userid",
+                    array_merge(['forum' => $cm->instance], $inparams)
+                );
+                foreach ($rows as $row) {
+                    if (!empty($row->lastpost)) {
+                        $result[(int) $row->userid] = (int) $row->lastpost;
+                    }
+                }
+                break;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk-load effective native-module deadlines for multiple users.
+     *
+     * Mirrors get_module_user_deadline() but resolves all users in at most two
+     * queries per module type instead of two per student. User-specific overrides
+     * take priority over group overrides, mirroring Moodle's native behaviour.
+     * Returns null for modules without native per-user override tables.
+     *
+     * @param string $modname    Module name (e.g. 'assign', 'quiz').
+     * @param int    $instanceid Module instance ID.
+     * @param int[]  $userids    Array of user IDs.
+     * @return array<int, int|null> Map of userid → effective deadline (null if none).
+     */
+    public static function get_module_user_deadlines_bulk(
+        string $modname,
+        int $instanceid,
+        array $userids
+    ): array {
+        global $DB;
+
+        if (empty($userids)) {
+            return [];
+        }
+
+        $result = array_fill_keys($userids, null);
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+
+        switch ($modname) {
+            case 'assign':
+                $rows = $DB->get_records_sql(
+                    "SELECT userid, duedate
+                       FROM {assign_overrides}
+                      WHERE assignid = :assignid
+                        AND userid $insql
+                        AND duedate > 0",
+                    array_merge(['assignid' => $instanceid], $inparams)
+                );
+                foreach ($rows as $row) {
+                    $result[(int) $row->userid] = (int) $row->duedate;
+                }
+
+                $missingids = array_keys(array_filter($result, fn($v) => $v === null));
+                if (!empty($missingids)) {
+                    [$missingsql, $missingparams] = $DB->get_in_or_equal(
+                        $missingids,
+                        SQL_PARAMS_NAMED,
+                        'mu'
+                    );
+                    $grouprows = $DB->get_records_sql(
+                        "SELECT gm.userid, MAX(ao.duedate) AS duedate
+                           FROM {assign_overrides} ao
+                           JOIN {groups_members} gm ON gm.groupid = ao.groupid
+                          WHERE ao.assignid = :assignid
+                            AND gm.userid $missingsql
+                            AND ao.duedate > 0
+                       GROUP BY gm.userid",
+                        array_merge(['assignid' => $instanceid], $missingparams)
+                    );
+                    foreach ($grouprows as $grow) {
+                        if (!empty($grow->duedate)) {
+                            $result[(int) $grow->userid] = (int) $grow->duedate;
+                        }
+                    }
+                }
+                break;
+
+            case 'quiz':
+                $rows = $DB->get_records_sql(
+                    "SELECT userid, timeclose
+                       FROM {quiz_overrides}
+                      WHERE quiz = :quizid
+                        AND userid $insql
+                        AND timeclose > 0",
+                    array_merge(['quizid' => $instanceid], $inparams)
+                );
+                foreach ($rows as $row) {
+                    $result[(int) $row->userid] = (int) $row->timeclose;
+                }
+
+                $missingids = array_keys(array_filter($result, fn($v) => $v === null));
+                if (!empty($missingids)) {
+                    [$missingsql, $missingparams] = $DB->get_in_or_equal(
+                        $missingids,
+                        SQL_PARAMS_NAMED,
+                        'mu'
+                    );
+                    $grouprows = $DB->get_records_sql(
+                        "SELECT gm.userid, MAX(qo.timeclose) AS timeclose
+                           FROM {quiz_overrides} qo
+                           JOIN {groups_members} gm ON gm.groupid = qo.groupid
+                          WHERE qo.quiz = :quizid
+                            AND gm.userid $missingsql
+                            AND qo.timeclose > 0
+                       GROUP BY gm.userid",
+                        array_merge(['quizid' => $instanceid], $missingparams)
+                    );
+                    foreach ($grouprows as $grow) {
+                        if (!empty($grow->timeclose)) {
+                            $result[(int) $grow->userid] = (int) $grow->timeclose;
+                        }
+                    }
+                }
+                break;
+
+            case 'lesson':
+                $rows = $DB->get_records_sql(
+                    "SELECT userid, deadline
+                       FROM {lesson_overrides}
+                      WHERE lessonid = :lessonid
+                        AND userid $insql
+                        AND deadline > 0",
+                    array_merge(['lessonid' => $instanceid], $inparams)
+                );
+                foreach ($rows as $row) {
+                    $result[(int) $row->userid] = (int) $row->deadline;
+                }
+
+                $missingids = array_keys(array_filter($result, fn($v) => $v === null));
+                if (!empty($missingids)) {
+                    [$missingsql, $missingparams] = $DB->get_in_or_equal(
+                        $missingids,
+                        SQL_PARAMS_NAMED,
+                        'mu'
+                    );
+                    $grouprows = $DB->get_records_sql(
+                        "SELECT gm.userid, MAX(lo.deadline) AS deadline
+                           FROM {lesson_overrides} lo
+                           JOIN {groups_members} gm ON gm.groupid = lo.groupid
+                          WHERE lo.lessonid = :lessonid
+                            AND gm.userid $missingsql
+                            AND lo.deadline > 0
+                       GROUP BY gm.userid",
+                        array_merge(['lessonid' => $instanceid], $missingparams)
+                    );
+                    foreach ($grouprows as $grow) {
+                        if (!empty($grow->deadline)) {
+                            $result[(int) $grow->userid] = (int) $grow->deadline;
+                        }
+                    }
+                }
+                break;
+        }
+
+        return $result;
+    }
+
+    /**
      * Get the per-user override record for a course module, if one exists.
      *
      * @param int $cmid   Course module ID.

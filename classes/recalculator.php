@@ -83,13 +83,63 @@ class recalculator {
         }
 
         $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
-
         $isautograded = in_array($cm->modname, penalty_helper::$autogradedmodules);
 
-        // Load all per-user overrides for this cmid in a single query, keyed by userid.
+        // Collect all student user IDs. All records for the same CM share one grade item.
+        $userids = array_map(fn($s) => (int) $s->userid, $students);
+        $itemid  = (int) $students[0]->itemid;
+
+        $gradeitem = \grade_item::fetch(['id' => $itemid]);
+        if (!$gradeitem) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+
+        // Pre-load grade_grades to check finalgrade and lock status without per-user queries.
+        $graderows = $DB->get_records_sql(
+            "SELECT userid, finalgrade, locked
+               FROM {grade_grades}
+              WHERE itemid = :itemid
+                AND userid $insql",
+            array_merge(['itemid' => $itemid], $inparams)
+        );
+        $gradebyuserid = [];
+        foreach ($graderows as $gr) {
+            $gradebyuserid[(int) $gr->userid] = $gr;
+        }
+
+        // Pre-load plugin overrides in a single query, keyed by userid.
         $overridesbyuserid = [];
         foreach ($DB->get_records('local_latepenalty_overrides', ['cmid' => $cmid]) as $override) {
             $overridesbyuserid[(int) $override->userid] = $override;
+        }
+
+        // Pre-load module-native deadline overrides for all students in one pass.
+        $moduledeadlinesbyuserid = penalty_helper::get_module_user_deadlines_bulk(
+            $cm->modname,
+            $cm->instance,
+            $userids
+        );
+
+        // Pre-load submission times — one bulk query instead of N individual queries.
+        if ($isautograded) {
+            // For auto-graded modules the grade history timestamp proxies submission time.
+            $subrows = $DB->get_records_sql(
+                "SELECT userid, MAX(timemodified) AS timemodified
+                   FROM {grade_grades_history}
+                  WHERE itemid = :itemid
+                    AND userid $insql
+                    AND source != 'local_latepenalty'
+               GROUP BY userid",
+                array_merge(['itemid' => $itemid], $inparams)
+            );
+            $submissiontimesbyuserid = [];
+            foreach ($subrows as $subrow) {
+                $submissiontimesbyuserid[(int) $subrow->userid] = (int) $subrow->timemodified;
+            }
+        } else {
+            $submissiontimesbyuserid = penalty_helper::get_submission_times_bulk($userids, $cm);
         }
 
         foreach ($students as $student) {
@@ -101,11 +151,7 @@ class recalculator {
             if ($override && $override->deadline !== null) {
                 $effectivedeadline = (int) $override->deadline;
             } else {
-                $effectivedeadline = penalty_helper::get_module_user_deadline(
-                    $cm->modname,
-                    $cm->instance,
-                    $userid
-                ) ?? $newdeadline;
+                $effectivedeadline = $moduledeadlinesbyuserid[$userid] ?? $newdeadline;
             }
             $effectivedaily = ($override && $override->daily_penalty !== null)
                 ? (float) $override->daily_penalty
@@ -118,32 +164,8 @@ class recalculator {
                 continue;
             }
 
-            if ($isautograded) {
-                // For auto-graded modules there is no submission record, but the
-                // original grade history entry (written when the student completed
-                // the activity) has a timemodified that matches the event timestamp
-                // the observer used — making it a reliable proxy for submission time.
-                $row = $DB->get_record_sql(
-                    "SELECT timemodified
-                       FROM {grade_grades_history}
-                      WHERE itemid = :itemid
-                        AND userid = :userid
-                        AND source != 'local_latepenalty'
-                   ORDER BY timemodified DESC",
-                    ['itemid' => (int) $student->itemid, 'userid' => $userid],
-                    IGNORE_MISSING
-                );
-                $submissiontime = $row ? (int) $row->timemodified : null;
-            } else {
-                $submissiontime = penalty_helper::get_submission_time($userid, $cm);
-            }
-
+            $submissiontime = $submissiontimesbyuserid[$userid] ?? null;
             if ($submissiontime === null) {
-                continue;
-            }
-
-            $gradeitem = \grade_item::fetch(['id' => (int) $student->itemid]);
-            if (!$gradeitem) {
                 continue;
             }
 
@@ -151,10 +173,8 @@ class recalculator {
                 continue;
             }
 
-            $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $userid]);
-            $grade->load_optional_fields();
-
-            if (!empty($grade->locked) || !empty($gradeitem->locked)) {
+            $graderow = $gradebyuserid[$userid] ?? null;
+            if (!empty($graderow->locked) || !empty($gradeitem->locked)) {
                 continue;
             }
 
@@ -170,7 +190,7 @@ class recalculator {
                     (float) $gradeitem->grademin
                 );
 
-            $currentgrade = (float) ($grade->finalgrade ?? 0);
+            $currentgrade = (float) ($graderow->finalgrade ?? 0);
             if (abs($newfinalgrade - $currentgrade) < 0.01) {
                 continue;
             }
