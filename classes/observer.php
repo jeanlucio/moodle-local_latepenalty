@@ -165,7 +165,9 @@ class observer {
         $submissiontime = penalty_helper::get_submission_time($userid, $cm);
 
         if ($submissiontime === null) {
-            if (in_array($cm->modname, penalty_helper::$autogradedmodules)) {
+            if (!in_array($cm->modname, penalty_helper::$submissionmodules)) {
+                // No submission table for this module type; the grade event fires when
+                // the student completes the activity, so use its timestamp as a proxy.
                 $submissiontime = (int) ($eventdata['timecreated'] ?? time());
             } else {
                 return;

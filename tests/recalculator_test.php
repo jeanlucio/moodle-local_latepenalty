@@ -23,6 +23,7 @@
  *  - Changed daily rate recalculates the penalty
  *  - Students with no penalty history record are left untouched
  *  - Per-user override: override deadline, override daily rate, override max cap
+ *  - h5pactivity: rate change recalculates from grade_grades_history timestamp
  *
  * @package    local_latepenalty
  * @category   test
@@ -325,5 +326,66 @@ final class recalculator_test extends advanced_testcase {
         recalculator::recalculate($s['assign']->cmid, $s['deadline'], 10.0, 50.0);
 
         self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
+    }
+
+    // H5P activity: recalculator uses grade_grades_history as submission-time proxy.
+
+    /**
+     * h5pactivity: changing the daily rate recalculates the penalty from grade history.
+     *
+     * h5pactivity has no explicit submission table. The recalculator reads
+     * grade_grades_history (excluding source = 'local_latepenalty') to recover
+     * the original grading timestamp.
+     *
+     * Initial state: completionexpected = 5 days ago; grade event fires "now" →
+     * ~5 days late → 10%/day, max 50% → 50% off → grade 50.
+     *
+     * After recalculate at 5%/day: 5 days × 5% = 25% off → grade 75.
+     */
+    public function test_h5pactivity_rate_change_recalculates_penalty(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $h5p = $this->getDataGenerator()->create_module('h5pactivity', [
+            'course' => $course->id,
+            'grade'  => 100,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $h5p->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($h5p->cmid, true, 10.0, 50.0);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'h5pactivity',
+            'iteminstance' => $h5p->id,
+            'courseid'     => $course->id,
+        ]);
+
+        // Initial grade: observer applies 50% cap (5 days late, 10%/day) → 50.
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/h5pactivity');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+        self::assertEqualsWithDelta(50.0, (float) $grade->finalgrade, 0.01, 'Initial penalty must be 50%.');
+
+        // Recalculate at 5%/day: 5 × 5% = 25% off → 75.
+        recalculator::recalculate($h5p->cmid, $deadline, 5.0, 50.0);
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        self::assertEqualsWithDelta(
+            75.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'H5P: recalculator must recompute penalty at new rate using grade_grades_history timestamp.'
+        );
     }
 }

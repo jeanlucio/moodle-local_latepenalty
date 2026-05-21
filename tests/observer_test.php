@@ -23,6 +23,8 @@
  *  - get_submission_time(): forum with no posts returns null
  *  - Full observer chain via assign: no rule, rule disabled, no deadline,
  *    on-time, 1 day late, 2 days late, penalty capped at max
+ *  - Full observer chain via quiz: 1 day late
+ *  - Full observer chain via h5pactivity: late (event-timestamp fallback) and on-time
  *  - Per-user override: custom deadline, custom daily rate, custom max cap,
  *    penalty waived (daily = 0), all-null override inherits rule
  *  - get_module_user_deadline(): assign extension, assign/quiz/lesson overrides
@@ -352,6 +354,23 @@ final class observer_test extends advanced_testcase {
         $forum   = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
 
         $cm = (object) ['modname' => 'forum', 'instance' => $forum->id];
+
+        self::assertNull($this->submission_time($student->id, $cm));
+    }
+
+    /**
+     * h5pactivity has no entry in get_submission_time(); it returns null.
+     *
+     * The observer falls back to the event timestamp for modules not in
+     * penalty_helper::$submissionmodules. This test documents that null
+     * is the expected return — not a bug.
+     */
+    public function test_h5pactivity_submission_time_returns_null(): void {
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $h5p     = $this->getDataGenerator()->create_module('h5pactivity', ['course' => $course->id]);
+
+        $cm = (object) ['modname' => 'h5pactivity', 'instance' => $h5p->id, 'course' => $course->id];
 
         self::assertNull($this->submission_time($student->id, $cm));
     }
@@ -739,6 +758,99 @@ final class observer_test extends advanced_testcase {
             (float) $grade->finalgrade,
             0.01,
             'Quiz: 1 day late at 10%/day must reduce grade from 100 to 90.'
+        );
+    }
+
+    // Full observer chain: integration tests via h5pactivity.
+
+    /**
+     * Full observer chain via h5pactivity: graded after deadline → penalty applied.
+     *
+     * h5pactivity has no submission table. The observer falls back to the grade-event
+     * timestamp as a proxy for the submission time. completionexpected is set 5 days in
+     * the past; the event fires "now", so the student is ~5 days late. At 10%/day with
+     * a 50% cap: 50% off → grade 100 → 50.
+     */
+    public function test_h5pactivity_late_applies_penalty(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $h5p = $this->getDataGenerator()->create_module('h5pactivity', [
+            'course' => $course->id,
+            'grade'  => 100,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $h5p->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($h5p->cmid, true, 10.0, 50.0);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'h5pactivity',
+            'iteminstance' => $h5p->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/h5pactivity');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        // Event timestamp ≈ now = ~5 days after deadline → 50% cap at 10%/day → 50.
+        self::assertEqualsWithDelta(
+            50.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'H5P: penalty must be applied when the grade event fires after completionexpected.'
+        );
+    }
+
+    /**
+     * Full observer chain via h5pactivity: graded before deadline → no penalty.
+     *
+     * completionexpected is set 10 days in the future. The grade event fires "now",
+     * which is before the deadline → 0 days late → grade unchanged.
+     */
+    public function test_h5pactivity_on_time_no_penalty(): void {
+        global $DB;
+
+        $deadline = time() + 10 * DAYSECS;
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $h5p = $this->getDataGenerator()->create_module('h5pactivity', [
+            'course' => $course->id,
+            'grade'  => 100,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $h5p->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($h5p->cmid, true, 10.0, 50.0);
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'h5pactivity',
+            'iteminstance' => $h5p->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/h5pactivity');
+
+        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
+        $grade->load_optional_fields();
+
+        self::assertEqualsWithDelta(
+            100.0,
+            (float) $grade->finalgrade,
+            0.01,
+            'H5P: grade must not be penalised when the event fires before completionexpected.'
         );
     }
 

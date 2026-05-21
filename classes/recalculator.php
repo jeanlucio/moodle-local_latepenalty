@@ -32,9 +32,9 @@ namespace local_latepenalty;
  * grade_grades_history with source = 'local_latepenalty') are affected.
  * Students who submitted within the original deadline are never touched.
  *
- * Auto-graded modules (lesson, playergroup, scorm) are skipped during
- * recalculation because their original submission timestamp is derived from
- * the live grade event and is no longer recoverable.
+ * For modules without an explicit submission table (anything not in
+ * penalty_helper::$submissionmodules), the grade_grades_history timestamp is
+ * used as a proxy for the original submission time.
  */
 class recalculator {
     /**
@@ -83,7 +83,7 @@ class recalculator {
         }
 
         $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
-        $isautograded = in_array($cm->modname, penalty_helper::$autogradedmodules);
+        $isautograded = !in_array($cm->modname, penalty_helper::$submissionmodules);
 
         // Collect all student user IDs. All records for the same CM share one grade item.
         $userids = array_map(fn($s) => (int) $s->userid, $students);

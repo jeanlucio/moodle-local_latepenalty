@@ -44,15 +44,21 @@ class penalty_helper {
     ];
 
     /**
-     * Modules where the grade event itself represents the student action.
-     * Submission records do not exist for these; the event timestamp is used instead.
+     * Modules that have an explicit submission table tracked by this plugin.
+     *
+     * For any module NOT in this list the grade-event timestamp is used as a
+     * proxy for the submission time (the event fires when the student completes
+     * the activity, so it is a reliable stand-in). This makes the plugin work
+     * universally for any activity that has "completionexpected" set, including
+     * H5P and any future module type.
      *
      * @var array<int, string>
      */
-    public static array $autogradedmodules = [
-        'lesson',
-        'playergroup',
-        'scorm',
+    public static array $submissionmodules = [
+        'assign',
+        'forum',
+        'quiz',
+        'workshop',
     ];
 
     /**
