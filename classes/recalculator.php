@@ -47,7 +47,9 @@ class recalculator {
      * @return void
      */
     public static function recalculate(int $cmid, int $newdeadline, float $daily, float $max): void {
-        global $DB;
+        global $CFG, $DB;
+
+        require_once($CFG->libdir . '/gradelib.php');
 
         if (!$newdeadline) {
             return;
@@ -242,5 +244,148 @@ class recalculator {
                 true
             );
         }
+    }
+
+    /**
+     * Recalculate the penalty for a single student after a per-user override
+     * is saved or deleted.
+     *
+     * Unlike {@see recalculate()}, this method does not require a prior
+     * local_latepenalty history entry — it works directly from
+     * grade_grades.rawgrade, making it safe for restored courses or
+     * activities whose grade was never written by this plugin.
+     *
+     * The "teacher manually edited" guard is applied only when a previous
+     * latepenalty write exists (lastpenalty > 0). When no history entry
+     * exists the grade is treated as the unmodified original and is always
+     * eligible for recalculation.
+     *
+     * @param int   $cmid   Course module ID.
+     * @param int   $userid Student user ID.
+     * @param float $daily  Rule daily penalty percentage.
+     * @param float $max    Rule maximum penalty cap percentage.
+     * @return void
+     */
+    public static function recalculate_for_student(int $cmid, int $userid, float $daily, float $max): void {
+        global $CFG, $DB;
+
+        require_once($CFG->libdir . '/gradelib.php');
+
+        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
+
+        $gradeitem = \grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => $cm->modname,
+            'iteminstance' => $cm->instance,
+            'courseid'     => $cm->course,
+        ]);
+        if (!$gradeitem) {
+            return;
+        }
+
+        $graderow = $DB->get_record('grade_grades', ['itemid' => $gradeitem->id, 'userid' => $userid]);
+        if (!$graderow || !empty($graderow->locked) || !empty($gradeitem->locked)) {
+            return;
+        }
+
+        if ($graderow->rawgrade === null) {
+            return;
+        }
+
+        $rawgrade = (float) $graderow->rawgrade;
+        if ($rawgrade <= (float) $gradeitem->grademin) {
+            return;
+        }
+
+        // Resolve effective deadline and rates (override already saved/deleted at call time).
+        $override = penalty_helper::get_override($cmid, $userid);
+        if ($override && $override->deadline !== null) {
+            $effectivedeadline = (int) $override->deadline;
+        } else {
+            $effectivedeadline = penalty_helper::get_module_user_deadline($cm->modname, $cm->instance, $userid)
+                ?? penalty_helper::get_deadline($cm)
+                ?? 0;
+        }
+        if (!$effectivedeadline) {
+            return;
+        }
+
+        $effectivedaily = ($override && $override->daily_penalty !== null)
+            ? (float) $override->daily_penalty
+            : $daily;
+        $effectivemax = ($override && $override->max_penalty !== null)
+            ? (float) $override->max_penalty
+            : $max;
+
+        // Resolve submission time.
+        $submissiontime = penalty_helper::get_submission_time($userid, $cm);
+        if ($submissiontime === null) {
+            if (!in_array($cm->modname, penalty_helper::$submissionmodules)) {
+                // Auto-graded module: use the most recent non-latepenalty history as proxy.
+                $row = $DB->get_record_sql(
+                    "SELECT MAX(timemodified) AS timemodified
+                       FROM {grade_grades_history}
+                      WHERE itemid = :itemid
+                        AND userid = :userid
+                        AND (source IS NULL OR source != 'local_latepenalty')",
+                    ['itemid' => $gradeitem->id, 'userid' => $userid]
+                );
+                $submissiontime = ($row && $row->timemodified !== null) ? (int) $row->timemodified : null;
+            }
+            if ($submissiontime === null) {
+                return;
+            }
+        }
+
+        // Guard: skip only when a prior latepenalty write exists AND the teacher
+        // edited the grade after that write. When no latepenalty entry exists the
+        // grade is treated as the unmodified original (e.g. from a course restore).
+        $hrow = $DB->get_record_sql(
+            "SELECT MAX(CASE WHEN source = 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastpenalty,
+                    MAX(CASE WHEN source IS NULL
+                               OR source != 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastother
+               FROM {grade_grades_history}
+              WHERE itemid = :itemid
+                AND userid = :userid",
+            ['itemid' => $gradeitem->id, 'userid' => $userid]
+        );
+        $lastpenalty = ($hrow !== null && $hrow->lastpenalty !== null) ? (int) $hrow->lastpenalty : 0;
+        $lastother   = ($hrow !== null && $hrow->lastother !== null) ? (int) $hrow->lastother : 0;
+        if ($lastpenalty > 0 && $lastother > $lastpenalty) {
+            return;
+        }
+
+        $dayslate = penalty_helper::calculate_days_late($submissiontime, $effectivedeadline);
+
+        $newfinalgrade = ($dayslate <= 0)
+            ? $rawgrade
+            : penalty_helper::apply_penalty(
+                $rawgrade,
+                $dayslate,
+                $effectivedaily,
+                $effectivemax,
+                (float) $gradeitem->grademin
+            );
+
+        $currentgrade = (float) ($graderow->finalgrade ?? 0);
+        if (abs($newfinalgrade - $currentgrade) < 0.01) {
+            return;
+        }
+
+        $key = $userid . '_' . $cmid;
+        observer::register_pending_grade($key, (float) $gradeitem->bounded_grade($newfinalgrade));
+
+        $gradeitem->update_final_grade(
+            $userid,
+            $newfinalgrade,
+            'local_latepenalty',
+            false,
+            FORMAT_MOODLE,
+            null,
+            null,
+            true
+        );
     }
 }

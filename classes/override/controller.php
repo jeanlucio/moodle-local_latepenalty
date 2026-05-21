@@ -29,6 +29,7 @@ use context_module;
 use core\output\notification;
 use html_writer;
 use local_latepenalty\form\override_form;
+use local_latepenalty\recalculator;
 use moodle_url;
 use renderer_base;
 use stdClass;
@@ -154,10 +155,27 @@ class controller {
         }
 
         require_sesskey();
+
+        $overriderow = $DB->get_record(
+            'local_latepenalty_overrides',
+            ['id' => $this->overrideid, 'cmid' => $this->cmid],
+            'userid'
+        );
+
         $DB->delete_records(
             'local_latepenalty_overrides',
             ['id' => $this->overrideid, 'cmid' => $this->cmid]
         );
+
+        if ($overriderow) {
+            recalculator::recalculate_for_student(
+                $this->cmid,
+                (int) $overriderow->userid,
+                (float) $this->rule->daily_penalty,
+                (float) $this->rule->max_penalty
+            );
+        }
+
         redirect(
             $this->listurl,
             get_string('override_deleted', 'local_latepenalty'),
@@ -299,6 +317,13 @@ class controller {
             $record->timecreated = time();
             $DB->insert_record('local_latepenalty_overrides', $record);
         }
+
+        recalculator::recalculate_for_student(
+            $this->cmid,
+            (int) $record->userid,
+            (float) $this->rule->daily_penalty,
+            (float) $this->rule->max_penalty
+        );
     }
 
     /**
