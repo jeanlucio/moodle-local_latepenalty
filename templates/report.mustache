@@ -74,22 +74,22 @@
 }}
 <div class="local-latepenalty-report mt-4">
     <form method="get" action="{{formaction}}" class="mb-4">
-        <div class="row g-2 align-items-end">
+        <div class="row align-items-end local-latepenalty-filter-row">
             <div class="col-auto">
-                <label for="lp-filter-user" class="form-label mb-1">
+                <label for="lp-filter-user" class="mb-1">
                     {{#str}} filter_student, local_latepenalty {{/str}}
                 </label>
-                <select id="lp-filter-user" name="userid" class="form-select form-select-sm">
+                <select id="lp-filter-user" name="userid" class="form-control form-control-sm">
                     {{#useroptions}}
                     <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                     {{/useroptions}}
                 </select>
             </div>
             <div class="col-auto">
-                <label for="lp-filter-cm" class="form-label mb-1">
+                <label for="lp-filter-cm" class="mb-1">
                     {{#str}} filter_activity, local_latepenalty {{/str}}
                 </label>
-                <select id="lp-filter-cm" name="cmid" class="form-select form-select-sm">
+                <select id="lp-filter-cm" name="cmid" class="form-control form-control-sm">
                     {{#cmoptions}}
                     <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                     {{/cmoptions}}
@@ -105,7 +105,7 @@
     </form>
     <div class="card shadow-sm border-0">
         <div class="card-header bg-primary d-flex align-items-center">
-            <i class="fa fa-table me-2 text-white" aria-hidden="true"></i>
+            <i class="fa fa-table text-white local-latepenalty-report-icon" aria-hidden="true"></i>
             <h2 class="card-title h5 mb-0 text-white">
                 {{#str}} report, local_latepenalty {{/str}}
             </h2>
@@ -138,7 +138,7 @@
                             <td>{{activity}}</td>
                             <td>{{#hasdeadline}}{{completionexpected}}{{/hasdeadline}}{{^hasdeadline}}&mdash;{{/hasdeadline}}</td>
                             <td class="text-center">{{rawgrade}} / {{grademax}}</td>
-                            <td class="text-center fw-bold local-latepenalty-discount">
+                            <td class="text-center local-latepenalty-discount">
                                 &minus;{{discount}}%
                             </td>
                             <td class="text-center">{{finalgrade}} / {{grademax}}</td>

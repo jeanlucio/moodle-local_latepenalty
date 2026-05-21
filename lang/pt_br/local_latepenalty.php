@@ -59,6 +59,7 @@ $string['override_delete'] = 'Excluir';
 $string['override_deleted'] = 'Sobreposição excluída com sucesso.';
 $string['override_edit'] = 'Editar';
 $string['override_empty'] = 'Nenhuma sobreposição foi configurada para esta atividade.';
+$string['override_error_duplicate'] = 'Este estudante já possui uma sobreposição para esta atividade.';
 $string['override_error_nothing_enabled'] = 'Habilite pelo menos um campo para criar uma sobreposição.';
 $string['override_hint'] = 'Deixe um campo em branco para herdar o valor configurado na atividade.';
 $string['override_inherit'] = 'Padrão da atividade';

@@ -286,7 +286,7 @@ class controller {
 
         $record                = new stdClass();
         $record->cmid          = $this->cmid;
-        $record->userid        = (int) $formdata->userid;
+        $record->userid        = $this->resolve_override_userid($formdata);
         $record->deadline      = empty($formdata->deadline) ? null : (int) $formdata->deadline;
         $record->daily_penalty = ($dailyraw === '') ? null : (float) $dailyraw;
         $record->max_penalty   = ($maxraw === '') ? null : (float) $maxraw;
@@ -299,6 +299,48 @@ class controller {
             $record->timecreated = time();
             $DB->insert_record('local_latepenalty_overrides', $record);
         }
+    }
+
+    /**
+     * Resolve and validate the user ID that an override may affect.
+     *
+     * @param stdClass $formdata Validated form data.
+     * @return int User ID that belongs to this override.
+     */
+    private function resolve_override_userid(stdClass $formdata): int {
+        global $DB;
+
+        if ($this->overrideid) {
+            $override = $DB->get_record(
+                'local_latepenalty_overrides',
+                ['id' => $this->overrideid, 'cmid' => $this->cmid],
+                'id, userid',
+                MUST_EXIST
+            );
+            return (int) $override->userid;
+        }
+
+        $userid = (int) ($formdata->userid ?? 0);
+        if (!$userid || !$this->is_user_enrolled($userid)) {
+            throw new \moodle_exception('invaliduser');
+        }
+
+        if ($DB->record_exists('local_latepenalty_overrides', ['cmid' => $this->cmid, 'userid' => $userid])) {
+            throw new \moodle_exception('override_error_duplicate', 'local_latepenalty');
+        }
+
+        return $userid;
+    }
+
+    /**
+     * Check whether a user is actively enrolled in this controller's course.
+     *
+     * @param int $userid User ID to check.
+     * @return bool True when the user is enrolled.
+     */
+    private function is_user_enrolled(int $userid): bool {
+        $coursecontext = context_course::instance($this->course->id);
+        return is_enrolled($coursecontext, $userid, '', true);
     }
 
     /**

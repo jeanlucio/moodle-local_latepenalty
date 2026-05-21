@@ -171,6 +171,19 @@ final class controller_test extends advanced_testcase {
         );
     }
 
+    /**
+     * Invoke the private save_override() method with controlled form data.
+     *
+     * @param controller $ctrl Controller instance.
+     * @param stdClass $formdata Form data to save.
+     * @return void
+     */
+    private function invoke_save_override(controller $ctrl, stdClass $formdata): void {
+        $method = new \ReflectionMethod($ctrl, 'save_override');
+        $method->setAccessible(true);
+        $method->invoke($ctrl, $formdata);
+    }
+
     // Tests: render() in list mode.
 
     /**
@@ -252,6 +265,61 @@ final class controller_test extends advanced_testcase {
         self::assertStringContainsString(
             get_string('override_no_students', 'local_latepenalty'),
             $html
+        );
+    }
+
+    /**
+     * save_override() rejects an add request for a user who is not enrolled in the course.
+     */
+    public function test_save_add_rejects_unenrolled_user(): void {
+        global $DB;
+
+        $this->setAdminUser();
+
+        $s = $this->make_scenario();
+        $intruder = $this->getDataGenerator()->create_user();
+        $ctrl = $this->make_controller($s, 'add');
+
+        $this->expectException(\moodle_exception::class);
+        $this->expectExceptionMessage(get_string('invaliduser'));
+
+        try {
+            $this->invoke_save_override($ctrl, (object) [
+                'userid' => $intruder->id,
+            ]);
+        } finally {
+            self::assertFalse(
+                $DB->record_exists('local_latepenalty_overrides', ['cmid' => $s['cm']->id, 'userid' => $intruder->id])
+            );
+        }
+    }
+
+    /**
+     * save_override() keeps the original user when an edit POST tampers with the hidden userid.
+     */
+    public function test_save_edit_preserves_original_userid(): void {
+        global $DB;
+
+        $this->setAdminUser();
+
+        $s = $this->make_scenario();
+        $otherstudent = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($otherstudent->id, $s['course']->id);
+        $override = $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, null, 5.0, 30.0);
+
+        $ctrl = $this->make_controller($s, 'edit', (int) $override->id);
+        $this->invoke_save_override($ctrl, (object) [
+            'userid' => $otherstudent->id,
+        ]);
+
+        $saved = $DB->get_record('local_latepenalty_overrides', ['id' => $override->id], '*', MUST_EXIST);
+
+        self::assertSame((int) $s['student']->id, (int) $saved->userid);
+        self::assertFalse(
+            $DB->record_exists(
+                'local_latepenalty_overrides',
+                ['cmid' => $s['cm']->id, 'userid' => $otherstudent->id]
+            )
         );
     }
 

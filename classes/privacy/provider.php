@@ -95,16 +95,28 @@ class provider implements
         global $DB;
 
         $userid = $contextlist->get_user()->id;
+        $contextsbycmid = [];
 
         foreach ($contextlist->get_contexts() as $context) {
-            if (!$context instanceof \context_module) {
-                continue;
+            if ($context instanceof \context_module) {
+                $contextsbycmid[(int) $context->instanceid] = $context;
             }
-            $record = $DB->get_record(
-                'local_latepenalty_overrides',
-                ['cmid' => $context->instanceid, 'userid' => $userid]
-            );
-            if (!$record) {
+        }
+
+        if (empty($contextsbycmid)) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal(array_keys($contextsbycmid), SQL_PARAMS_NAMED, 'cmid');
+        $records = $DB->get_records_select(
+            'local_latepenalty_overrides',
+            "userid = :userid AND cmid $insql",
+            array_merge(['userid' => $userid], $inparams)
+        );
+
+        foreach ($records as $record) {
+            $context = $contextsbycmid[(int) $record->cmid] ?? null;
+            if (!$context) {
                 continue;
             }
             writer::with_context($context)->export_data(
@@ -135,16 +147,24 @@ class provider implements
         global $DB;
 
         $userid = $contextlist->get_user()->id;
+        $cmids = [];
 
         foreach ($contextlist->get_contexts() as $context) {
-            if (!$context instanceof \context_module) {
-                continue;
+            if ($context instanceof \context_module) {
+                $cmids[] = (int) $context->instanceid;
             }
-            $DB->delete_records(
-                'local_latepenalty_overrides',
-                ['cmid' => $context->instanceid, 'userid' => $userid]
-            );
         }
+
+        if (empty($cmids)) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED, 'cmid');
+        $DB->delete_records_select(
+            'local_latepenalty_overrides',
+            "userid = :userid AND cmid $insql",
+            array_merge(['userid' => $userid], $inparams)
+        );
     }
 
     #[\Override]
@@ -156,7 +176,12 @@ class provider implements
             return;
         }
 
-        [$insql, $inparams] = $DB->get_in_or_equal($userlist->get_userids(), SQL_PARAMS_NAMED);
+        $userids = $userlist->get_userids();
+        if (empty($userids)) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
         $inparams['cmid'] = $context->instanceid;
         $DB->delete_records_select(
             'local_latepenalty_overrides',

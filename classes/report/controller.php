@@ -132,6 +132,7 @@ class controller {
         $rows = $DB->get_records_sql($sql, $params);
 
         $modinfo = get_fast_modinfo($this->courseid);
+        $moduledeadlines = self::load_module_deadlines($rows);
 
         // Keep only the most recent penalty per student + grade item (ORDER BY DESC above).
         $seen      = [];
@@ -163,7 +164,7 @@ class controller {
                 ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
                 : '';
 
-            $deadline = self::resolve_deadline($row);
+            $deadline = self::resolve_deadline($row, $moduledeadlines);
 
             $penalties[] = [
                 'fullname'           => format_string(
@@ -306,19 +307,75 @@ class controller {
      *                       itemmodule and iteminstance.
      * @return int|null Deadline timestamp or null if not determinable.
      */
-    private static function resolve_deadline(\stdClass $row): ?int {
-        global $DB;
-
+    private static function resolve_deadline(\stdClass $row, array $moduledeadlines): ?int {
         if (!empty($row->completionexpected)) {
             return (int) $row->completionexpected;
         }
 
-        $field = self::$deadlinefields[$row->itemmodule] ?? null;
-        if (!$field) {
-            return null;
+        $value = $moduledeadlines[$row->itemmodule][(int) $row->iteminstance] ?? null;
+        return ($value) ? (int) $value : null;
+    }
+
+    /**
+     * Load module deadline fields in bulk, grouped by module type.
+     *
+     * @param array $rows Report rows containing itemmodule and iteminstance.
+     * @return array<string, array<int, int>> Deadline timestamps keyed by module name and instance ID.
+     */
+    private static function load_module_deadlines(array $rows): array {
+        global $DB;
+
+        $instancesbymodule = [];
+        foreach ($rows as $row) {
+            if (!empty($row->completionexpected) || empty(self::$deadlinefields[$row->itemmodule])) {
+                continue;
+            }
+            $instancesbymodule[$row->itemmodule][(int) $row->iteminstance] = (int) $row->iteminstance;
         }
 
-        $value = $DB->get_field($row->itemmodule, $field, ['id' => $row->iteminstance]);
-        return ($value) ? (int) $value : null;
+        $deadlines = [];
+        self::load_deadlines_for_module('assign', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('forum', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('lesson', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('playergroup', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('quiz', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('scorm', $instancesbymodule, $deadlines);
+        self::load_deadlines_for_module('workshop', $instancesbymodule, $deadlines);
+
+        return $deadlines;
+    }
+
+    /**
+     * Load deadline values for one whitelisted module table.
+     *
+     * @param string $modname Module name.
+     * @param array $instancesbymodule Instance IDs grouped by module name.
+     * @param array $deadlines Deadline accumulator keyed by module name and instance ID.
+     * @return void
+     */
+    private static function load_deadlines_for_module(
+        string $modname,
+        array $instancesbymodule,
+        array &$deadlines
+    ): void {
+        global $DB;
+
+        if (empty($instancesbymodule[$modname])) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($instancesbymodule[$modname], SQL_PARAMS_NAMED, 'inst');
+        $field = self::$deadlinefields[$modname];
+        $records = $DB->get_records_sql(
+            "SELECT id, $field AS deadline
+               FROM {{$modname}}
+              WHERE id $insql",
+            $inparams
+        );
+        foreach ($records as $record) {
+            if (!empty($record->deadline)) {
+                $deadlines[$modname][(int) $record->id] = (int) $record->deadline;
+            }
+        }
     }
 }
