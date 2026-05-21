@@ -340,15 +340,20 @@ final class recalculator_test extends advanced_testcase {
 
         $s = $this->make_scenario(2 * DAYSECS);
         $this->grade_via_module($s, 100.0);
+        // Observer applies 2×10% = 20% off → finalgrade = 80; latepenalty history written.
 
-        // Simulate a teacher manual override: set overridden = now and adjust finalgrade.
-        $gradeitem = $s['gradeitem'];
-        $DB->set_field('grade_grades', 'overridden', time(), [
-            'itemid' => $gradeitem->id,
-            'userid' => $s['student']->id,
-        ]);
+        // Simulate a teacher manually overriding the grade after our penalty.
+        // Advancing the non-latepenalty history timestamp past the latepenalty
+        // record makes the recalculator treat it as a teacher edit and skip it.
+        $DB->set_field_select(
+            'grade_grades_history',
+            'timemodified',
+            time() + 60,
+            "itemid = :itemid AND userid = :userid AND source != 'local_latepenalty'",
+            ['itemid' => $s['gradeitem']->id, 'userid' => $s['student']->id]
+        );
         $DB->set_field('grade_grades', 'finalgrade', 90.0, [
-            'itemid' => $gradeitem->id,
+            'itemid' => $s['gradeitem']->id,
             'userid' => $s['student']->id,
         ]);
 

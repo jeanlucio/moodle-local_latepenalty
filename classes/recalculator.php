@@ -96,9 +96,9 @@ class recalculator {
 
         [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
 
-        // Pre-load grade_grades to check finalgrade, lock, and override status.
+        // Pre-load grade_grades to check finalgrade and lock status.
         $graderows = $DB->get_records_sql(
-            "SELECT userid, finalgrade, locked, overridden
+            "SELECT userid, finalgrade, locked
                FROM {grade_grades}
               WHERE itemid = :itemid
                 AND userid $insql",
@@ -142,6 +142,30 @@ class recalculator {
             $submissiontimesbyuserid = penalty_helper::get_submission_times_bulk($userids, $cm);
         }
 
+        // Pre-load grade history timestamps to detect teacher manual overrides.
+        // update_final_grade() sets grade_grades.overridden, so that field cannot
+        // distinguish our penalty writes from teacher edits. Instead, compare the
+        // most recent non-latepenalty history timestamp against the most recent
+        // latepenalty one: if a non-latepenalty record is newer the teacher edited
+        // the grade after our last penalty and we must leave it untouched.
+        $historyrows = $DB->get_records_sql(
+            "SELECT userid,
+                    MAX(CASE WHEN source = 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastpenalty,
+                    MAX(CASE WHEN source IS NULL
+                               OR source != 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastother
+               FROM {grade_grades_history}
+              WHERE itemid = :itemid
+                AND userid $insql
+              GROUP BY userid",
+            array_merge(['itemid' => $itemid], $inparams)
+        );
+        $historybyuserid = [];
+        foreach ($historyrows as $hrow) {
+            $historybyuserid[(int) $hrow->userid] = $hrow;
+        }
+
         foreach ($students as $student) {
             $userid   = (int) $student->userid;
             $rawgrade = (float) $student->rawgrade;
@@ -174,7 +198,14 @@ class recalculator {
             }
 
             $graderow = $gradebyuserid[$userid] ?? null;
-            if (!empty($graderow->locked) || !empty($gradeitem->locked) || !empty($graderow->overridden)) {
+            if (!empty($graderow->locked) || !empty($gradeitem->locked)) {
+                continue;
+            }
+
+            $hrow        = $historybyuserid[$userid] ?? null;
+            $lastpenalty = ($hrow !== null && $hrow->lastpenalty !== null) ? (int) $hrow->lastpenalty : 0;
+            $lastother   = ($hrow !== null && $hrow->lastother !== null) ? (int) $hrow->lastother : 0;
+            if ($lastother > $lastpenalty) {
                 continue;
             }
 
