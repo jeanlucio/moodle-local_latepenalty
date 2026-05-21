@@ -31,42 +31,8 @@ body.path-local-latepenalty .local-latepenalty-report-icon {
 }
 
 /**
- * CSS ::after fallback badge — shown only before the real badge span is
- * injected (i.e. before data-lp-injected is set on the li during reactive
- * courseformat adoption). Suppressed once the span is in place.
- * Label and colour come from data attributes set by courseinfo.js.
- */
-body.path-course-view li[data-lp-penalty]:not([data-lp-injected]) .activityname::after {
-    content: attr(data-lp-label);
-    display: inline-block;
-    background-color: transparent;
-    color: var(--bs-secondary-color, #6c757d);
-    border: 1.5px solid var(--bs-secondary, #6c757d);
-    font-size: 0.7em;
-    font-weight: 600;
-    padding: 0.15em 0.5em;
-    border-radius: 0.25rem;
-    margin-inline-start: 0.5rem;
-    vertical-align: middle;
-    white-space: nowrap;
-    cursor: help;
-}
-
-body.path-course-view li[data-lp-state="warning"]:not([data-lp-injected]) .activityname::after {
-    background-color: var(--bs-warning, #ffc107);
-    color: #000;
-    border-color: var(--bs-warning, #ffc107);
-}
-
-body.path-course-view li[data-lp-state="danger"]:not([data-lp-injected]) .activityname::after {
-    background-color: var(--bs-danger, #dc3545);
-    color: #fff;
-    border-color: var(--bs-danger, #dc3545);
-}
-
-/**
- * Real badge span — injected after reactive adoption; serves as both
- * the visual badge and the Bootstrap tooltip anchor.
+ * Badge span injected by courseinfo.js — serves as both the visual badge
+ * and the Bootstrap tooltip anchor.
  * Base style is the neutral/ontime state (within deadline).
  */
 body.path-course-view .local-latepenalty-badge {
