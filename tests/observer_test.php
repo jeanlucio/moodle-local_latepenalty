@@ -366,6 +366,7 @@ final class observer_test extends advanced_testcase {
      * is the expected return — not a bug.
      */
     public function test_h5pactivity_submission_time_returns_null(): void {
+        $this->setAdminUser();
         $course  = $this->getDataGenerator()->create_course();
         $student = $this->getDataGenerator()->create_user();
         $h5p     = $this->getDataGenerator()->create_module('h5pactivity', ['course' => $course->id]);
@@ -774,6 +775,7 @@ final class observer_test extends advanced_testcase {
     public function test_h5pactivity_late_applies_penalty(): void {
         global $DB;
 
+        $this->setAdminUser();
         $deadline = time() - 5 * DAYSECS;
 
         $course  = $this->getDataGenerator()->create_course();
@@ -819,6 +821,7 @@ final class observer_test extends advanced_testcase {
     public function test_h5pactivity_on_time_no_penalty(): void {
         global $DB;
 
+        $this->setAdminUser();
         $deadline = time() + 10 * DAYSECS;
 
         $course  = $this->getDataGenerator()->create_course();

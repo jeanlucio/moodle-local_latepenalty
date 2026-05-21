@@ -345,6 +345,7 @@ final class recalculator_test extends advanced_testcase {
     public function test_h5pactivity_rate_change_recalculates_penalty(): void {
         global $DB;
 
+        $this->setAdminUser();
         $deadline = time() - 5 * DAYSECS;
 
         $course  = $this->getDataGenerator()->create_course();
