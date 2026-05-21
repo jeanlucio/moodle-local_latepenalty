@@ -328,6 +328,35 @@ final class recalculator_test extends advanced_testcase {
         self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
     }
 
+    /**
+     * Recalculation skips students whose grade has been manually overridden by a teacher.
+     *
+     * Student was 2 days late (20% off → 80). Teacher later overrides the grade
+     * to 90 in the gradebook. When the rate is changed, the recalculator must
+     * leave the overridden grade untouched.
+     */
+    public function test_overridden_grade_not_affected(): void {
+        global $DB;
+
+        $s = $this->make_scenario(2 * DAYSECS);
+        $this->grade_via_module($s, 100.0);
+
+        // Simulate a teacher manual override: set overridden = now and adjust finalgrade.
+        $gradeitem = $s['gradeitem'];
+        $DB->set_field('grade_grades', 'overridden', time(), [
+            'itemid' => $gradeitem->id,
+            'userid' => $s['student']->id,
+        ]);
+        $DB->set_field('grade_grades', 'finalgrade', 90.0, [
+            'itemid' => $gradeitem->id,
+            'userid' => $s['student']->id,
+        ]);
+
+        recalculator::recalculate($s['assign']->cmid, $s['deadline'], 5.0, 50.0);
+
+        self::assertEqualsWithDelta(90.0, $this->read_final_grade($s), 0.01);
+    }
+
     // H5P activity: recalculator uses grade_grades_history as submission-time proxy.
 
     /**

@@ -96,9 +96,9 @@ class recalculator {
 
         [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
 
-        // Pre-load grade_grades to check finalgrade and lock status without per-user queries.
+        // Pre-load grade_grades to check finalgrade, lock, and override status.
         $graderows = $DB->get_records_sql(
-            "SELECT userid, finalgrade, locked
+            "SELECT userid, finalgrade, locked, overridden
                FROM {grade_grades}
               WHERE itemid = :itemid
                 AND userid $insql",
@@ -174,7 +174,7 @@ class recalculator {
             }
 
             $graderow = $gradebyuserid[$userid] ?? null;
-            if (!empty($graderow->locked) || !empty($gradeitem->locked)) {
+            if (!empty($graderow->locked) || !empty($gradeitem->locked) || !empty($graderow->overridden)) {
                 continue;
             }
 
