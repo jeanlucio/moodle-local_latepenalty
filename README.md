@@ -86,31 +86,50 @@ The maximum penalty must be greater than or equal to the daily penalty.
 
 ### 📖 How It Works
 
-1. Teacher enables the penalty rule and sets the daily rate and cap when creating/editing the activity.
-2. Student submits the activity after the deadline.
-3. Moodle fires a `user_graded` event; the plugin observer intercepts it.
-4. The plugin resolves the **effective deadline** for that student through the following priority chain:
-   1. Plugin per-user override (`local_latepenalty_overrides.deadline`)
-   2. Module-native user or group override (Assignment extension/override, Quiz override, Lesson override)
-   3. `completionexpected` on the course module
-   4. Module deadline field (`assign.duedate` or `forum.duedate`) — Assignment and Forum only
-5. Days late are calculated and the discount is applied.
-6. The adjusted grade is written back to the Gradebook via the standard grade API.
-7. On the course page, each affected activity shows a contextual status badge: grey with the deadline when on time, yellow with the accumulated penalty when overdue, or red when the maximum is reached. The tooltip adapts accordingly. Both badge and activity-page notice disappear once the student completes the activity.
+1. The teacher opens any Moodle activity that has a grade and completion conditions.
 
-> **Note — hard-deadline modules (Quiz, Lesson, SCORM, Workshop, H5P, etc.):** These modules enforce their own close time and physically prevent submissions after it. Using their native close field as a penalty deadline would be meaningless — no student can ever be late relative to it. For these activities, set `completionexpected` (the "Set reminder on timeline" field) to an earlier date: that date becomes the soft penalty deadline, and students can still complete the activity up to the module's hard close time. For universal support, every activity type — including H5P and any future module — can receive a penalty as long as `completionexpected` is configured.
+2. The teacher sets a **submission deadline** for the activity, which serves as the reference point for penalty calculation:
+   - **Assignment** and **Forum**: have a native due date field (do not confuse with the Assignment cut-off date, which blocks submissions and prevents penalty calculation).
+   - **Quiz, Lesson, SCORM, and all other activities**: do not have a deadline that allows late submission. For these, the **"Set reminder on timeline"** field (*Completion conditions* tab) is **required** — it does not block submissions and serves solely as the penalty reference date. Without it configured, there is no deadline and no penalty is applied.
 
-> **Note — manual grading without a submission:** The penalty is based on the student's **submission timestamp**, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
+3. The teacher then opens the **Late Penalty** section and enables **Enable progressive penalty**.
+
+4. The teacher enters the **daily penalty (%)** and the **maximum penalty (%)**. Example: 10% daily penalty with a 50% cap → the system deducts 10% of the student's achieved grade per day late, up to a maximum of 50%, regardless of how many days pass after that point.
+
+5. When the activity is saved, a **badge** appears next to the activity name showing the deadline. After the deadline, if the student has not yet completed the activity, the badge switches to show the accumulated penalty. The badge has contextual status: grey with the deadline when on time, yellow with the accumulated penalty when overdue, and red when the maximum is reached. The tooltip adapts to each state. The badge and the activity-page notice disappear automatically once the student completes the activity.
+
+6. When a student submits after the deadline and a grade is assigned (manually by the teacher or automatically), the plugin calculates and applies the penalty.
+
+7. If a **deadline override** is set for a specific student, it takes precedence over other configurations. The priority order is:
+   - **Plugin per-user override** — accessed via *Penalty overrides* inside the activity. Highest priority.
+   - **Module-native override** — Assignment (extension/override), Quiz (override), and Lesson (override) have their own fields, checked next.
+   - **"Set reminder on timeline"** (`completionexpected`) — applies to any activity type.
+   - **Native deadline field** — Assignment and Forum only, as a final fallback.
+
+8. Days late are calculated and the discount is applied.
+
+9. The adjusted grade is written back to the Gradebook via the standard grade API.
+
+> **Note — manual grading without a submission:** The penalty is based on the student's submission timestamp, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
 
 > **Note — Assignment team (group) submissions:** When an Assignment is configured for team submissions with *Require all team members to submit* **disabled**, Moodle stores a single submission record for the whole group (`userid = 0`). The plugin automatically detects this case, looks up the student's groups, and uses the **group submission timestamp** as the basis for penalty calculation for every group member. When *Require all team members to submit* is **enabled**, Moodle records an individual submission per member and each student's own submission time is used.
 
-#### Calculation Formula
+#### Calculation
 
-```
-Days Late = ceil((Submission Time − Deadline) / 86400)
-Discount   = min(Days Late × Daily Rate, Maximum Cap)
-Final Grade = Raw Grade × (1 − Discount / 100)
-```
+1. **Days late** — counted from the moment of submission. Any fraction of a day counts as a full day (rounded up). Example: submitted 25 hours after the deadline = 2 days late.
+2. **Discount** — days late × daily rate, capped at the maximum penalty.
+3. **Final grade** — the raw grade reduced by the discount percentage.
+
+**Example** (raw grade: 100 | daily penalty: 10% | cap: 50%):
+
+| Submission | Discount | Final grade |
+|---|---|---|
+| On time | 0% | 100 |
+| 1 day late | 10% | 90 |
+| 2 days late | 20% | 80 |
+| 3 days late | 30% | 70 |
+| 4 days late | 40% | 60 |
+| 5+ days late | 50% (cap) | 50 |
 
 #### Deadline Priority Chain
 
@@ -341,31 +360,50 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 
 ### 📖 Como Funciona
 
-1. O professor ativa a regra e define o desconto diário e o limite máximo ao criar/editar a atividade.
-2. O aluno entrega a atividade após o prazo.
-3. O Moodle dispara um evento `user_graded`; o observer do plugin o intercepta.
-4. O plugin resolve o **prazo efetivo** para aquele aluno pela seguinte cadeia de prioridade:
-   1. Sobreposição por aluno do plugin (`local_latepenalty_overrides.deadline`)
-   2. Override/extensão nativo do módulo por usuário ou grupo (extensão/override de Tarefa, override de Questionário, override de Lição)
-   3. `completionexpected` no módulo de curso
-   4. Campo de prazo do módulo (`assign.duedate` ou `forum.duedate`) — apenas Tarefa e Fórum
-5. Os dias de atraso são calculados e o desconto é aplicado.
-6. A nota ajustada é registrada de volta no Livro de Notas via API padrão de notas.
-7. Na página do curso, cada atividade afetada exibe um badge de status contextual: cinza com o prazo quando no tempo, amarelo com a penalidade acumulada quando em atraso, ou vermelho ao atingir o máximo. O tooltip adapta o texto a cada estado. O badge e o aviso na página da atividade desaparecem após o aluno concluir a atividade.
+1. O professor acessa qualquer atividade do Moodle que possua nota e condições de conclusão.
 
-> **Observação — módulos com prazo rígido (Questionário, Lição, SCORM, Oficina, H5P, etc.):** Esses módulos encerram o acesso no horário configurado e impedem fisicamente qualquer entrega após esse momento. Usar o campo de prazo nativo deles como prazo de penalidade seria inútil — nenhum aluno consegue entregar com atraso em relação a ele. Para essas atividades, configure `completionexpected` (o campo "Definir lembrete na linha do tempo") com uma data anterior: essa data se torna o prazo soft de penalidade, e o aluno ainda pode concluir a atividade até o encerramento rígido do módulo. Para suporte universal, qualquer tipo de atividade — incluindo H5P e qualquer módulo futuro — pode receber penalidade desde que `completionexpected` esteja configurado.
+2. O professor define uma **data de entrega** para a atividade, que servirá como referência para o cálculo da penalidade:
+   - **Tarefa** e **Fórum**: possuem campo nativo de data de entrega (não confundir com a data limite da Tarefa, que bloqueia o envio e impede o cálculo da penalidade).
+   - **Questionário, Lição, SCORM e demais atividades**: não possuem prazo que permita entrega tardia. Para essas, é **obrigatório** usar o campo **"Definir lembrete na linha do tempo"** (aba *Condições de Conclusão*) — esse campo não impede a entrega e funciona como prazo de referência exclusivamente para o cálculo da penalidade. Sem ele configurado, não há prazo e a penalidade não é aplicada.
 
-> **Observação — avaliação sem entrega:** A penalidade é baseada no **timestamp de entrega do aluno**, não no momento em que o professor avalia. Se um professor atribuir nota a um aluno que nunca entregou (ex.: Fórum em que o aluno não fez nenhuma postagem), não existe registro de entrega e o plugin ignora a penalidade. Isso é intencional: sem entrega, não há atraso a medir.
+3. Em seguida, o professor acessa a aba **Penalidade por Atraso** e marca a opção **Habilitar penalidade progressiva**.
 
-> **Observação — Tarefas com entrega em grupo:** Quando uma Tarefa é configurada para entregas em grupo com *Exigir que todos os membros do grupo façam a entrega* **desativado**, o Moodle registra uma única entrega para o grupo inteiro (`userid = 0`). O plugin detecta automaticamente esse caso, identifica os grupos do aluno e usa o **timestamp de entrega do grupo** como base para o cálculo da penalidade de todos os membros. Quando a opção está **ativada**, o Moodle registra uma entrega individual por membro e o timestamp de cada aluno é usado.
+4. O professor informa o **percentual de desconto diário** e o **desconto máximo**. Exemplo: 10% de desconto diário com limite de 50% → o sistema desconta 10% da nota alcançada por dia de atraso, até o máximo de 50%, independentemente de quantos dias se passem depois disso.
 
-#### Fórmula de Cálculo
+5. Ao salvar a atividade, um **badge** aparece ao lado do nome exibindo o prazo de entrega. Após o prazo, caso o aluno ainda não tenha concluído, o badge passa a mostrar a penalidade acumulada. O badge possui status contextual: cinza com o prazo quando dentro do tempo, amarelo com a penalidade acumulada quando em atraso, e vermelho ao atingir o limite máximo. O tooltip adapta o texto a cada estado. O badge e o aviso na página da atividade desaparecem após o aluno concluir a atividade.
 
-```
-Dias de Atraso = ceil((Hora da Entrega − Prazo) / 86400)
-Desconto       = min(Dias de Atraso × Taxa Diária, Limite Máximo)
-Nota Final     = Nota Bruta × (1 − Desconto / 100)
-```
+6. Quando o aluno entrega após o prazo e a nota é atribuída (manualmente pelo professor ou automaticamente), o plugin calcula a penalidade e a aplica.
+
+7. Se houver uma **sobreposição de prazo** registrada para um aluno específico, ela tem prioridade sobre as demais configurações. A ordem é:
+   - **Sobreposição do plugin** — acessada em *Sobreposição de penalidades*, dentro da atividade. Tem a maior prioridade.
+   - **Sobreposição nativa do módulo** — Tarefa (extensão/override), Questionário (override) e Lição (override) possuem campos próprios consultados em seguida.
+   - **"Definir lembrete na linha do tempo"** — válido para qualquer tipo de atividade.
+   - **Campo de prazo nativo** — apenas Tarefa e Fórum, como último recurso.
+
+8. Os dias de atraso são calculados e o desconto é aplicado.
+
+9. A nota ajustada é registrada de volta no Livro de Notas via API padrão de notas.
+
+> **Observação — avaliação sem entrega:** A penalidade é baseada na data de entrega do aluno, não no momento em que o professor avalia. Se um professor atribuir nota a um aluno que nunca entregou (ex.: Fórum em que o aluno não fez nenhuma postagem), não existe registro de entrega e o plugin ignora a penalidade. Isso é intencional: sem entrega, não há atraso a medir.
+
+> **Observação — Tarefas com entrega em grupo:** Quando uma Tarefa é configurada para entregas em grupo com *Exigir que todos os membros do grupo façam a entrega* **desativado**, o Moodle registra uma única entrega para o grupo inteiro (`userid = 0`). O plugin detecta automaticamente esse caso, identifica os grupos do aluno e usa a data de entrega do grupo como base para o cálculo da penalidade de todos os membros. Quando a opção está **ativada**, o Moodle registra uma entrega individual por membro e a data de entrega de cada aluno é usada.
+
+#### Como a penalidade é calculada
+
+1. **Dias de atraso** — contados a partir do momento da entrega. Qualquer fração de dia conta como um dia completo (arredondado para cima). Exemplo: entregou 25 horas depois do prazo = 2 dias de atraso.
+2. **Desconto** — dias de atraso × percentual diário, respeitando o limite máximo.
+3. **Nota final** — a nota bruta reduzida pelo percentual de desconto.
+
+**Exemplo** (nota bruta: 100 | desconto diário: 10% | limite: 50%):
+
+| Entrega | Desconto | Nota final |
+|---|---|---|
+| No prazo | 0% | 100 |
+| 1 dia de atraso | 10% | 90 |
+| 2 dias de atraso | 20% | 80 |
+| 3 dias de atraso | 30% | 70 |
+| 4 dias de atraso | 40% | 60 |
+| 5+ dias de atraso | 50% (limite) | 50 |
 
 #### Cadeia de Prioridade de Prazo
 
@@ -374,13 +412,13 @@ Para cada aluno, o prazo efetivo é resolvido nesta ordem (o primeiro que corres
 | Prioridade | Fonte | Aplica-se a |
 |---|---|---|
 | 1 | Sobreposição por aluno do plugin (`local_latepenalty_overrides`) | Todos os módulos |
-| 2 | Override nativo do módulo por usuário | Tarefa (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Questionário (`quiz_overrides.timeclose`), Lição (`lesson_overrides.deadline`) |
+| 2 | Sobreposição nativa do módulo por usuário | Tarefa (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Questionário (`quiz_overrides.timeclose`), Lição (`lesson_overrides.deadline`) |
 | 3 | `completionexpected` no módulo de curso | Todos os módulos |
 | 4 | Campo de prazo do módulo | Ver tabela abaixo |
 
-Para overrides de grupo no nível 2, o **prazo mais favorável (mais tardio)** entre todos os grupos do aluno é utilizado, espelhando o comportamento nativo do Moodle.
+Para sobreposições de grupo no nível 2, o **prazo mais favorável (mais tardio)** entre todos os grupos do aluno é utilizado, espelhando o comportamento nativo do Moodle.
 
-Se o professor configurar tanto um override do plugin quanto um override nativo do módulo para o mesmo aluno, o **override do plugin tem prioridade** (foi configurado explicitamente para fins de penalidade).
+Se o professor configurar tanto uma sobreposição do plugin quanto uma sobreposição nativa do módulo para o mesmo aluno, a **sobreposição do plugin tem prioridade** (foi configurada explicitamente para fins de penalidade).
 
 #### Campos de Prazo dos Módulos (fallback nível 4)
 
