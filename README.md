@@ -20,7 +20,8 @@ Unlike Moodle's native late-submission penalty — which is limited to Assignmen
 ### ✨ Features
 
 * 📋 **Universal activity support:** Works with every activity type that uses the Moodle Gradebook, not just Assignments.
-* 📅 **Flexible deadline resolution:** Resolves the effective deadline through a priority chain: plugin per-user override → module-native user/group override (Assignment extensions and overrides, Quiz overrides, Lesson overrides) → `completionexpected` → module deadline field (Assignment and Forum only).
+* 📅 **Flexible deadline resolution:** Resolves the effective deadline through a priority chain: plugin per-user override → plugin group override → module-native user/group override (Assignment extensions and overrides, Quiz overrides, Lesson overrides) → `completionexpected` → module deadline field (Assignment and Forum only).
+* 👥 **Group overrides:** Teachers can set a custom deadline, daily rate, and maximum cap for entire groups. When a student belongs to multiple groups with overrides, the most lenient value per field is applied independently (latest deadline, lowest penalty rates), mirroring Moodle's native quiz behaviour.
 * 📉 **Progressive daily penalty:** Configurable percentage deducted per day late (e.g., 5% per day).
 * 🔒 **Maximum penalty cap:** Deduction never exceeds the configured cap (e.g., 50% maximum), and the final grade is always ≥ 0.
 * 🔄 **Event-driven, zero polling:** Reacts to `user_graded` events in real time — no cron jobs, no scheduled tasks.
@@ -102,6 +103,7 @@ The maximum penalty must be greater than or equal to the daily penalty.
 
 7. If a **deadline override** is set for a specific student, it takes precedence over other configurations. The priority order is:
    - **Plugin per-user override** — accessed via *Penalty overrides* inside the activity. Highest priority.
+   - **Plugin group override** — accessed via *Group penalty overrides* inside the activity. When the student belongs to multiple groups, the most lenient value per field is used.
    - **Module-native override** — Assignment (extension/override), Quiz (override), and Lesson (override) have their own fields, checked next.
    - **"Set reminder on timeline"** (`completionexpected`) — applies to any activity type.
    - **Native deadline field** — Assignment and Forum only, as a final fallback.
@@ -138,11 +140,12 @@ For each student, the effective deadline is resolved in this order (first match 
 | Priority | Source | Applies to |
 |---|---|---|
 | 1 | Plugin per-user override (`local_latepenalty_overrides`) | All modules |
-| 2 | Module-native user override | Assignment (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Quiz (`quiz_overrides.timeclose`), Lesson (`lesson_overrides.deadline`) |
-| 3 | `completionexpected` on the course module | All modules |
-| 4 | Module deadline field | See table below |
+| 2 | Plugin group override (`local_latepenalty_group_overrides`) — most lenient value per field across all of the student's groups | All modules |
+| 3 | Module-native user/group override | Assignment (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Quiz (`quiz_overrides.timeclose`), Lesson (`lesson_overrides.deadline`) |
+| 4 | `completionexpected` on the course module | All modules |
+| 5 | Module deadline field | See table below |
 
-For group overrides at level 2, the **most favourable (latest) deadline** among all of the student's groups is used, mirroring Moodle's native behaviour.
+For module-native overrides at level 3, the **most favourable (latest) deadline** among all of the student's groups is used, mirroring Moodle's native behaviour.
 
 If a teacher sets both a plugin override and a native module override for the same student, the **plugin override takes precedence** (it was set explicitly for penalty purposes).
 
@@ -223,7 +226,7 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **60 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **78 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
@@ -235,11 +238,14 @@ Late Penalty ships with **60 PHPUnit tests** that run on every CI push across th
 | Observer chain — h5pactivity | Late (event-timestamp fallback): penalty applied; on-time: grade unchanged |
 | Observer — per-user overrides | Custom deadline (shifts or removes lateness), custom daily rate, custom max cap, waived penalty (daily = 0), all-null override inherits rule |
 | `get_module_user_deadline()` | Assign extension, assign user override, assign group override, quiz user override, lesson user override, unknown module → null, no override → null, full-chain integration with extension |
+| Group override helper | `get_group_override()` — null when no applicable override, null when user in no group, single group, most-lenient resolution (MAX deadline, MIN rates) across multiple groups, partial null fields; `get_group_overrides_bulk()` — empty input, per-user merged values, most-lenient per user |
 | Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
 | Recalculation — per-user overrides | Override deadline, override daily rate, override max cap each take precedence over new rule parameters |
+| Recalculation — group overrides | Group override deadline applied, user override beats group override, `recalculate_for_group()` updates all group members |
 | Recalculation — h5pactivity | Rate change recalculates penalty from `grade_grades_history` timestamp |
 | Recalculation — teacher override | Manually overridden grade is not touched by recalculation |
 | Override controller | Render list (empty state, student name and penalties, always includes add button); render add (no students when all covered); save add rejects unenrolled user; save edit preserves original user; delete removes record on confirm, leaves record without confirm, does not affect foreign override |
+| Group override controller | Render list (empty state, group name and penalties, always includes add button); render add (no groups notice when all covered); delete removes record on confirm, leaves record without confirm, does not affect foreign-CM override |
 
 Run them locally with:
 
@@ -247,7 +253,9 @@ Run them locally with:
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
 vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
+vendor/bin/phpunit local/latepenalty/tests/penalty_helper_group_test.php
 vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
+vendor/bin/phpunit local/latepenalty/tests/group_override/controller_test.php
 ```
 
 ---
@@ -294,7 +302,8 @@ Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apen
 ### ✨ Funcionalidades
 
 * 📋 **Suporte universal:** Funciona com qualquer tipo de atividade que use o Livro de Notas do Moodle, não apenas Tarefas.
-* 📅 **Resolução flexível de prazo:** Resolve o prazo efetivo por uma cadeia de prioridade: sobreposição por aluno do plugin → override/extensão nativo do módulo (Tarefa, Questionário, Lição) → `completionexpected` → campo de prazo do módulo (apenas Tarefa e Fórum).
+* 📅 **Resolução flexível de prazo:** Resolve o prazo efetivo por uma cadeia de prioridade: sobreposição por aluno do plugin → sobreposição de grupo do plugin → override/extensão nativo do módulo (Tarefa, Questionário, Lição) → `completionexpected` → campo de prazo do módulo (apenas Tarefa e Fórum).
+* 👥 **Sobreposições de grupo:** Professores podem definir prazo, taxa diária e limite máximo customizados para grupos inteiros. Quando o aluno pertencer a múltiplos grupos com sobreposições, o valor mais favorável por campo é aplicado de forma independente (prazo mais tardio, menores taxas de penalidade), espelhando o comportamento nativo do Moodle para questionários.
 * 📉 **Penalidade diária progressiva:** Percentual configurável por dia de atraso (ex.: 5% ao dia).
 * 🔒 **Limite máximo de penalidade:** O desconto nunca excede o teto configurado (ex.: 50% no máximo) e a nota final é sempre ≥ 0.
 * 🔄 **Orientado a eventos, sem polling:** Reage a eventos `user_graded` em tempo real — sem cron jobs ou tarefas agendadas.
@@ -375,7 +384,8 @@ O desconto máximo deve ser maior ou igual ao desconto diário.
 6. Quando o aluno entrega após o prazo e a nota é atribuída (manualmente pelo professor ou automaticamente), o plugin calcula a penalidade e a aplica.
 
 7. Se houver uma **sobreposição de prazo** registrada para um aluno específico, ela tem prioridade sobre as demais configurações. A ordem é:
-   - **Sobreposição do plugin** — acessada em *Sobreposição de penalidades*, dentro da atividade. Tem a maior prioridade.
+   - **Sobreposição por aluno do plugin** — acessada em *Sobreposição de penalidades*, dentro da atividade. Tem a maior prioridade.
+   - **Sobreposição de grupo do plugin** — acessada em *Sobreposições de grupo de penalidades*, dentro da atividade. Quando o aluno pertencer a múltiplos grupos, o valor mais favorável por campo é utilizado.
    - **Sobreposição nativa do módulo** — Tarefa (extensão/override), Questionário (override) e Lição (override) possuem campos próprios consultados em seguida.
    - **"Definir lembrete na linha do tempo"** — válido para qualquer tipo de atividade.
    - **Campo de prazo nativo** — apenas Tarefa e Fórum, como último recurso.
@@ -412,11 +422,12 @@ Para cada aluno, o prazo efetivo é resolvido nesta ordem (o primeiro que corres
 | Prioridade | Fonte | Aplica-se a |
 |---|---|---|
 | 1 | Sobreposição por aluno do plugin (`local_latepenalty_overrides`) | Todos os módulos |
-| 2 | Sobreposição nativa do módulo por usuário | Tarefa (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Questionário (`quiz_overrides.timeclose`), Lição (`lesson_overrides.deadline`) |
-| 3 | `completionexpected` no módulo de curso | Todos os módulos |
-| 4 | Campo de prazo do módulo | Ver tabela abaixo |
+| 2 | Sobreposição de grupo do plugin (`local_latepenalty_group_overrides`) — valor mais favorável por campo entre todos os grupos do aluno | Todos os módulos |
+| 3 | Sobreposição nativa do módulo por usuário/grupo | Tarefa (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Questionário (`quiz_overrides.timeclose`), Lição (`lesson_overrides.deadline`) |
+| 4 | `completionexpected` no módulo de curso | Todos os módulos |
+| 5 | Campo de prazo do módulo | Ver tabela abaixo |
 
-Para sobreposições de grupo no nível 2, o **prazo mais favorável (mais tardio)** entre todos os grupos do aluno é utilizado, espelhando o comportamento nativo do Moodle.
+Para sobreposições nativas no nível 3, o **prazo mais favorável (mais tardio)** entre todos os grupos do aluno é utilizado, espelhando o comportamento nativo do Moodle.
 
 Se o professor configurar tanto uma sobreposição do plugin quanto uma sobreposição nativa do módulo para o mesmo aluno, a **sobreposição do plugin tem prioridade** (foi configurada explicitamente para fins de penalidade).
 
@@ -497,7 +508,7 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **60 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **78 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
@@ -509,11 +520,14 @@ O Late Penalty inclui **60 testes PHPUnit** executados em todo push de CI na mat
 | Cadeia do observer — h5pactivity | Atrasado (fallback por timestamp do evento): penalidade aplicada; no prazo: nota inalterada |
 | Observer — sobreposições por aluno | Prazo customizado (desloca ou remove atraso), taxa diária customizada, teto customizado, penalidade isenta (taxa = 0), override nulo herda a regra |
 | `get_module_user_deadline()` | Extensão assign, override de usuário assign, override de grupo assign, override de usuário quiz, override de usuário lesson, módulo desconhecido → null, sem override → null, integração completa com extensão |
+| Helper de sobreposição de grupo | `get_group_override()` — null sem override aplicável, null sem grupo, grupo único, resolução mais favorável (MAX prazo, MIN taxas) entre múltiplos grupos, campos nulos parciais; `get_group_overrides_bulk()` — entrada vazia, valores mesclados por usuário, mais favorável por usuário |
 | Recálculo | Prazo estendido reduz penalidade, prazo estendido restaura nota no prazo, mudança de taxa recalcula, aluno no prazo não é afetado |
 | Recálculo — sobreposições por aluno | Override de prazo, taxa e teto têm prioridade sobre os novos parâmetros da regra |
+| Recálculo — sobreposições de grupo | Override de prazo do grupo aplicado, override por aluno supera o de grupo, `recalculate_for_group()` atualiza todos os membros |
 | Recálculo — h5pactivity | Mudança de taxa recalcula penalidade a partir do timestamp do `grade_grades_history` |
 | Recálculo — override manual do professor | Nota sobrescrita manualmente não é alterada pelo recálculo |
 | Controller de sobreposições | Exibição da lista (estado vazio, nome do aluno e penalidades, sempre exibe botão adicionar); exibição do formulário de adição (sem alunos quando todos já cobertos); salvar adição rejeita aluno não matriculado; salvar edição preserva usuário original; exclusão remove o registro com confirmação, mantém sem confirmação, não afeta override de outro aluno |
+| Controller de sobreposições de grupo | Exibição da lista (estado vazio, nome do grupo e penalidades, sempre exibe botão adicionar); exibição do formulário de adição (aviso sem grupos quando todos já cobertos); exclusão remove com confirmação, mantém sem confirmação, não afeta override de outro CM |
 
 Para executar localmente:
 
@@ -521,7 +535,9 @@ Para executar localmente:
 php admin/tool/phpunit/cli/init.php
 vendor/bin/phpunit local/latepenalty/tests/observer_test.php
 vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
+vendor/bin/phpunit local/latepenalty/tests/penalty_helper_group_test.php
 vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
+vendor/bin/phpunit local/latepenalty/tests/group_override/controller_test.php
 ```
 
 ---

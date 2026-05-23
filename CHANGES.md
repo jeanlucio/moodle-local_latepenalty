@@ -1,14 +1,6 @@
 # Changes
 
-## [1.1.0] - 2026-05-23
-
-- Group overrides: teachers can now set a custom deadline, daily rate,
-  and maximum cap for entire groups via a dedicated Group Overrides page
-- Conflict resolution follows the Moodle-native pattern: user override takes
-  priority; when the student belongs to multiple groups with overrides, the
-  most lenient value per field is applied (latest deadline, lowest penalty rate)
-
-## [1.0.0] - 2026-05-19
+## [1.0.0] - 2026-05-23
 
 - Penalty rule configuration per activity: teachers can enable a daily
   late penalty rate (%) and a maximum cap (%) on any supported activity
@@ -19,14 +11,18 @@
   across all sources
 - Per-student overrides: teachers can set a custom deadline, daily rate,
   and maximum cap for individual students via a dedicated Overrides page
+- Group overrides: teachers can set a custom deadline, daily rate, and
+  maximum cap for entire groups via a dedicated Group Overrides page;
+  when a student belongs to multiple groups with overrides, the most lenient
+  value per field is applied (latest deadline, lowest penalty rates)
 - Penalty recalculator: when a rule's deadline, daily rate, or maximum cap
   changes, the plugin re-applies the penalty to all already-graded students
 - Course page notice: activities with an active rule show a short reminder
   below the activity link with the deadline and penalty terms
 - Late penalty report: per-course report showing every student who received
   a penalty, with raw grade, discount applied, and final grade
-- Backup and restore: penalty rules travel with activities on course backup,
-  restore, and duplication
+- Backup and restore: penalty rules and per-user/group overrides travel with
+  activities on course backup, restore, and duplication
 - Privacy API: declares personal data stored in overrides and supports GDPR
   export and deletion
 - Capabilities: `local/latepenalty:manageoverrides` and
