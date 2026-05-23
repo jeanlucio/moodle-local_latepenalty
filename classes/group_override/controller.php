@@ -475,15 +475,15 @@ class controller {
             $rows[] = [
                 'groupname'     => $group
                     ? format_string($group->name, true, ['context' => $this->modcontext])
-                    : '?',
+                    : get_string('unknown', 'local_latepenalty'),
                 'deadline'      => ($override->deadline !== null)
                     ? userdate((int) $override->deadline, $dateformat)
                     : $inherit,
                 'daily_penalty' => ($override->daily_penalty !== null)
-                    ? (string) $override->daily_penalty . '%'
+                    ? get_string('percent', 'local_latepenalty', $override->daily_penalty)
                     : $inherit,
                 'max_penalty'   => ($override->max_penalty !== null)
-                    ? (string) $override->max_penalty . '%'
+                    ? get_string('percent', 'local_latepenalty', $override->max_penalty)
                     : $inherit,
                 'editurl'       => (new moodle_url(
                     '/local/latepenalty/overrides.php',
