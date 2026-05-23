@@ -197,12 +197,143 @@ class controller {
             'penalties'    => $penalties,
             'haspenalties' => !empty($penalties),
             'formaction'   => (new \moodle_url('/local/latepenalty/report.php'))->out(false),
+            'exporturl'    => (new \moodle_url('/local/latepenalty/report_export.php', [
+                'courseid' => $this->courseid,
+                'userid'   => $this->filteruserid,
+                'cmid'     => $this->filtercmid,
+            ]))->out(false),
             'courseid'     => $this->courseid,
             'useroptions'  => $this->build_user_options(),
             'cmoptions'    => $this->build_cm_options(),
             'filteruserid' => $this->filteruserid,
             'filtercmid'   => $this->filtercmid,
         ];
+    }
+
+    /**
+     * Returns column headers and data rows suitable for \core\dataformat::download_data().
+     *
+     * Mirrors get_template_context() but returns raw numeric values for grades
+     * and a plain-text override label instead of a Mustache badge.
+     *
+     * @return array{0: string[], 1: array[]} Tuple of [columns, rows].
+     */
+    public function get_export_data(): array {
+        global $DB;
+
+        $params = [
+            'courseid'  => $this->courseid,
+            'courseid2' => $this->courseid,
+        ];
+
+        $userwhere = '';
+        if ($this->filteruserid > 0) {
+            $userwhere = ' AND ggh.userid = :filteruserid';
+            $params['filteruserid'] = $this->filteruserid;
+        }
+
+        $cmwhere = '';
+        if ($this->filtercmid > 0) {
+            $cmwhere = ' AND cm.id = :filtercmid';
+            $params['filtercmid'] = $this->filtercmid;
+        }
+
+        $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
+                       ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
+                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       cm.id AS cmid, cm.completionexpected,
+                       u.firstname, u.lastname,
+                       u.firstnamephonetic, u.lastnamephonetic,
+                       u.middlename, u.alternatename
+                  FROM {grade_grades_history} ggh
+                  JOIN {grade_items} gi ON gi.id = ggh.itemid
+                                       AND gi.itemtype = 'mod'
+                                       AND gi.courseid = :courseid
+                  JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
+                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {course_modules} cm ON cm.instance = gi.iteminstance
+                                          AND cm.course = :courseid2
+                                          AND cm.module = mod.id
+                  JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
+                 WHERE ggh.source = 'local_latepenalty'
+                       {$userwhere}
+                       {$cmwhere}
+                 ORDER BY u.lastname, u.firstname, cm.id, ggh.timemodified DESC";
+
+        $rows = $DB->get_records_sql($sql, $params);
+
+        $modinfo        = get_fast_modinfo($this->courseid);
+        $moduledeadlines = self::load_module_deadlines($rows);
+        $overrides      = self::load_overrides($rows);
+
+        $seen = [];
+        $data = [];
+
+        foreach ($rows as $row) {
+            $key = $row->userid . '_' . $row->itemid;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $rawgrade   = (float) $row->rawgrade;
+            $finalgrade = (float) $row->finalgrade;
+            $discount   = ($rawgrade > 0)
+                ? round((1.0 - $finalgrade / $rawgrade) * 100.0, 1)
+                : 0.0;
+
+            $overridekey    = $row->userid . '_' . $row->cmid;
+            $hasuseroverride  = !empty($overrides['user'][$overridekey]);
+            $hasgroupoverride = !$hasuseroverride && !empty($overrides['group'][$overridekey]);
+
+            $fakeuser = (object) [
+                'firstname'         => $row->firstname ?? '',
+                'lastname'          => $row->lastname ?? '',
+                'firstnamephonetic' => $row->firstnamephonetic ?? '',
+                'lastnamephonetic'  => $row->lastnamephonetic ?? '',
+                'middlename'        => $row->middlename ?? '',
+                'alternatename'     => $row->alternatename ?? '',
+            ];
+
+            $cmname  = isset($modinfo->cms[$row->cmid])
+                ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
+                : '';
+            $deadline = self::resolve_deadline($row, $moduledeadlines);
+
+            if ($hasuseroverride) {
+                $overridelabel = get_string('report_override_user', 'local_latepenalty');
+            } else if ($hasgroupoverride) {
+                $overridelabel = get_string('report_override_group', 'local_latepenalty');
+            } else {
+                $overridelabel = '';
+            }
+
+            $data[] = [
+                format_string(fullname($fakeuser), true, ['context' => $this->context]),
+                $cmname,
+                $deadline !== null ? userdate($deadline) : '',
+                $rawgrade,
+                (float) $row->grademax,
+                $discount,
+                $finalgrade,
+                userdate((int) $row->timemodified),
+                $overridelabel,
+            ];
+        }
+
+        $columns = [
+            get_string('report_col_student', 'local_latepenalty'),
+            get_string('report_col_activity', 'local_latepenalty'),
+            get_string('report_col_deadline', 'local_latepenalty'),
+            get_string('report_col_rawgrade', 'local_latepenalty'),
+            get_string('report_export_grademax', 'local_latepenalty'),
+            get_string('report_col_discount', 'local_latepenalty'),
+            get_string('report_col_finalgrade', 'local_latepenalty'),
+            get_string('report_col_date', 'local_latepenalty'),
+            get_string('report_export_override', 'local_latepenalty'),
+        ];
+
+        return [$columns, $data];
     }
 
     /**

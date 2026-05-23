@@ -81,3 +81,7 @@ body.path-local-latepenalty .local-latepenalty-discount {
     font-weight: 700;
     color: var(--bs-danger, #dc3545);
 }
+
+body.path-local-latepenalty .badge.local-latepenalty-override-badge {
+    color: var(--bs-dark, #212529);
+}
