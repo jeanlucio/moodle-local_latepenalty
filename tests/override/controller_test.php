@@ -28,7 +28,7 @@
  *  - process(): delete leaves the record intact when confirm = false
  *  - process(): delete does not remove an override belonging to a different CM
  *
- * @package    local_latepenalty\override
+ * @package    local_latepenalty
  * @category   test
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
