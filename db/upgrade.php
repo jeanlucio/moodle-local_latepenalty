@@ -29,5 +29,31 @@
  * @return bool Always returns true.
  */
 function xmldb_local_latepenalty_upgrade(int $oldversion): bool {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026052300) {
+        $table = new \xmldb_table('local_latepenalty_group_overrides');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('cmid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('groupid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('deadline', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('daily_penalty', XMLDB_TYPE_NUMBER, '5, 2', null, null, null, null);
+        $table->add_field('max_penalty', XMLDB_TYPE_NUMBER, '5, 2', null, null, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('cmid_groupid', XMLDB_KEY_UNIQUE, ['cmid', 'groupid']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026052300, 'local', 'latepenalty');
+    }
+
     return true;
 }

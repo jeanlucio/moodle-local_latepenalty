@@ -218,6 +218,16 @@ function local_latepenalty_extend_settings_navigation(
         'local_latepenalty_overrides',
         new pix_icon('i/override', '')
     );
+
+    $groupurl = new moodle_url('/local/latepenalty/group_overrides.php', ['cmid' => $cmid]);
+    $node->add(
+        get_string('group_overrides', 'local_latepenalty'),
+        $groupurl,
+        navigation_node::TYPE_SETTING,
+        null,
+        'local_latepenalty_group_overrides',
+        new pix_icon('i/group', '')
+    );
 }
 
 /**

@@ -585,6 +585,83 @@ class penalty_helper {
     }
 
     /**
+     * Get the most-lenient merged group override for a user across all their groups.
+     *
+     * Resolution per field (ignores NULLs in SQL aggregates):
+     *  - deadline:      MAX (latest date = most lenient)
+     *  - daily_penalty: MIN (lowest rate = most lenient)
+     *  - max_penalty:   MIN (lowest cap = most lenient)
+     *
+     * Returns null when the user belongs to no group with an override for this CM.
+     *
+     * @param int $cmid   Course module ID.
+     * @param int $userid User ID.
+     * @return \stdClass|null Merged override with deadline/daily_penalty/max_penalty, or null.
+     */
+    public static function get_group_override(int $cmid, int $userid): ?\stdClass {
+        global $DB;
+
+        $row = $DB->get_record_sql(
+            "SELECT MAX(go.deadline) AS deadline,
+                    MIN(go.daily_penalty) AS daily_penalty,
+                    MIN(go.max_penalty) AS max_penalty
+               FROM {local_latepenalty_group_overrides} go
+               JOIN {groups_members} gm ON gm.groupid = go.groupid
+              WHERE go.cmid = :cmid
+                AND gm.userid = :userid",
+            ['cmid' => $cmid, 'userid' => $userid],
+            IGNORE_MISSING
+        );
+
+        if (!$row || ($row->deadline === null && $row->daily_penalty === null && $row->max_penalty === null)) {
+            return null;
+        }
+
+        return $row;
+    }
+
+    /**
+     * Bulk-load merged group overrides for multiple users in a single query.
+     *
+     * Same resolution rules as get_group_override(). Users with no applicable
+     * group override are absent from the returned array.
+     *
+     * @param int   $cmid    Course module ID.
+     * @param int[] $userids Array of user IDs.
+     * @return array<int, \stdClass> Map of userid → merged override object.
+     */
+    public static function get_group_overrides_bulk(int $cmid, array $userids): array {
+        global $DB;
+
+        if (empty($userids)) {
+            return [];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+        $rows = $DB->get_records_sql(
+            "SELECT gm.userid,
+                    MAX(go.deadline) AS deadline,
+                    MIN(go.daily_penalty) AS daily_penalty,
+                    MIN(go.max_penalty) AS max_penalty
+               FROM {local_latepenalty_group_overrides} go
+               JOIN {groups_members} gm ON gm.groupid = go.groupid
+              WHERE go.cmid = :cmid
+                AND gm.userid $insql
+           GROUP BY gm.userid",
+            array_merge(['cmid' => $cmid], $inparams)
+        );
+
+        $result = [];
+        foreach ($rows as $row) {
+            if ($row->deadline !== null || $row->daily_penalty !== null || $row->max_penalty !== null) {
+                $result[(int) $row->userid] = $row;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

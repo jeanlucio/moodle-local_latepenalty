@@ -117,6 +117,9 @@ class recalculator {
             $overridesbyuserid[(int) $override->userid] = $override;
         }
 
+        // Pre-load group overrides for all students (merged most-lenient per field).
+        $groupoverridesbyuserid = penalty_helper::get_group_overrides_bulk($cmid, $userids);
+
         // Pre-load module-native deadline overrides for all students in one pass.
         $moduledeadlinesbyuserid = penalty_helper::get_module_user_deadlines_bulk(
             $cm->modname,
@@ -172,19 +175,26 @@ class recalculator {
             $userid   = (int) $student->userid;
             $rawgrade = (float) $student->rawgrade;
 
-            // Resolve effective deadline and rates for this student.
+            // Resolve effective deadline and rates: user override > group override > rule default.
             $override = $overridesbyuserid[$userid] ?? null;
+            $groupoverride = $groupoverridesbyuserid[$userid] ?? null;
             if ($override && $override->deadline !== null) {
                 $effectivedeadline = (int) $override->deadline;
+            } else if ($groupoverride && $groupoverride->deadline !== null) {
+                $effectivedeadline = (int) $groupoverride->deadline;
             } else {
                 $effectivedeadline = $moduledeadlinesbyuserid[$userid] ?? $newdeadline;
             }
             $effectivedaily = ($override && $override->daily_penalty !== null)
                 ? (float) $override->daily_penalty
-                : $daily;
+                : (($groupoverride && $groupoverride->daily_penalty !== null)
+                    ? (float) $groupoverride->daily_penalty
+                    : $daily);
             $effectivemax = ($override && $override->max_penalty !== null)
                 ? (float) $override->max_penalty
-                : $max;
+                : (($groupoverride && $groupoverride->max_penalty !== null)
+                    ? (float) $groupoverride->max_penalty
+                    : $max);
 
             if (!$effectivedeadline) {
                 continue;
@@ -297,10 +307,13 @@ class recalculator {
             return;
         }
 
-        // Resolve effective deadline and rates (override already saved/deleted at call time).
+        // Resolve effective deadline and rates: user override > group override > rule default.
         $override = penalty_helper::get_override($cmid, $userid);
+        $groupoverride = penalty_helper::get_group_override($cmid, $userid);
         if ($override && $override->deadline !== null) {
             $effectivedeadline = (int) $override->deadline;
+        } else if ($groupoverride && $groupoverride->deadline !== null) {
+            $effectivedeadline = (int) $groupoverride->deadline;
         } else {
             $effectivedeadline = penalty_helper::get_module_user_deadline($cm->modname, $cm->instance, $userid)
                 ?? penalty_helper::get_deadline($cm)
@@ -312,10 +325,14 @@ class recalculator {
 
         $effectivedaily = ($override && $override->daily_penalty !== null)
             ? (float) $override->daily_penalty
-            : $daily;
+            : (($groupoverride && $groupoverride->daily_penalty !== null)
+                ? (float) $groupoverride->daily_penalty
+                : $daily);
         $effectivemax = ($override && $override->max_penalty !== null)
             ? (float) $override->max_penalty
-            : $max;
+            : (($groupoverride && $groupoverride->max_penalty !== null)
+                ? (float) $groupoverride->max_penalty
+                : $max);
 
         // Resolve submission time.
         $submissiontime = penalty_helper::get_submission_time($userid, $cm);
@@ -387,5 +404,32 @@ class recalculator {
             null,
             true
         );
+    }
+
+    /**
+     * Recalculate penalties for every member of a group after a group override
+     * is saved or deleted.
+     *
+     * Fetches group members in a single query, then delegates per-student
+     * recalculation to recalculate_for_student(), which reads the updated
+     * group override state and resolves each student's effective values.
+     *
+     * @param int   $cmid    Course module ID.
+     * @param int   $groupid Group ID whose members should be recalculated.
+     * @param float $daily   Rule daily penalty percentage (fallback when no override).
+     * @param float $max     Rule maximum penalty cap percentage (fallback when no override).
+     * @return void
+     */
+    public static function recalculate_for_group(int $cmid, int $groupid, float $daily, float $max): void {
+        global $DB;
+
+        $memberids = array_column(
+            $DB->get_records('groups_members', ['groupid' => $groupid], '', 'userid'),
+            'userid'
+        );
+
+        foreach ($memberids as $userid) {
+            self::recalculate_for_student($cmid, (int) $userid, $daily, $max);
+        }
     }
 }

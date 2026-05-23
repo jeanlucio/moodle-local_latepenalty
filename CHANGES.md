@@ -1,5 +1,13 @@
 # Changes
 
+## [1.1.0] - 2026-05-23
+
+- Group overrides: teachers can now set a custom deadline, daily rate,
+  and maximum cap for entire groups via a dedicated Group Overrides page
+- Conflict resolution follows the Moodle-native pattern: user override takes
+  priority; when the student belongs to multiple groups with overrides, the
+  most lenient value per field is applied (latest deadline, lowest penalty rate)
+
 ## [1.0.0] - 2026-05-19
 
 - Penalty rule configuration per activity: teachers can enable a daily

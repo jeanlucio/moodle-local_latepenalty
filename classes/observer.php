@@ -135,11 +135,14 @@ class observer {
         // Get course module details.
         $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
 
-        // Resolve effective deadline and rates, respecting any per-user override.
+        // Resolve effective deadline and rates: user override > group override > rule default.
         $override = penalty_helper::get_override($cmid, $userid);
+        $groupoverride = penalty_helper::get_group_override($cmid, $userid);
 
         if ($override && $override->deadline !== null) {
             $deadline = (int) $override->deadline;
+        } else if ($groupoverride && $groupoverride->deadline !== null) {
+            $deadline = (int) $groupoverride->deadline;
         } else {
             $deadline = penalty_helper::get_module_user_deadline($cm->modname, $cm->instance, $userid)
                 ?? penalty_helper::get_deadline($cm);
@@ -151,11 +154,15 @@ class observer {
 
         $daily = ($override && $override->daily_penalty !== null)
             ? (float) $override->daily_penalty
-            : (float) $rule->daily_penalty;
+            : (($groupoverride && $groupoverride->daily_penalty !== null)
+                ? (float) $groupoverride->daily_penalty
+                : (float) $rule->daily_penalty);
 
         $max = ($override && $override->max_penalty !== null)
             ? (float) $override->max_penalty
-            : (float) $rule->max_penalty;
+            : (($groupoverride && $groupoverride->max_penalty !== null)
+                ? (float) $groupoverride->max_penalty
+                : (float) $rule->max_penalty);
 
         // Get submission timestamp (when the student submitted, not when graded).
         // For auto-graded modules the grade event itself is the student action, so
