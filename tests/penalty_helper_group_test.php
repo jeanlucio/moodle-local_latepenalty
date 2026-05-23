@@ -104,6 +104,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s = $this->make_course_with_assign();
 
         $user  = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $s['courseid']);
         $group = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
 
@@ -132,6 +133,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s = $this->make_course_with_assign();
 
         $user     = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $s['courseid']);
         $group    = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
 
@@ -155,6 +157,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s = $this->make_course_with_assign();
 
         $user   = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $s['courseid']);
         $groupa = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $groupb = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $groupa->id, 'userid' => $user->id]);
@@ -189,6 +192,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s = $this->make_course_with_assign();
 
         $user   = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $s['courseid']);
         $groupa = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $groupb = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $groupa->id, 'userid' => $user->id]);
@@ -231,6 +235,8 @@ final class penalty_helper_group_test extends advanced_testcase {
         $user1 = $this->getDataGenerator()->create_user();
         $user2 = $this->getDataGenerator()->create_user();
         $user3 = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user1->id, $s['courseid']);
+        $this->getDataGenerator()->enrol_user($user2->id, $s['courseid']);
 
         $group = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $user1->id]);
@@ -262,6 +268,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s = $this->make_course_with_assign();
 
         $user   = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $s['courseid']);
         $groupa = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $groupb = $this->getDataGenerator()->create_group(['courseid' => $s['courseid']]);
         $this->getDataGenerator()->create_group_member(['groupid' => $groupa->id, 'userid' => $user->id]);
