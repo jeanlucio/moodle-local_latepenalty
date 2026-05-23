@@ -213,13 +213,12 @@ class observer {
             return;
         }
 
-        if (empty($grade->finalgrade)) {
+        $rawgrade = $grade->rawgrade ?? $grade->finalgrade;
+        if (empty($rawgrade)) {
             return;
         }
 
-        $rawgrade = $grade->finalgrade;
-
-        if ($rawgrade <= (float) $gradeitem->grademin) {
+        if ((float) $rawgrade <= (float) $gradeitem->grademin) {
             return;
         }
 

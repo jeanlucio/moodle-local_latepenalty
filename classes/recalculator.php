@@ -410,9 +410,9 @@ class recalculator {
      * Recalculate penalties for every member of a group after a group override
      * is saved or deleted.
      *
-     * Fetches group members in a single query, then delegates per-student
-     * recalculation to recalculate_for_student(), which reads the updated
-     * group override state and resolves each student's effective values.
+     * Pre-loads all grade records, overrides, submission times and teacher-edit
+     * timestamps in bulk queries, then applies recalculation to each member in
+     * a single pass without per-student DB calls.
      *
      * @param int   $cmid    Course module ID.
      * @param int   $groupid Group ID whose members should be recalculated.
@@ -421,15 +421,192 @@ class recalculator {
      * @return void
      */
     public static function recalculate_for_group(int $cmid, int $groupid, float $daily, float $max): void {
-        global $DB;
+        global $CFG, $DB;
+
+        require_once($CFG->libdir . '/gradelib.php');
 
         $memberids = array_column(
             $DB->get_records('groups_members', ['groupid' => $groupid], '', 'userid'),
             'userid'
         );
 
-        foreach ($memberids as $userid) {
-            self::recalculate_for_student($cmid, (int) $userid, $daily, $max);
+        if (empty($memberids)) {
+            return;
+        }
+
+        $userids = array_map('intval', $memberids);
+        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
+        $isautograded = !in_array($cm->modname, penalty_helper::$submissionmodules);
+
+        $gradeitem = \grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => $cm->modname,
+            'iteminstance' => $cm->instance,
+            'courseid'     => $cm->course,
+        ]);
+        if (!$gradeitem) {
+            return;
+        }
+
+        $itemid = (int) $gradeitem->id;
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+
+        // Pre-load grade records for all group members.
+        $graderows = $DB->get_records_sql(
+            "SELECT userid, rawgrade, finalgrade, locked
+               FROM {grade_grades}
+              WHERE itemid = :itemid
+                AND userid $insql",
+            array_merge(['itemid' => $itemid], $inparams)
+        );
+
+        if (empty($graderows)) {
+            return;
+        }
+
+        // Pre-load plugin user overrides for this CM (filter per-student below).
+        $overridesbyuserid = [];
+        foreach ($DB->get_records('local_latepenalty_overrides', ['cmid' => $cmid]) as $override) {
+            $overridesbyuserid[(int) $override->userid] = $override;
+        }
+
+        // Pre-load merged group overrides (reads the just-updated DB state).
+        $groupoverridesbyuserid = penalty_helper::get_group_overrides_bulk($cmid, $userids);
+
+        // Pre-load module-native per-student deadline overrides.
+        $moduledeadlinesbyuserid = penalty_helper::get_module_user_deadlines_bulk(
+            $cm->modname,
+            $cm->instance,
+            $userids
+        );
+
+        $ruledeadline = penalty_helper::get_deadline($cm) ?? 0;
+
+        // Pre-load submission times.
+        if ($isautograded) {
+            $subrows = $DB->get_records_sql(
+                "SELECT userid, MAX(timemodified) AS timemodified
+                   FROM {grade_grades_history}
+                  WHERE itemid = :itemid
+                    AND userid $insql
+                    AND source != 'local_latepenalty'
+               GROUP BY userid",
+                array_merge(['itemid' => $itemid], $inparams)
+            );
+            $submissiontimesbyuserid = [];
+            foreach ($subrows as $subrow) {
+                $submissiontimesbyuserid[(int) $subrow->userid] = (int) $subrow->timemodified;
+            }
+        } else {
+            $submissiontimesbyuserid = penalty_helper::get_submission_times_bulk($userids, $cm);
+        }
+
+        // Pre-load history timestamps to detect teacher manual overrides.
+        $historyrows = $DB->get_records_sql(
+            "SELECT userid,
+                    MAX(CASE WHEN source = 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastpenalty,
+                    MAX(CASE WHEN source IS NULL
+                               OR source != 'local_latepenalty'
+                             THEN timemodified ELSE NULL END) AS lastother
+               FROM {grade_grades_history}
+              WHERE itemid = :itemid
+                AND userid $insql
+              GROUP BY userid",
+            array_merge(['itemid' => $itemid], $inparams)
+        );
+        $historybyuserid = [];
+        foreach ($historyrows as $hrow) {
+            $historybyuserid[(int) $hrow->userid] = $hrow;
+        }
+
+        foreach ($graderows as $graderow) {
+            $userid = (int) $graderow->userid;
+
+            if ($graderow->rawgrade === null) {
+                continue;
+            }
+
+            $rawgrade = (float) $graderow->rawgrade;
+            if ($rawgrade <= (float) $gradeitem->grademin) {
+                continue;
+            }
+
+            if (!empty($graderow->locked) || !empty($gradeitem->locked)) {
+                continue;
+            }
+
+            // Resolve effective deadline and rates: user override > group override > rule default.
+            $override = $overridesbyuserid[$userid] ?? null;
+            $groupoverride = $groupoverridesbyuserid[$userid] ?? null;
+            if ($override && $override->deadline !== null) {
+                $effectivedeadline = (int) $override->deadline;
+            } else if ($groupoverride && $groupoverride->deadline !== null) {
+                $effectivedeadline = (int) $groupoverride->deadline;
+            } else {
+                $effectivedeadline = $moduledeadlinesbyuserid[$userid] ?? $ruledeadline;
+            }
+
+            if (!$effectivedeadline) {
+                continue;
+            }
+
+            $effectivedaily = ($override && $override->daily_penalty !== null)
+                ? (float) $override->daily_penalty
+                : (($groupoverride && $groupoverride->daily_penalty !== null)
+                    ? (float) $groupoverride->daily_penalty
+                    : $daily);
+            $effectivemax = ($override && $override->max_penalty !== null)
+                ? (float) $override->max_penalty
+                : (($groupoverride && $groupoverride->max_penalty !== null)
+                    ? (float) $groupoverride->max_penalty
+                    : $max);
+
+            $submissiontime = $submissiontimesbyuserid[$userid] ?? null;
+            if ($submissiontime === null) {
+                continue;
+            }
+
+            // Guard: skip only when a prior latepenalty write exists AND the teacher
+            // edited the grade after that write.
+            $hrow        = $historybyuserid[$userid] ?? null;
+            $lastpenalty = ($hrow !== null && $hrow->lastpenalty !== null) ? (int) $hrow->lastpenalty : 0;
+            $lastother   = ($hrow !== null && $hrow->lastother !== null) ? (int) $hrow->lastother : 0;
+            if ($lastpenalty > 0 && $lastother > $lastpenalty) {
+                continue;
+            }
+
+            $dayslate = penalty_helper::calculate_days_late($submissiontime, $effectivedeadline);
+
+            $newfinalgrade = ($dayslate <= 0)
+                ? $rawgrade
+                : penalty_helper::apply_penalty(
+                    $rawgrade,
+                    $dayslate,
+                    $effectivedaily,
+                    $effectivemax,
+                    (float) $gradeitem->grademin
+                );
+
+            $currentgrade = (float) ($graderow->finalgrade ?? 0);
+            if (abs($newfinalgrade - $currentgrade) < 0.01) {
+                continue;
+            }
+
+            // Register the anti-recursion guard before writing.
+            $key = $userid . '_' . $cmid;
+            observer::register_pending_grade($key, (float) $gradeitem->bounded_grade($newfinalgrade));
+
+            $gradeitem->update_final_grade(
+                $userid,
+                $newfinalgrade,
+                'local_latepenalty',
+                false,
+                FORMAT_MOODLE,
+                null,
+                null,
+                true
+            );
         }
     }
 }

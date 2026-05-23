@@ -152,6 +152,11 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         // Replace the original cmid with the new one created during restore.
         $data->cmid = $this->task->get_moduleid();
 
+        // Seed last_deadline from the restored activity so the first teacher save
+        // after restore does not trigger a spurious bulk recalculation.
+        $restoredcm = get_coursemodule_from_id('', $data->cmid, 0, false, MUST_EXIST);
+        $data->last_deadline = \local_latepenalty\penalty_helper::get_deadline($restoredcm) ?? 0;
+
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {
             $existing->enabled = $data->enabled;
@@ -159,6 +164,7 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
             $existing->max_penalty = $data->max_penalty;
             $existing->recalc_on_deadline = $data->recalc_on_deadline ?? 1;
             $existing->recalc_on_rate = $data->recalc_on_rate ?? 1;
+            $existing->last_deadline = $data->last_deadline;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {
             unset($data->id);

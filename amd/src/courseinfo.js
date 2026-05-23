@@ -84,9 +84,6 @@ const markItem = (el, item) => {
  * @param {Array<{cmid: number, notice: string, badgelabel: string, badgestate: string}>} notices One entry per activity.
  */
 export const init = (notices) => {
-    // Diagnosis: expose received cmids on body so DevTools can confirm PHP output.
-    document.body.dataset.lpCmids = notices.map(n => n.cmid).join(',');
-
     /** @type {Map<number, {notice: string, badgelabel: string, badgestate: string}>} */
     const noticeMap = new Map(notices.map(item => [item.cmid, item]));
 
