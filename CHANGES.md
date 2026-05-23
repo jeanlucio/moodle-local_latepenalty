@@ -1,5 +1,10 @@
 # Changes
 
+## [1.0.1] - 2026-05-23
+
+- Fix `@package` tag in all test files to use the component root (`local_latepenalty`)
+- Add CI workflow to publish releases automatically to the Moodle Plugins directory
+
 ## [1.0.0] - 2026-05-23
 
 - Penalty rule configuration per activity: teachers can enable a daily
