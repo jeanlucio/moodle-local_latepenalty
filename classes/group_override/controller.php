@@ -105,7 +105,7 @@ class controller {
         $this->action     = $action;
         $this->overrideid = $overrideid;
         $this->confirm    = $confirm;
-        $this->listurl    = new moodle_url('/local/latepenalty/group_overrides.php', ['cmid' => $cmid]);
+        $this->listurl    = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'group']);
     }
 
     /**
@@ -235,8 +235,8 @@ class controller {
         $this->groupoptions = $groupoptions;
 
         $formurl = new moodle_url(
-            '/local/latepenalty/group_overrides.php',
-            ['cmid' => $this->cmid, 'action' => $this->action, 'overrideid' => $this->overrideid]
+            '/local/latepenalty/overrides.php',
+            ['cmid' => $this->cmid, 'mode' => 'group', 'action' => $this->action, 'overrideid' => $this->overrideid]
         );
 
         $this->form = new group_override_form($formurl, [
@@ -372,8 +372,9 @@ class controller {
                 'local_latepenalty',
                 format_string($group->name, true, ['context' => $this->modcontext])
             ),
-            new moodle_url('/local/latepenalty/group_overrides.php', [
+            new moodle_url('/local/latepenalty/overrides.php', [
                 'cmid'       => $this->cmid,
+                'mode'       => 'group',
                 'action'     => 'delete',
                 'overrideid' => $this->overrideid,
                 'confirm'    => 1,
@@ -437,8 +438,8 @@ class controller {
             'groupid ASC'
         );
         $addurl    = new moodle_url(
-            '/local/latepenalty/group_overrides.php',
-            ['cmid' => $this->cmid, 'action' => 'add']
+            '/local/latepenalty/overrides.php',
+            ['cmid' => $this->cmid, 'mode' => 'group', 'action' => 'add']
         );
         $addbutton = $output->single_button($addurl, get_string('group_override_add', 'local_latepenalty'), 'get');
 
@@ -485,12 +486,12 @@ class controller {
                     ? (string) $override->max_penalty . '%'
                     : $inherit,
                 'editurl'       => (new moodle_url(
-                    '/local/latepenalty/group_overrides.php',
-                    ['cmid' => $this->cmid, 'action' => 'edit', 'overrideid' => $override->id]
+                    '/local/latepenalty/overrides.php',
+                    ['cmid' => $this->cmid, 'mode' => 'group', 'action' => 'edit', 'overrideid' => $override->id]
                 ))->out(false),
                 'deleteurl'     => (new moodle_url(
-                    '/local/latepenalty/group_overrides.php',
-                    ['cmid' => $this->cmid, 'action' => 'delete', 'overrideid' => $override->id]
+                    '/local/latepenalty/overrides.php',
+                    ['cmid' => $this->cmid, 'mode' => 'group', 'action' => 'delete', 'overrideid' => $override->id]
                 ))->out(false),
             ];
         }

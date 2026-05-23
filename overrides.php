@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Per-user late penalty override management page.
+ * Late penalty override management page — user and group overrides.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -24,12 +24,18 @@
 
 require(__DIR__ . '/../../config.php');
 
-use local_latepenalty\override\controller;
+use local_latepenalty\group_override\controller as group_controller;
+use local_latepenalty\override\controller as user_controller;
 
 $cmid       = required_param('cmid', PARAM_INT);
+$mode       = optional_param('mode', 'user', PARAM_ALPHA);
 $action     = optional_param('action', 'list', PARAM_ALPHA);
 $overrideid = optional_param('overrideid', 0, PARAM_INT);
 $confirm    = optional_param('confirm', 0, PARAM_BOOL);
+
+if (!in_array($mode, ['user', 'group'])) {
+    $mode = 'user';
+}
 
 $cm     = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -41,7 +47,7 @@ require_capability('local/latepenalty:manageoverrides', $modcontext);
 
 $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid, 'enabled' => 1], '*', MUST_EXIST);
 
-$listurl = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid]);
+$listurl = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => $mode]);
 
 $PAGE->set_url($listurl);
 $PAGE->set_context($modcontext);
@@ -55,10 +61,44 @@ $PAGE->navbar->add(
 );
 $PAGE->navbar->add(get_string('overrides', 'local_latepenalty'));
 
-$ctrl = new controller($cmid, $course, $cm, $modcontext, $rule, $action, $overrideid, (bool) $confirm);
+if ($mode === 'group') {
+    $ctrl = new group_controller($cmid, $course, $cm, $modcontext, $rule, $action, $overrideid, (bool) $confirm);
+} else {
+    $ctrl = new user_controller($cmid, $course, $cm, $modcontext, $rule, $action, $overrideid, (bool) $confirm);
+}
+
 $ctrl->process();
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('overrides_for', 'local_latepenalty', format_string($cm->name)));
+
+if ($action === 'list') {
+    $usermodeurl  = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'user']);
+    $groupmodeurl = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'group']);
+
+    $modeselectorhtml  = html_writer::start_tag('ul', ['class' => 'nav nav-pills mb-3']);
+    $modeselectorhtml .= html_writer::tag(
+        'li',
+        html_writer::link(
+            $usermodeurl,
+            get_string('overrides_mode_user', 'local_latepenalty'),
+            ['class' => 'nav-link' . ($mode === 'user' ? ' active' : '')]
+        ),
+        ['class' => 'nav-item']
+    );
+    $modeselectorhtml .= html_writer::tag(
+        'li',
+        html_writer::link(
+            $groupmodeurl,
+            get_string('overrides_mode_group', 'local_latepenalty'),
+            ['class' => 'nav-link' . ($mode === 'group' ? ' active' : '')]
+        ),
+        ['class' => 'nav-item']
+    );
+    $modeselectorhtml .= html_writer::end_tag('ul');
+
+    echo $modeselectorhtml;
+}
+
 echo $ctrl->render($OUTPUT);
 echo $OUTPUT->footer();
