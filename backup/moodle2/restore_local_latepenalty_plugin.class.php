@@ -45,6 +45,10 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
                 'local_latepenalty_override',
                 $this->get_pathfor('/overrides/override')
             ),
+            new restore_path_element(
+                'local_latepenalty_group_override',
+                $this->get_pathfor('/groupoverrides/groupoverride')
+            ),
         ];
     }
 
@@ -85,6 +89,46 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
             $data->timecreated = time();
             $data->timemodified = time();
             $DB->insert_record('local_latepenalty_overrides', $data);
+        }
+    }
+
+    /**
+     * Process one group override record from the backup XML.
+     *
+     * Maps the backed-up groupid to the restored group ID. Records whose group
+     * was not included in the restore are silently skipped.
+     *
+     * @param array $data Raw element data from the XML.
+     * @return void
+     */
+    public function process_local_latepenalty_group_override(array $data): void {
+        global $DB;
+
+        $data = (object) $data;
+
+        $data->groupid = (int) $this->get_mappingid('group', $data->groupid);
+        if (!$data->groupid) {
+            return;
+        }
+
+        $data->cmid = $this->task->get_moduleid();
+
+        $existing = $DB->get_record(
+            'local_latepenalty_group_overrides',
+            ['cmid' => $data->cmid, 'groupid' => $data->groupid]
+        );
+
+        if ($existing) {
+            $existing->deadline      = $data->deadline ?? null;
+            $existing->daily_penalty = $data->daily_penalty ?? null;
+            $existing->max_penalty   = $data->max_penalty ?? null;
+            $existing->timemodified  = time();
+            $DB->update_record('local_latepenalty_group_overrides', $existing);
+        } else {
+            unset($data->id);
+            $data->timecreated  = time();
+            $data->timemodified = time();
+            $DB->insert_record('local_latepenalty_group_overrides', $data);
         }
     }
 

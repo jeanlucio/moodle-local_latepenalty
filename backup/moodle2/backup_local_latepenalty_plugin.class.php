@@ -67,12 +67,26 @@ class backup_local_latepenalty_plugin extends backup_local_plugin {
         $wrapper->add_child($overrides);
         $overrides->add_child($override);
 
+        $groupoverrides = new backup_nested_element('groupoverrides');
+        $groupoverride  = new backup_nested_element('groupoverride', ['id'], [
+            'groupid',
+            'deadline',
+            'daily_penalty',
+            'max_penalty',
+            'timecreated',
+            'timemodified',
+        ]);
+        $wrapper->add_child($groupoverrides);
+        $groupoverrides->add_child($groupoverride);
+
         // Backup::VAR_MODID is resolved to the course_modules.id at backup time.
         $rule->set_source_table('local_latepenalty_rules', ['cmid' => backup::VAR_MODID]);
         $override->set_source_table('local_latepenalty_overrides', ['cmid' => backup::VAR_MODID]);
+        $groupoverride->set_source_table('local_latepenalty_group_overrides', ['cmid' => backup::VAR_MODID]);
 
-        // Annotate userid so the restore framework can remap user IDs.
+        // Annotate IDs so the restore framework can remap them.
         $override->annotate_ids('user', 'userid');
+        $groupoverride->annotate_ids('group', 'groupid');
 
         return $plugin;
     }

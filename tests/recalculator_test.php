@@ -362,6 +362,162 @@ final class recalculator_test extends advanced_testcase {
         self::assertEqualsWithDelta(90.0, $this->read_final_grade($s), 0.01);
     }
 
+    // Group override scenarios.
+
+    /**
+     * recalculate_for_student() uses a group override deadline when no user override exists.
+     *
+     * Student is 5 days past the rule deadline. A group override extends that to 3 days
+     * past → 3 × 10% = 30% off → grade 70.
+     */
+    public function test_recalculate_for_student_uses_group_override_deadline(): void {
+        global $DB;
+
+        $s = $this->make_scenario(5 * DAYSECS); // 5 days late relative to rule deadline.
+        $this->grade_via_module($s, 100.0);
+
+        // Group override extends the deadline by 2 days (student is now only 3 days late).
+        $group = $this->getDataGenerator()->create_group(['courseid' => $s['course']->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $s['student']->id]);
+        $newdeadline = $s['deadline'] + 2 * DAYSECS;
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid'          => $s['assign']->cmid,
+            'groupid'       => $group->id,
+            'deadline'      => $newdeadline,
+            'daily_penalty' => null,
+            'max_penalty'   => null,
+            'timecreated'   => time(),
+            'timemodified'  => time(),
+        ]);
+
+        recalculator::recalculate_for_student(
+            $s['assign']->cmid,
+            (int) $s['student']->id,
+            10.0,
+            50.0
+        );
+
+        self::assertEqualsWithDelta(70.0, $this->read_final_grade($s), 0.01);
+    }
+
+    /**
+     * User override takes precedence over a group override (per field).
+     *
+     * Rule: 10%/day, max 50%. Group override: daily 5%. User override: daily 2%.
+     * Student is 2 days late → user override wins: 2 × 2% = 4% off → grade 96.
+     */
+    public function test_recalculate_for_student_user_override_beats_group_override(): void {
+        global $DB;
+
+        $s = $this->make_scenario(2 * DAYSECS);
+        $this->grade_via_module($s, 100.0);
+
+        $group = $this->getDataGenerator()->create_group(['courseid' => $s['course']->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $s['student']->id]);
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid'          => $s['assign']->cmid,
+            'groupid'       => $group->id,
+            'deadline'      => null,
+            'daily_penalty' => 5.0,
+            'max_penalty'   => null,
+            'timecreated'   => time(),
+            'timemodified'  => time(),
+        ]);
+
+        // User override wins: daily 2%.
+        $this->upsert_override($s['assign']->cmid, (int) $s['student']->id, null, 2.0, null);
+
+        recalculator::recalculate_for_student(
+            $s['assign']->cmid,
+            (int) $s['student']->id,
+            10.0,
+            50.0
+        );
+
+        // 2 days × 2% = 4% off → 96.
+        self::assertEqualsWithDelta(96.0, $this->read_final_grade($s), 0.01);
+    }
+
+    /**
+     * recalculate_for_group() re-applies the penalty for every member of the group.
+     *
+     * Two students in the same group. A group override raises the deadline by 3 days
+     * (students were 5 days late, now 2 days late → 2 × 10% = 20% off → grade 80).
+     */
+    public function test_recalculate_for_group_updates_all_members(): void {
+        global $DB;
+
+        $deadline = time() - 5 * DAYSECS;
+        $submissiontime = $deadline + 5 * DAYSECS;
+
+        $course   = $this->getDataGenerator()->create_course();
+        $student1 = $this->getDataGenerator()->create_user();
+        $student2 = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student1->id, $course->id);
+        $this->getDataGenerator()->enrol_user($student2->id, $course->id);
+
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course'  => $course->id,
+            'grade'   => 100,
+            'duedate' => 0,
+        ]);
+
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
+        rebuild_course_cache($course->id);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+
+        foreach ([$student1->id, $student2->id] as $uid) {
+            $DB->insert_record('assign_submission', (object) [
+                'assignment'    => $assign->id,
+                'userid'        => $uid,
+                'timecreated'   => $submissiontime,
+                'timemodified'  => $submissiontime,
+                'status'        => 'submitted',
+                'groupid'       => 0,
+                'attemptnumber' => 0,
+                'latest'        => 1,
+            ]);
+        }
+
+        $gradeitem = grade_item::fetch([
+            'itemtype'     => 'mod',
+            'itemmodule'   => 'assign',
+            'iteminstance' => $assign->id,
+            'courseid'     => $course->id,
+        ]);
+        $gradeitem->update_raw_grade($student1->id, 100.0, 'mod/assign');
+        $gradeitem->update_raw_grade($student2->id, 100.0, 'mod/assign');
+
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student1->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student2->id]);
+
+        // Group override: extend deadline by 3 days (students now 2 days late → 80).
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid'          => $assign->cmid,
+            'groupid'       => $group->id,
+            'deadline'      => $deadline + 3 * DAYSECS,
+            'daily_penalty' => null,
+            'max_penalty'   => null,
+            'timecreated'   => time(),
+            'timemodified'  => time(),
+        ]);
+
+        recalculator::recalculate_for_group($assign->cmid, (int) $group->id, 10.0, 50.0);
+
+        foreach ([$student1->id, $student2->id] as $uid) {
+            $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $uid]);
+            $grade->load_optional_fields();
+            self::assertEqualsWithDelta(
+                80.0,
+                (float) $grade->finalgrade,
+                0.01,
+                "Grade for userid $uid must be 80 after group override recalculation."
+            );
+        }
+    }
+
     // H5P activity: recalculator uses grade_grades_history as submission-time proxy.
 
     /**
