@@ -18,7 +18,10 @@
 - Penalty recalculator: when a rule's deadline, daily rate, or maximum cap
   changes, the plugin re-applies the penalty to all already-graded students
 - Course page notice: activities with an active rule show a short reminder
-  below the activity link with the deadline and penalty terms
+  below the activity link with the deadline and penalty terms; teachers see
+  a role-specific variant for overdue activities showing the penalty rate
+  and how many students have not yet submitted (badge hidden when all
+  students have submitted)
 - Late penalty report: per-course report showing every student who received
   a penalty, with raw grade, discount applied, and final grade
 - Backup and restore: penalty rules and per-user/group overrides travel with
