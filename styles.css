@@ -54,13 +54,13 @@ body.path-course-view .local-latepenalty-badge {
 
 body.path-course-view .local-latepenalty-badge.local-latepenalty-badge--warning {
     background-color: var(--bs-warning, #ffc107);
-    color: #000;
+    color: var(--bs-dark, #000);
     border-color: var(--bs-warning, #ffc107);
 }
 
 body.path-course-view .local-latepenalty-badge.local-latepenalty-badge--danger {
     background-color: var(--bs-danger, #dc3545);
-    color: #fff;
+    color: var(--bs-white, #fff);
     border-color: var(--bs-danger, #dc3545);
 }
 

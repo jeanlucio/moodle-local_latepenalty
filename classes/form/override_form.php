@@ -91,7 +91,11 @@ class override_form extends \moodleform {
         // Daily penalty: checkbox + text, mirroring the optional date_time_selector pattern.
         $dailygroup   = [];
         $dailygroup[] = $mform->createElement('advcheckbox', 'enable', '', $enablelabel);
-        $dailygroup[] = $mform->createElement('text', 'value', '', ['size' => 10, 'placeholder' => $dailyplaceholder]);
+        $dailygroup[] = $mform->createElement('text', 'value', '', [
+            'size' => 10,
+            'placeholder' => $dailyplaceholder,
+            'aria-label' => get_string('override_daily', 'local_latepenalty'),
+        ]);
         $mform->addGroup($dailygroup, 'daily_grp', get_string('override_daily', 'local_latepenalty'), ' ');
         $mform->disabledIf('daily_grp[value]', 'daily_grp[enable]', 'notchecked');
         $mform->setType('daily_grp[value]', PARAM_RAW);
@@ -99,7 +103,11 @@ class override_form extends \moodleform {
         // Max penalty: checkbox + text, same pattern.
         $maxgroup   = [];
         $maxgroup[] = $mform->createElement('advcheckbox', 'enable', '', $enablelabel);
-        $maxgroup[] = $mform->createElement('text', 'value', '', ['size' => 10, 'placeholder' => $maxplaceholder]);
+        $maxgroup[] = $mform->createElement('text', 'value', '', [
+            'size' => 10,
+            'placeholder' => $maxplaceholder,
+            'aria-label' => get_string('override_max', 'local_latepenalty'),
+        ]);
         $mform->addGroup($maxgroup, 'max_grp', get_string('override_max', 'local_latepenalty'), ' ');
         $mform->disabledIf('max_grp[value]', 'max_grp[enable]', 'notchecked');
         $mform->setType('max_grp[value]', PARAM_RAW);
