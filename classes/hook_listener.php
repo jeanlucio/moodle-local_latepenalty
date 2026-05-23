@@ -97,88 +97,141 @@ class hook_listener {
         $now = time();
         $notices = [];
         $activitydeadlines = self::load_activity_deadlines($records);
-        $userdeadlines = self::load_user_module_deadlines($records, (int) $USER->id);
 
-        // Load all per-user overrides for this user in this course (single query).
-        $overridessql = "SELECT o.cmid, o.deadline, o.daily_penalty, o.max_penalty
-                           FROM {local_latepenalty_overrides} o
-                           JOIN {course_modules} cm ON cm.id = o.cmid
-                          WHERE cm.course = :courseid
-                            AND o.userid = :userid";
-        $useroverriderows = $DB->get_records_sql($overridessql, [
-            'courseid' => $courseid,
-            'userid'   => (int) $USER->id,
-        ]);
-        $useroverrides = [];
-        foreach ($useroverriderows as $o) {
-            $useroverrides[(int) $o->cmid] = $o;
-        }
+        $isteacher = has_capability(
+            'local/latepenalty:viewreport',
+            \context_course::instance($courseid)
+        );
 
-        // Load merged group overrides for this user across all penalized activities.
-        $groupoverridessql = "SELECT go.cmid,
-                                     MAX(go.deadline) AS deadline,
-                                     MIN(go.daily_penalty) AS daily_penalty,
-                                     MIN(go.max_penalty) AS max_penalty
-                                FROM {local_latepenalty_group_overrides} go
-                                JOIN {groups_members} gm ON gm.groupid = go.groupid
-                                JOIN {course_modules} cm ON cm.id = go.cmid
-                               WHERE cm.course = :courseid
-                                 AND gm.userid = :userid
-                            GROUP BY go.cmid";
-        $groupoverriderows = $DB->get_records_sql($groupoverridessql, [
-            'courseid' => $courseid,
-            'userid'   => (int) $USER->id,
-        ]);
-        $groupoverrides = [];
-        foreach ($groupoverriderows as $o) {
-            $groupoverrides[(int) $o->cmid] = $o;
-        }
+        if ($isteacher) {
+            $cmids = array_map(fn($r) => (int) $r->cmid, $records);
+            $pendingcounts = self::load_pending_counts($cmids, $courseid);
 
-        foreach ($records as $record) {
-            if (isset($completedcmids[(int) $record->cmid])) {
-                continue;
-            }
-
-            $override = $useroverrides[(int) $record->cmid] ?? null;
-            $groupoverride = $groupoverrides[(int) $record->cmid] ?? null;
-
-            if ($override && $override->deadline !== null) {
-                $deadline = (int) $override->deadline;
-            } else if ($groupoverride && $groupoverride->deadline !== null) {
-                $deadline = (int) $groupoverride->deadline;
-            } else {
+            foreach ($records as $record) {
                 $cmid = (int) $record->cmid;
-                $deadline = $userdeadlines[$cmid] ?? $activitydeadlines[$cmid] ?? null;
+                $deadline = $activitydeadlines[$cmid] ?? null;
+                if (!$deadline) {
+                    continue;
+                }
+
+                $daily = (float) $record->daily_penalty;
+                $max   = (float) $record->max_penalty;
+
+                [$badgelabel, $badgestate, $notice] = self::compute_badge(
+                    $deadline,
+                    $daily,
+                    $max,
+                    $now,
+                    $dateformat
+                );
+
+                if ($badgestate !== 'ontime') {
+                    $pending = $pendingcounts[$cmid] ?? 0;
+                    if ($pending === 0) {
+                        continue;
+                    }
+                    [$badgelabel, $notice] = self::compute_teacher_badge(
+                        $deadline,
+                        $daily,
+                        $max,
+                        $now,
+                        $dateformat,
+                        $pending,
+                        $badgestate
+                    );
+                }
+
+                $notices[] = [
+                    'cmid'       => $cmid,
+                    'notice'     => $notice,
+                    'badgelabel' => $badgelabel,
+                    'badgestate' => $badgestate,
+                ];
             }
-            if (!$deadline) {
-                continue;
+        } else {
+            $userdeadlines = self::load_user_module_deadlines($records, (int) $USER->id);
+
+            // Load all per-user overrides for this user in this course (single query).
+            $overridessql = "SELECT o.cmid, o.deadline, o.daily_penalty, o.max_penalty
+                               FROM {local_latepenalty_overrides} o
+                               JOIN {course_modules} cm ON cm.id = o.cmid
+                              WHERE cm.course = :courseid
+                                AND o.userid = :userid";
+            $useroverriderows = $DB->get_records_sql($overridessql, [
+                'courseid' => $courseid,
+                'userid'   => (int) $USER->id,
+            ]);
+            $useroverrides = [];
+            foreach ($useroverriderows as $o) {
+                $useroverrides[(int) $o->cmid] = $o;
             }
 
-            $daily = ($override && $override->daily_penalty !== null)
-                ? (float) $override->daily_penalty
-                : (($groupoverride && $groupoverride->daily_penalty !== null)
-                    ? (float) $groupoverride->daily_penalty
-                    : (float) $record->daily_penalty);
-            $max = ($override && $override->max_penalty !== null)
-                ? (float) $override->max_penalty
-                : (($groupoverride && $groupoverride->max_penalty !== null)
-                    ? (float) $groupoverride->max_penalty
-                    : (float) $record->max_penalty);
+            // Load merged group overrides for this user across all penalized activities.
+            $groupoverridessql = "SELECT go.cmid,
+                                         MAX(go.deadline) AS deadline,
+                                         MIN(go.daily_penalty) AS daily_penalty,
+                                         MIN(go.max_penalty) AS max_penalty
+                                    FROM {local_latepenalty_group_overrides} go
+                                    JOIN {groups_members} gm ON gm.groupid = go.groupid
+                                    JOIN {course_modules} cm ON cm.id = go.cmid
+                                   WHERE cm.course = :courseid
+                                     AND gm.userid = :userid
+                                GROUP BY go.cmid";
+            $groupoverriderows = $DB->get_records_sql($groupoverridessql, [
+                'courseid' => $courseid,
+                'userid'   => (int) $USER->id,
+            ]);
+            $groupoverrides = [];
+            foreach ($groupoverriderows as $o) {
+                $groupoverrides[(int) $o->cmid] = $o;
+            }
 
-            [$badgelabel, $badgestate, $notice] = self::compute_badge(
-                $deadline,
-                $daily,
-                $max,
-                $now,
-                $dateformat
-            );
+            foreach ($records as $record) {
+                if (isset($completedcmids[(int) $record->cmid])) {
+                    continue;
+                }
 
-            $notices[] = [
-                'cmid'       => (int) $record->cmid,
-                'notice'     => $notice,
-                'badgelabel' => $badgelabel,
-                'badgestate' => $badgestate,
-            ];
+                $override = $useroverrides[(int) $record->cmid] ?? null;
+                $groupoverride = $groupoverrides[(int) $record->cmid] ?? null;
+
+                if ($override && $override->deadline !== null) {
+                    $deadline = (int) $override->deadline;
+                } else if ($groupoverride && $groupoverride->deadline !== null) {
+                    $deadline = (int) $groupoverride->deadline;
+                } else {
+                    $cmid = (int) $record->cmid;
+                    $deadline = $userdeadlines[$cmid] ?? $activitydeadlines[$cmid] ?? null;
+                }
+                if (!$deadline) {
+                    continue;
+                }
+
+                $daily = ($override && $override->daily_penalty !== null)
+                    ? (float) $override->daily_penalty
+                    : (($groupoverride && $groupoverride->daily_penalty !== null)
+                        ? (float) $groupoverride->daily_penalty
+                        : (float) $record->daily_penalty);
+                $max = ($override && $override->max_penalty !== null)
+                    ? (float) $override->max_penalty
+                    : (($groupoverride && $groupoverride->max_penalty !== null)
+                        ? (float) $groupoverride->max_penalty
+                        : (float) $record->max_penalty);
+
+                [$badgelabel, $badgestate, $notice] = self::compute_badge(
+                    $deadline,
+                    $daily,
+                    $max,
+                    $now,
+                    $dateformat
+                );
+
+                $notices[] = [
+                    'cmid'       => (int) $record->cmid,
+                    'notice'     => $notice,
+                    'badgelabel' => $badgelabel,
+                    'badgestate' => $badgestate,
+                ];
+            }
         }
 
         if (empty($notices)) {
@@ -215,6 +268,47 @@ class hook_listener {
 
         $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cm->id, 'enabled' => 1]);
         if (!$rule) {
+            return;
+        }
+
+        $dateformat = get_string('strftimedatefullshort', 'langconfig');
+        $isteacher = has_capability(
+            'local/latepenalty:viewreport',
+            \context_course::instance((int) $cm->course)
+        );
+
+        if ($isteacher) {
+            $record = (object) [
+                'completionexpected' => $cm->completionexpected ?? 0,
+                'instance'           => $cm->instance,
+                'modname'            => $cm->modname,
+            ];
+            $deadline = self::resolve_deadline($record);
+            if (!$deadline) {
+                return;
+            }
+
+            $daily = (float) $rule->daily_penalty;
+            $max   = (float) $rule->max_penalty;
+            [, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
+
+            if ($badgestate !== 'ontime') {
+                $pending = self::count_pending_students((int) $cm->id, (int) $cm->course);
+                if ($pending === 0) {
+                    return;
+                }
+                [, $notice] = self::compute_teacher_badge(
+                    $deadline,
+                    $daily,
+                    $max,
+                    time(),
+                    $dateformat,
+                    $pending,
+                    $badgestate
+                );
+            }
+
+            $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
             return;
         }
 
@@ -255,7 +349,6 @@ class hook_listener {
             return;
         }
 
-        $dateformat = get_string('strftimedatefullshort', 'langconfig');
         $daily = ($override && $override->daily_penalty !== null)
             ? (float) $override->daily_penalty
             : (($groupoverride && $groupoverride->daily_penalty !== null)
@@ -269,6 +362,154 @@ class hook_listener {
         [, , $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
 
         $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
+    }
+
+    /**
+     * Compute the teacher-specific badge label and notice for an overdue activity.
+     *
+     * Called only when the current user is a teacher and there are pending students.
+     * Reuses the CSS state already determined by compute_badge().
+     *
+     * @param int    $deadline   Unix timestamp of the activity deadline.
+     * @param float  $daily      Daily penalty percentage.
+     * @param float  $max        Maximum penalty percentage.
+     * @param int    $now        Current Unix timestamp.
+     * @param string $dateformat Moodle date format string.
+     * @param int    $pending    Number of students who have not yet completed the activity.
+     * @param string $state      Badge state: 'warning' or 'danger'.
+     * @return array{string, string} [badgelabel, notice].
+     */
+    private static function compute_teacher_badge(
+        int $deadline,
+        float $daily,
+        float $max,
+        int $now,
+        string $dateformat,
+        int $pending,
+        string $state
+    ): array {
+        $datestr = userdate($deadline, $dateformat);
+        $daysoverdue = (int) ceil(($now - $deadline) / DAYSECS);
+        $penalty = min($daysoverdue * $daily, $max);
+
+        if ($state === 'danger') {
+            $label = get_string('badge_teacher_pending_max', 'local_latepenalty', [
+                'pct'     => $max,
+                'pending' => $pending,
+            ]);
+            $notice = get_string('courseinfo_teacher_overdue_max', 'local_latepenalty', (object) [
+                'deadline' => $datestr,
+                'max'      => (string) $max,
+                'pending'  => $pending,
+            ]);
+        } else {
+            $label = get_string('badge_teacher_pending', 'local_latepenalty', [
+                'pct'     => $penalty,
+                'pending' => $pending,
+            ]);
+            $notice = get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
+                'deadline' => $datestr,
+                'pct'      => (string) $penalty,
+                'daily'    => (string) $daily,
+                'max'      => (string) $max,
+                'pending'  => $pending,
+            ]);
+        }
+
+        return [$label, $notice];
+    }
+
+    /**
+     * Count enrolled students who have not yet completed a given course module.
+     *
+     * Uses role archetype 'student' to exclude teachers and managers.
+     * Returns 0 if no students are enrolled.
+     *
+     * @param int $cmid     Course module ID.
+     * @param int $courseid Course ID.
+     * @return int Number of students without completionstate >= 1 for this CM.
+     */
+    private static function count_pending_students(int $cmid, int $courseid): int {
+        global $DB;
+
+        $contextid = \context_course::instance($courseid)->id;
+
+        $total = (int) $DB->count_records_sql(
+            "SELECT COUNT(DISTINCT ra.userid)
+               FROM {role_assignments} ra
+               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+              WHERE ra.contextid = :contextid",
+            ['contextid' => $contextid]
+        );
+
+        if ($total === 0) {
+            return 0;
+        }
+
+        $completed = (int) $DB->count_records_sql(
+            "SELECT COUNT(DISTINCT cmc.userid)
+               FROM {course_modules_completion} cmc
+               JOIN {role_assignments} ra ON ra.userid = cmc.userid AND ra.contextid = :contextid
+               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+              WHERE cmc.coursemoduleid = :cmid
+                AND cmc.completionstate >= 1",
+            ['contextid' => $contextid, 'cmid' => $cmid]
+        );
+
+        return max(0, $total - $completed);
+    }
+
+    /**
+     * Bulk-load pending student counts for multiple course modules.
+     *
+     * Runs two queries for the whole set: one for total enrolled students,
+     * one for per-CM completion counts. No per-activity loop queries.
+     *
+     * @param int[] $cmids    Course module IDs to count for.
+     * @param int   $courseid Course ID.
+     * @return array<int, int> Map of cmid => pending student count.
+     */
+    private static function load_pending_counts(array $cmids, int $courseid): array {
+        global $DB;
+
+        if (empty($cmids)) {
+            return [];
+        }
+
+        $contextid = \context_course::instance($courseid)->id;
+
+        $total = (int) $DB->count_records_sql(
+            "SELECT COUNT(DISTINCT ra.userid)
+               FROM {role_assignments} ra
+               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+              WHERE ra.contextid = :contextid",
+            ['contextid' => $contextid]
+        );
+
+        if ($total === 0) {
+            return array_fill_keys($cmids, 0);
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED, 'cm');
+        $completedrows = $DB->get_records_sql(
+            "SELECT cmc.coursemoduleid AS cmid, COUNT(DISTINCT cmc.userid) AS cnt
+               FROM {course_modules_completion} cmc
+               JOIN {role_assignments} ra ON ra.userid = cmc.userid AND ra.contextid = :contextid
+               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+              WHERE cmc.coursemoduleid $insql
+                AND cmc.completionstate >= 1
+           GROUP BY cmc.coursemoduleid",
+            array_merge(['contextid' => $contextid], $inparams)
+        );
+
+        $result = [];
+        foreach ($cmids as $cmid) {
+            $cmid = (int) $cmid;
+            $done = isset($completedrows[$cmid]) ? (int) $completedrows[$cmid]->cnt : 0;
+            $result[$cmid] = max(0, $total - $done);
+        }
+
+        return $result;
     }
 
     /**
