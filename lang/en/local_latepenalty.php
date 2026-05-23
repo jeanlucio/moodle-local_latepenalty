@@ -101,3 +101,5 @@ $string['report_col_finalgrade'] = 'Final grade';
 $string['report_col_rawgrade'] = 'Raw grade';
 $string['report_col_student'] = 'Student';
 $string['report_empty'] = 'No late penalties have been applied in this course yet.';
+$string['report_override_group'] = 'Group override';
+$string['report_override_user'] = 'User override';

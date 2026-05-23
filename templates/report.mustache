@@ -29,7 +29,8 @@
     * filtercmid   - Currently selected cm id (0 = all).
     * haspenalties - Boolean: true when at least one penalty has been applied.
     * penalties    - Array of penalty rows: fullname, activity, rawgrade,
-                     discount, finalgrade, grademax, penaltydate.
+                     hasdiscount, discount, finalgrade, grademax, penaltydate,
+                     hasuseroverride, hasgroupoverride.
 
     Example context (json):
     {
@@ -53,10 +54,13 @@
                 "hasdeadline": true,
                 "completionexpected": "7 May 2026",
                 "rawgrade": "8,00",
+                "hasdiscount": true,
                 "discount": "10,0",
                 "finalgrade": "7,20",
                 "grademax": "10,00",
-                "penaltydate": "7 May 2026, 2:14 PM"
+                "penaltydate": "7 May 2026, 2:14 PM",
+                "hasuseroverride": false,
+                "hasgroupoverride": false
             },
             {
                 "fullname": "Maria Souza",
@@ -64,10 +68,13 @@
                 "hasdeadline": false,
                 "completionexpected": "",
                 "rawgrade": "9,50",
-                "discount": "15,0",
-                "finalgrade": "8,08",
+                "hasdiscount": false,
+                "discount": "0,0",
+                "finalgrade": "9,50",
                 "grademax": "10,00",
-                "penaltydate": "4 May 2026, 9:00 AM"
+                "penaltydate": "4 May 2026, 9:00 AM",
+                "hasuseroverride": true,
+                "hasgroupoverride": false
             }
         ]
     }
@@ -139,7 +146,17 @@
                             <td>{{#hasdeadline}}{{completionexpected}}{{/hasdeadline}}{{^hasdeadline}}&mdash;{{/hasdeadline}}</td>
                             <td class="text-center">{{rawgrade}} / {{grademax}}</td>
                             <td class="text-center local-latepenalty-discount">
-                                &minus;{{discount}}%
+                                {{#hasdiscount}}&minus;{{/hasdiscount}}{{discount}}%
+                                {{#hasuseroverride}}
+                                <span class="badge bg-secondary ms-1">
+                                    {{#str}} report_override_user, local_latepenalty {{/str}}
+                                </span>
+                                {{/hasuseroverride}}
+                                {{#hasgroupoverride}}
+                                <span class="badge bg-secondary ms-1">
+                                    {{#str}} report_override_group, local_latepenalty {{/str}}
+                                </span>
+                                {{/hasgroupoverride}}
                             </td>
                             <td class="text-center">{{finalgrade}} / {{grademax}}</td>
                             <td>{{penaltydate}}</td>

@@ -101,3 +101,5 @@ $string['report_col_finalgrade'] = 'Nota final';
 $string['report_col_rawgrade'] = 'Nota bruta';
 $string['report_col_student'] = 'Estudante';
 $string['report_empty'] = 'Nenhuma penalidade por atraso foi aplicada neste curso ainda.';
+$string['report_override_group'] = 'Sobreposição de grupo';
+$string['report_override_user'] = 'Sobreposição de usuário';

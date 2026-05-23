@@ -133,6 +133,7 @@ class controller {
 
         $modinfo = get_fast_modinfo($this->courseid);
         $moduledeadlines = self::load_module_deadlines($rows);
+        $overrides = self::load_overrides($rows);
 
         // Keep only the most recent penalty per student + grade item (ORDER BY DESC above).
         $seen      = [];
@@ -150,6 +151,10 @@ class controller {
             $discount   = ($rawgrade > 0)
                 ? round((1.0 - $finalgrade / $rawgrade) * 100.0, 1)
                 : 0.0;
+
+            $overridekey    = $row->userid . '_' . $row->cmid;
+            $hasuseroverride  = !empty($overrides['user'][$overridekey]);
+            $hasgroupoverride = !$hasuseroverride && !empty($overrides['group'][$overridekey]);
 
             $fakeuser = (object) [
                 'firstname'         => $row->firstname ?? '',
@@ -178,10 +183,13 @@ class controller {
                     ? userdate($deadline)
                     : '',
                 'rawgrade'           => format_float($rawgrade, 2),
+                'hasdiscount'        => $discount > 0,
                 'discount'           => format_float($discount, 1),
                 'finalgrade'         => format_float($finalgrade, 2),
                 'grademax'           => format_float((float) $row->grademax, 2),
                 'penaltydate'        => userdate((int) $row->timemodified),
+                'hasuseroverride'    => $hasuseroverride,
+                'hasgroupoverride'   => $hasgroupoverride,
             ];
         }
 
@@ -315,6 +323,63 @@ class controller {
 
         $value = $moduledeadlines[$row->itemmodule][(int) $row->iteminstance] ?? null;
         return ($value) ? (int) $value : null;
+    }
+
+    /**
+     * Load user and group overrides in bulk for the given report rows.
+     *
+     * Returns two maps, each keyed by "userid_cmid" → true, so callers can do a
+     * cheap isset() check per row without triggering any additional queries.
+     *
+     * @param array $rows Report rows, each having userid and cmid properties.
+     * @return array{user: array<string,bool>, group: array<string,bool>}
+     */
+    private static function load_overrides(array $rows): array {
+        global $DB;
+
+        $userids = [];
+        $cmids   = [];
+        foreach ($rows as $row) {
+            $userids[(int) $row->userid] = (int) $row->userid;
+            $cmids[(int) $row->cmid]     = (int) $row->cmid;
+        }
+
+        if (empty($userids) || empty($cmids)) {
+            return ['user' => [], 'group' => []];
+        }
+
+        $useridlist = array_values($userids);
+        $cmidlist   = array_values($cmids);
+
+        // User overrides.
+        [$usql, $uparams] = $DB->get_in_or_equal($useridlist, SQL_PARAMS_NAMED, 'uo_uid');
+        [$csql, $cparams] = $DB->get_in_or_equal($cmidlist, SQL_PARAMS_NAMED, 'uo_cm');
+        $useroverrides = [];
+        $records = $DB->get_records_sql(
+            "SELECT id, userid, cmid FROM {local_latepenalty_overrides}
+              WHERE userid $usql AND cmid $csql",
+            array_merge($uparams, $cparams)
+        );
+        foreach ($records as $record) {
+            $useroverrides[(int) $record->userid . '_' . (int) $record->cmid] = true;
+        }
+
+        // Group overrides — resolved to individual users via groups_members.
+        [$usql2, $uparams2] = $DB->get_in_or_equal($useridlist, SQL_PARAMS_NAMED, 'go_uid');
+        [$csql2, $cparams2] = $DB->get_in_or_equal($cmidlist, SQL_PARAMS_NAMED, 'go_cm');
+        $groupoverrides = [];
+        $records = $DB->get_records_sql(
+            "SELECT go.id, go.cmid, gm.userid
+               FROM {local_latepenalty_group_overrides} go
+               JOIN {groups_members} gm ON gm.groupid = go.groupid
+              WHERE go.cmid $csql2 AND gm.userid $usql2",
+            array_merge($cparams2, $uparams2)
+        );
+        foreach ($records as $record) {
+            $groupoverrides[(int) $record->userid . '_' . (int) $record->cmid] = true;
+        }
+
+        return ['user' => $useroverrides, 'group' => $groupoverrides];
     }
 
     /**
