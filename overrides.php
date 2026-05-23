@@ -76,28 +76,13 @@ if ($action === 'list') {
     $usermodeurl  = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'user']);
     $groupmodeurl = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'group']);
 
-    $modeselectorhtml  = html_writer::start_tag('ul', ['class' => 'nav nav-pills mb-3']);
-    $modeselectorhtml .= html_writer::tag(
-        'li',
-        html_writer::link(
-            $usermodeurl,
-            get_string('overrides_mode_user', 'local_latepenalty'),
-            ['class' => 'nav-link' . ($mode === 'user' ? ' active' : '')]
-        ),
-        ['class' => 'nav-item']
-    );
-    $modeselectorhtml .= html_writer::tag(
-        'li',
-        html_writer::link(
-            $groupmodeurl,
-            get_string('overrides_mode_group', 'local_latepenalty'),
-            ['class' => 'nav-link' . ($mode === 'group' ? ' active' : '')]
-        ),
-        ['class' => 'nav-item']
-    );
-    $modeselectorhtml .= html_writer::end_tag('ul');
-
-    echo $modeselectorhtml;
+    $tabscontext = [
+        'usermodeurl'  => $usermodeurl->out(false),
+        'groupmodeurl' => $groupmodeurl->out(false),
+        'useractive'   => ($mode === 'user'),
+        'groupactive'  => ($mode === 'group'),
+    ];
+    echo $OUTPUT->render_from_template('local_latepenalty/overrides_tabs', $tabscontext);
 }
 
 echo $ctrl->render($OUTPUT);
