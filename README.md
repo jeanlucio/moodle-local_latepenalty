@@ -29,7 +29,7 @@ Unlike Moodle's native late-submission penalty — which is limited to Assignmen
 * 💾 **Backup and restore:** Penalty rules travel with the activity on course backup, restore, and duplication.
 * 🔔 **Dynamic status badge:** Each activity on the course page shows a contextual badge — grey with the deadline when on time, yellow with the accumulated penalty when overdue, and red when the maximum is reached. Tooltip text adapts to each state. Badge and notice disappear automatically once the student completes the activity. Teachers see a role-specific variant: for overdue activities the badge shows the penalty rate plus the number of students who have not yet submitted; when all students have submitted the badge is hidden entirely.
 * 🔁 **Automatic penalty recalculation:** When a teacher changes the deadline or penalty rate of an activity, the plugin can automatically recalculate and reapply penalties for all students who were already penalised. Two independent checkboxes (both enabled by default) let the teacher control whether each type of change triggers a recalculation.
-* 📊 **Penalty report:** Teachers access a filterable course report listing every grade adjustment applied by the plugin, always available regardless of course format.
+* 📊 **Penalty report:** Teachers access a filterable course report listing every grade adjustment applied by the plugin, with one-click CSV and Excel export, always available regardless of course format.
 * 🌐 **Bilingual:** Full support for English and Brazilian Portuguese.
 
 ---
@@ -174,11 +174,22 @@ The report shows every grade adjustment applied by the plugin in that course:
 | **Activity** | Name of the graded activity |
 | **Deadline** | Resolved deadline (completionexpected or module field) |
 | **Raw grade** | Grade before the penalty |
-| **Discount** | Percentage applied |
+| **Discount** | Percentage applied. When a user or group override zeroes the penalty, a badge (*User override* or *Group override*) appears next to the 0.0% value to explain the waiver. |
 | **Final grade** | Grade after the penalty |
 | **Date applied** | Date the penalty was recorded |
 
 The report includes **filters** for student and activity. Only students and activities that have at least one recorded penalty appear in the filter dropdowns — the report is always available regardless of the course format.
+
+#### Exporting the report
+
+Two download buttons appear in the report header whenever there is at least one row. The current student and activity filters are preserved in the export.
+
+| Button | Format | File |
+|--------|--------|------|
+| **Download CSV** | Comma-separated values | `latepenalty_<shortname>_<date>.csv` |
+| **Download Excel** | Excel workbook (.xlsx) | `latepenalty_<shortname>_<date>.xlsx` |
+
+The export contains one additional column — **Override** — that shows *User override* or *Group override* (or is empty) for each row, making it easy to filter waived penalties in a spreadsheet.
 
 ---
 
@@ -321,7 +332,7 @@ Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apen
 * 💾 **Backup e restauração:** As regras de penalidade viajam junto com a atividade no backup, restauração e duplicação de cursos.
 * 🔔 **Badge de status dinâmico:** Cada atividade na página do curso exibe um badge contextual — cinza com o prazo quando dentro do tempo, amarelo com a penalidade acumulada quando em atraso, e vermelho ao atingir o limite máximo. O tooltip adapta o texto a cada estado. O badge e o aviso desaparecem automaticamente após o aluno concluir a atividade. Professores veem uma variante específica por papel: para atividades em atraso o badge exibe a taxa de penalidade e a quantidade de estudantes que ainda não enviaram; quando todos os estudantes já entregaram o badge é ocultado.
 * 🔁 **Recálculo automático de penalidades:** Quando o professor altera o prazo ou a taxa de penalidade de uma atividade, o plugin pode recalcular e reaplicar automaticamente as penalidades de todos os alunos já penalizados. Dois checkboxes independentes (ambos habilitados por padrão) permitem ao professor controlar se cada tipo de mudança dispara um recálculo.
-* 📊 **Relatório de penalidades:** Professores acessam um relatório filtrado por curso com cada ajuste de nota aplicado pelo plugin, sempre disponível independentemente do formato de curso.
+* 📊 **Relatório de penalidades:** Professores acessam um relatório filtrado por curso com cada ajuste de nota aplicado pelo plugin, com exportação para CSV e Excel com um clique, sempre disponível independentemente do formato de curso.
 * 🌐 **Bilíngue:** Suporte completo para inglês e português do Brasil.
 
 ---
@@ -462,15 +473,26 @@ O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
 
 | Coluna | Descrição |
 |--------|-----------|
-| **Aluno** | Nome completo do aluno |
+| **Estudante** | Nome completo do estudante |
 | **Atividade** | Nome da atividade avaliada |
 | **Prazo** | Prazo resolvido (completionexpected ou campo do módulo) |
 | **Nota bruta** | Nota antes da penalidade |
-| **Desconto** | Percentual aplicado |
+| **Desconto** | Percentual aplicado. Quando uma sobreposição de usuário ou de grupo zera a penalidade, um badge (*Sobreposição de usuário* ou *Sobreposição de grupo*) aparece ao lado do valor 0,0% para explicar a isenção. |
 | **Nota final** | Nota após a penalidade |
-| **Data aplicada** | Data em que a penalidade foi registrada |
+| **Penalidade aplicada** | Data em que a penalidade foi registrada |
 
-O relatório inclui **filtros** por aluno e por atividade. Somente alunos e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
+O relatório inclui **filtros** por estudante e por atividade. Somente estudantes e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
+
+#### Exportar o relatório
+
+Dois botões de download aparecem no cabeçalho do relatório sempre que há ao menos uma linha. Os filtros ativos de estudante e atividade são preservados na exportação.
+
+| Botão | Formato | Arquivo |
+|-------|---------|---------|
+| **Baixar CSV** | Valores separados por vírgula | `latepenalty_<sigla>_<data>.csv` |
+| **Baixar Excel** | Pasta de trabalho Excel (.xlsx) | `latepenalty_<sigla>_<data>.xlsx` |
+
+A exportação contém uma coluna adicional — **Sobreposição** — que exibe *Sobreposição de usuário* ou *Sobreposição de grupo* (ou fica vazia) para cada linha, facilitando a filtragem de penalidades isentas em uma planilha.
 
 ---
 
