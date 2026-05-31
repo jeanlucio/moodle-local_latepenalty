@@ -56,7 +56,7 @@ class recalculator {
         }
 
         // Fetch the most-recent penalty record per student for this cmid.
-        $sql = "SELECT ggh.userid, ggh.rawgrade, ggh.itemid
+        $sql = "SELECT ggh.id, ggh.userid, ggh.rawgrade, ggh.itemid
                   FROM {grade_grades_history} ggh
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
