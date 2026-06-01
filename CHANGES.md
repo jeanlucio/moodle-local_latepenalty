@@ -1,5 +1,9 @@
 # Changes
 
+## [1.0.2] - 2026-05-31
+
+- Fix a duplicate key error when recalculating penalties: the grade history primary key is now selected first so `get_records_sql()` always receives a unique array key
+
 ## [1.0.1] - 2026-05-23
 
 - Fix `@package` tag in all test files to use the component root (`local_latepenalty`)

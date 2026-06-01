@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_latepenalty';
-$plugin->version = 2026052301;
+$plugin->version = 2026053100;
 $plugin->requires = 2024042200;
 $plugin->supported = [405, 502];
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = 'v1.0.1';
+$plugin->release = 'v1.0.2';
