@@ -1,0 +1,54 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Extract changelog section
+        run: |
+          python3 << 'EOF'
+          import re, os, sys
+
+          tag = os.environ['GITHUB_REF_NAME']   # e.g. "v1.5.2"
+
+          try:
+              content = open('CHANGES.md').read()
+          except FileNotFoundError:
+              print('CHANGES.md not found', file=sys.stderr)
+              open('/tmp/release-notes.md', 'w').write(f'Release {tag}.')
+              sys.exit(0)
+
+          # Match ## [v1.5.2] — date  …  up to the next ## [ or end of file
+          escaped = re.escape(tag)
+          pattern = rf'^## \[{escaped}\][^\n]*\n(.*?)(?=\n^## \[|\Z)'
+          match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
+
+          if match:
+              body = match.group(1).strip()
+              body = re.sub(r'\n\n---\s*$', '', body).strip()  # remove trailing ---
+          else:
+              print(f'Section for {tag} not found in CHANGES.md', file=sys.stderr)
+              body = f'Release {tag}.\n\nSee [CHANGES.md](CHANGES.md) for details.'
+
+          open('/tmp/release-notes.md', 'w').write(body)
+          print(f'Extracted {len(body)} chars for {tag}.')
+          EOF
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file /tmp/release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
