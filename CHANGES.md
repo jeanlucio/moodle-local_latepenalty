@@ -1,5 +1,10 @@
 # Changes
 
+## [1.0.3] - 2026-06-17
+
+- Fix a fatal error when restoring a course: the restore step resolved the host course module with `MUST_EXIST` before the activity instance was linked, aborting the restore of any course whose modules carry a penalty rule. The deadline seed now degrades gracefully and is recomputed on the first save.
+- Add backup/restore PHPUnit coverage (rule, per-user and per-group overrides, source course unaffected)
+
 ## [1.0.2] - 2026-05-31
 
 - Fix a duplicate key error when recalculating penalties: the grade history primary key is now selected first so `get_records_sql()` always receives a unique array key
