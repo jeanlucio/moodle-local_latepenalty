@@ -153,9 +153,13 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         $data->cmid = $this->task->get_moduleid();
 
         // Seed last_deadline from the restored activity so the first teacher save
-        // after restore does not trigger a spurious bulk recalculation.
-        $restoredcm = get_coursemodule_from_id('', $data->cmid, 0, false, MUST_EXIST);
-        $data->last_deadline = \local_latepenalty\penalty_helper::get_deadline($restoredcm) ?? 0;
+        // after restore does not trigger a spurious bulk recalculation. The activity
+        // instance may not be linked to the course module yet at this point in the
+        // restore, so fall back to 0 when the module cannot be resolved.
+        $restoredcm = get_coursemodule_from_id('', $data->cmid, 0, false, IGNORE_MISSING);
+        $data->last_deadline = $restoredcm
+            ? (\local_latepenalty\penalty_helper::get_deadline($restoredcm) ?? 0)
+            : 0;
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {

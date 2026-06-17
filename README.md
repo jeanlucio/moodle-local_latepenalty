@@ -237,7 +237,7 @@ Third-party formats that replace the standard module HTML with a custom layout (
 
 ### 🧪 Automated Tests
 
-Late Penalty ships with **78 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
+Late Penalty ships with **81 PHPUnit tests** that run on every CI push across the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB):
 
 | Test group | Scenarios covered |
 |------------|------------------|
@@ -257,6 +257,7 @@ Late Penalty ships with **78 PHPUnit tests** that run on every CI push across th
 | Recalculation — teacher override | Manually overridden grade is not touched by recalculation |
 | Override controller | Render list (empty state, student name and penalties, always includes add button); render add (no students when all covered); save add rejects unenrolled user; save edit preserves original user; delete removes record on confirm, leaves record without confirm, does not affect foreign override |
 | Group override controller | Render list (empty state, group name and penalties, always includes add button); render add (no groups notice when all covered); delete removes record on confirm, leaves record without confirm, does not affect foreign-CM override |
+| Backup / restore | Rule travels with the activity and is remapped to the new course module (regression guard for resolving the module before its instance is linked); per-user and per-group overrides remapped with user data; source course rule unaffected by restore into a new course |
 
 Run them locally with:
 
@@ -267,6 +268,7 @@ vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
 vendor/bin/phpunit local/latepenalty/tests/penalty_helper_group_test.php
 vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
 vendor/bin/phpunit local/latepenalty/tests/group_override/controller_test.php
+vendor/bin/phpunit local/latepenalty/tests/backup/restore_test.php
 ```
 
 ---
@@ -540,7 +542,7 @@ Formatos de terceiros que substituem o HTML padrão dos módulos por um layout p
 
 ### 🧪 Testes Automatizados
 
-O Late Penalty inclui **78 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
+O Late Penalty inclui **81 testes PHPUnit** executados em todo push de CI na matriz completa (Moodle 4.5 → 5.2, PostgreSQL e MariaDB):
 
 | Grupo de testes | Cenários cobertos |
 |-----------------|------------------|
@@ -560,6 +562,7 @@ O Late Penalty inclui **78 testes PHPUnit** executados em todo push de CI na mat
 | Recálculo — override manual do professor | Nota sobrescrita manualmente não é alterada pelo recálculo |
 | Controller de sobreposições | Exibição da lista (estado vazio, nome do aluno e penalidades, sempre exibe botão adicionar); exibição do formulário de adição (sem alunos quando todos já cobertos); salvar adição rejeita aluno não matriculado; salvar edição preserva usuário original; exclusão remove o registro com confirmação, mantém sem confirmação, não afeta override de outro aluno |
 | Controller de sobreposições de grupo | Exibição da lista (estado vazio, nome do grupo e penalidades, sempre exibe botão adicionar); exibição do formulário de adição (aviso sem grupos quando todos já cobertos); exclusão remove com confirmação, mantém sem confirmação, não afeta override de outro CM |
+| Backup / restauração | A regra acompanha a atividade e é remapeada para o novo módulo do curso (guarda de regressão para resolver o módulo antes de sua instância ser vinculada); sobreposições por aluno e por grupo remapeadas com dados de usuário; regra do curso de origem não afetada pela restauração em um novo curso |
 
 Para executar localmente:
 
@@ -570,6 +573,7 @@ vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
 vendor/bin/phpunit local/latepenalty/tests/penalty_helper_group_test.php
 vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
 vendor/bin/phpunit local/latepenalty/tests/group_override/controller_test.php
+vendor/bin/phpunit local/latepenalty/tests/backup/restore_test.php
 ```
 
 ---

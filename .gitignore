@@ -18,6 +18,9 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Moodle PHPUnit generated configs
+phpunit.xml
+
 SCOPE.md
 CLAUDE.md
 docs/
