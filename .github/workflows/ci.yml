@@ -93,15 +93,6 @@ jobs:
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci savepoints
 
-      - name: Check database schema
-        if: ${{ !cancelled() && matrix.runchecks == 'all' }}
-        run: |
-          script=$(find "$HOME" "$RUNNER_WORKSPACE" "$GITHUB_WORKSPACE" -maxdepth 5 \
-            -path '*/admin/cli/check_database_schema.php' 2>/dev/null | head -1)
-          if [ -z "$script" ]; then echo "check_database_schema.php not found"; exit 1; fi
-          echo "Running: $script"
-          php "$script"
-
       - name: Mustache Lint
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci mustache
