@@ -93,6 +93,10 @@ jobs:
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci savepoints
 
+      - name: Check database schema
+        if: ${{ !cancelled() && matrix.runchecks == 'all' }}
+        run: php "$CI_BUILD_DIR/admin/cli/check_database_schema.php"
+
       - name: Mustache Lint
         if: ${{ !cancelled() && matrix.runchecks == 'all' }}
         run: moodle-plugin-ci mustache
