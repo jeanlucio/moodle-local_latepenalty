@@ -6,12 +6,20 @@
 # Required secret: MOODLE_ORG_TOKEN
 # (generate at https://moodle.org/user/profile.php → Security keys)
 #
+# NOTE: automatic publishing is disabled below (the "push: tags" trigger is commented
+# out). Moodle Marketplace replaced the Plugins directory and does not support version
+# upload via API at launch (Moodle's own "Launch limitations" documentation, checked
+# 2026-07-20); this workflow targets the legacy `local_plugins_add_version` endpoint,
+# which no longer works. Upload new versions manually through the Plugin dashboard for
+# now, and re-enable the trigger below once Moodle documents the Marketplace API upload
+# mechanism.
+#
 name: Releasing in the Plugins directory
 
 on:
-  push:
-    tags:
-      - v*
+  # push:
+  #   tags:
+  #     - v*
 
   workflow_dispatch:
     inputs:
