@@ -1,9 +1,14 @@
 # Moodle Local Late Penalty
 
+![Moodle](https://img.shields.io/badge/Moodle-4.5%2B-orange?style=flat&logo=moodle&logoColor=white)
+![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat)
+![Status](https://img.shields.io/badge/Status-Stable-green?style=flat)
+[![Latest Release](https://img.shields.io/github/v/release/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/releases)
+[![Author](https://img.shields.io/badge/by-Jean_Lucio-6f42c1?style=flat)](https://marketplace.moodle.com/user/984)
+
 [![Moodle Plugin CI](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml/badge.svg)](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml)
-![Moodle](https://img.shields.io/badge/Moodle-4.5%2B-orange?style=flat-square&logo=moodle&logoColor=white)
-![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Stable-green?style=flat-square)
+[![Last Commit](https://img.shields.io/github/last-commit/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/commits)
+[![Open Issues](https://img.shields.io/github/issues/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/issues)
 
 [English](#english) | [Português](#português)
 
