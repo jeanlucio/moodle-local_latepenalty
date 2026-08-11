@@ -43,21 +43,29 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
-     * Creates a SEPARATEGROUPS course with two groups, each holding one student,
-     * and one assign activity with an enabled penalty rule. Both students submit
-     * one day late and are graded, so the plugin's real observer chain writes
-     * genuine source = 'local_latepenalty' rows into grade_grades_history.
+     * Creates a course with two groups, each holding one student, and one assign
+     * activity with an enabled penalty rule. Both students submit one day late
+     * and are graded, so the plugin's real observer chain writes genuine
+     * source = 'local_latepenalty' rows into grade_grades_history.
      *
+     * @param int      $coursegroupmode Course-level group mode (default SEPARATEGROUPS).
+     * @param int      $groupmodeforce  Whether the course forces its group mode onto activities.
+     * @param int|null $cmgroupmode     Activity-level group mode override, or null to leave the
+     *                                  value create_module() assigns (0 = inherit from course).
      * @return array{course: stdClass, context: context_course, cm: stdClass,
      *               group1: stdClass, group2: stdClass, student1: stdClass, student2: stdClass}
      */
-    private function make_scenario(): array {
+    private function make_scenario(
+        int $coursegroupmode = SEPARATEGROUPS,
+        int $groupmodeforce = 1,
+        ?int $cmgroupmode = null
+    ): array {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/group/lib.php');
 
         $course = $this->getDataGenerator()->create_course([
-            'groupmode'      => SEPARATEGROUPS,
-            'groupmodeforce' => 1,
+            'groupmode'      => $coursegroupmode,
+            'groupmodeforce' => $groupmodeforce,
         ]);
         $context = context_course::instance($course->id);
 
@@ -74,6 +82,10 @@ final class controller_test extends advanced_testcase {
             'grade'   => 100,
             'duedate' => 0,
         ]);
+
+        if ($cmgroupmode !== null) {
+            $DB->set_field('course_modules', 'groupmode', $cmgroupmode, ['id' => $assign->cmid]);
+        }
 
         $deadline = time() - 5 * DAYSECS;
         $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
@@ -129,24 +141,41 @@ final class controller_test extends advanced_testcase {
         return $this->getDataGenerator()->create_and_enrol($course, 'teacher');
     }
 
+    /**
+     * Instantiate the report controller from a resolve_group_restriction() result.
+     *
+     * @param array $scenario Scenario array from make_scenario().
+     * @param array $groupscope Return value of controller::resolve_group_restriction().
+     * @return controller
+     */
+    private function make_controller(array $scenario, array $groupscope): controller {
+        return new controller(
+            (int) $scenario['course']->id,
+            $scenario['context'],
+            0,
+            0,
+            $groupscope['groupids'],
+            $groupscope['restrictedcmids']
+        );
+    }
+
     // Tests for resolve_group_restriction().
 
     /**
-     * A non-editing teacher without accessallgroups, in a separate-groups course,
-     * is restricted to their own group.
+     * A non-editing teacher without accessallgroups, in a course-wide
+     * separate-groups course, is restricted to their own group on the activity
+     * carrying the rule.
      */
     public function test_resolve_group_restriction_separategroups_without_accessallgroups(): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/group/lib.php');
-
         $s = $this->make_scenario();
         $teacher = $this->enrol_teacher($s['course']);
         groups_add_member($s['group1']->id, $teacher->id);
         $this->setUser($teacher);
 
-        $restriction = controller::resolve_group_restriction($s['course'], $s['context']);
+        $result = controller::resolve_group_restriction($s['course'], $s['context']);
 
-        self::assertSame([(int) $s['group1']->id], $restriction);
+        self::assertSame([(int) $s['group1']->id], $result['groupids']);
+        self::assertSame([(int) $s['cm']->cmid], $result['restrictedcmids']);
     }
 
     /**
@@ -158,33 +187,60 @@ final class controller_test extends advanced_testcase {
         $editingteacher = $this->getDataGenerator()->create_and_enrol($s['course'], 'editingteacher');
         $this->setUser($editingteacher);
 
-        self::assertNull(controller::resolve_group_restriction($s['course'], $s['context']));
+        $result = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        self::assertSame([], $result['restrictedcmids']);
     }
 
     /**
-     * A course not using separate groups is never restricted, regardless of capability.
+     * A course not using separate groups, with no activity overriding it, never
+     * restricts anything.
      */
-    public function test_resolve_group_restriction_non_separategroups_course_returns_null(): void {
-        global $DB;
-
-        $course = $this->getDataGenerator()->create_course(['groupmode' => NOGROUPS]);
+    public function test_resolve_group_restriction_non_separategroups_returns_no_restriction(): void {
+        $course  = $this->getDataGenerator()->create_course(['groupmode' => NOGROUPS]);
         $context = context_course::instance($course->id);
         $teacher = $this->enrol_teacher($course);
         $this->setUser($teacher);
 
-        self::assertNull(controller::resolve_group_restriction($course, $context));
+        $result = controller::resolve_group_restriction($course, $context);
+
+        self::assertSame([], $result['restrictedcmids']);
     }
 
     /**
      * A non-editing teacher belonging to no group at all, in a separate-groups
-     * course, is restricted to an empty set (must see nothing, not everything).
+     * course, is still restricted (to an empty group set) rather than
+     * unrestricted.
      */
-    public function test_resolve_group_restriction_teacher_with_no_group_returns_empty_array(): void {
+    public function test_resolve_group_restriction_teacher_with_no_group(): void {
         $s = $this->make_scenario();
         $teacher = $this->enrol_teacher($s['course']);
         $this->setUser($teacher);
 
-        self::assertSame([], controller::resolve_group_restriction($s['course'], $s['context']));
+        $result = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        self::assertSame([], $result['groupids']);
+        self::assertSame([(int) $s['cm']->cmid], $result['restrictedcmids']);
+    }
+
+    /**
+     * Regression guard for the activity-level group mode gap: a course in
+     * NOGROUPS (unforced) with an activity individually set to SEPARATEGROUPS
+     * must still restrict that activity's rows to the caller's own group.
+     *
+     * groups_get_course_groupmode() alone would miss this, because it only
+     * reads $course->groupmode; the activity's own groupmode applies here since
+     * the course does not force its mode onto activities.
+     */
+    public function test_resolve_group_restriction_activity_level_separategroups(): void {
+        $s = $this->make_scenario(NOGROUPS, 0, SEPARATEGROUPS);
+        $teacher = $this->enrol_teacher($s['course']);
+        groups_add_member($s['group1']->id, $teacher->id);
+        $this->setUser($teacher);
+
+        $result = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        self::assertSame([(int) $s['cm']->cmid], $result['restrictedcmids']);
     }
 
     // Tests for the report itself, driven by the resolved restriction.
@@ -199,9 +255,8 @@ final class controller_test extends advanced_testcase {
         groups_add_member($s['group1']->id, $teacher->id);
         $this->setUser($teacher);
 
-        $restriction = controller::resolve_group_restriction($s['course'], $s['context']);
-        $reportcontroller = new controller((int) $s['course']->id, $s['context'], 0, 0, $restriction);
-        $ctx = $reportcontroller->get_template_context();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
 
         self::assertCount(1, $ctx['penalties']);
 
@@ -219,9 +274,8 @@ final class controller_test extends advanced_testcase {
         $teacher = $this->enrol_teacher($s['course']);
         $this->setUser($teacher);
 
-        $restriction = controller::resolve_group_restriction($s['course'], $s['context']);
-        $reportcontroller = new controller((int) $s['course']->id, $s['context'], 0, 0, $restriction);
-        $ctx = $reportcontroller->get_template_context();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
 
         self::assertSame([], $ctx['penalties']);
         // Only the "all students" placeholder option remains.
@@ -238,9 +292,8 @@ final class controller_test extends advanced_testcase {
         $editingteacher = $this->getDataGenerator()->create_and_enrol($s['course'], 'editingteacher');
         $this->setUser($editingteacher);
 
-        $restriction = controller::resolve_group_restriction($s['course'], $s['context']);
-        $reportcontroller = new controller((int) $s['course']->id, $s['context'], 0, 0, $restriction);
-        $ctx = $reportcontroller->get_template_context();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
 
         self::assertCount(2, $ctx['penalties']);
     }
@@ -256,10 +309,27 @@ final class controller_test extends advanced_testcase {
         groups_add_member($s['group1']->id, $teacher->id);
         $this->setUser($teacher);
 
-        $restriction = controller::resolve_group_restriction($s['course'], $s['context']);
-        $reportcontroller = new controller((int) $s['course']->id, $s['context'], 0, 0, $restriction);
-        [, $rows] = $reportcontroller->get_export_data();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        [, $rows] = $this->make_controller($s, $groupscope)->get_export_data();
 
         self::assertCount(1, $rows);
+    }
+
+    /**
+     * End-to-end regression guard for the activity-level group mode gap: with the
+     * course in NOGROUPS (unforced) and the activity individually set to
+     * SEPARATEGROUPS, the report must still show only the caller's own group's
+     * student, not both — the exact scenario the course-level-only check missed.
+     */
+    public function test_report_activity_level_separategroups_restricts_to_own_group(): void {
+        $s = $this->make_scenario(NOGROUPS, 0, SEPARATEGROUPS);
+        $teacher = $this->enrol_teacher($s['course']);
+        groups_add_member($s['group1']->id, $teacher->id);
+        $this->setUser($teacher);
+
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+
+        self::assertCount(1, $ctx['penalties']);
     }
 }

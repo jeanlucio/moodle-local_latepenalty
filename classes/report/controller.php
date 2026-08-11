@@ -48,16 +48,26 @@ class controller {
     private int $filtercmid;
 
     /**
-     * Group IDs the report is restricted to, or null for no restriction.
+     * Group IDs the caller belongs to in this course.
      *
-     * Set by resolve_group_restriction() when the caller is a teacher without
-     * moodle/site:accessallgroups in a course using separate groups. An empty
-     * array (as opposed to null) means the caller belongs to no group at all,
-     * so the report must show nothing rather than everything.
+     * Always resolved (possibly empty), independent of whether any activity in
+     * the course actually needs the restriction below.
      *
-     * @var int[]|null
+     * @var int[]
      */
-    private ?array $restrictgroupids;
+    private array $callergroupids;
+
+    /**
+     * Course module IDs whose rows must be confined to $callergroupids.
+     *
+     * Set by resolve_group_restriction() to every cmid carrying an enabled rule
+     * whose *effective* group mode (course-level or activity-level — see
+     * groups_get_activity_groupmode()) is SEPARATEGROUPS, when the caller lacks
+     * moodle/site:accessallgroups. Empty means no restriction anywhere.
+     *
+     * @var int[]
+     */
+    private array $restrictedcmids;
 
     /**
      * Deadline field per module type, mirroring the observer's map.
@@ -77,76 +87,106 @@ class controller {
     /**
      * Constructor.
      *
-     * @param int            $courseid         The course id.
-     * @param context_course $context          The course context.
-     * @param int            $filteruserid     User id to filter by (0 = all).
-     * @param int            $filtercmid       Course module id to filter by (0 = all).
-     * @param int[]|null     $restrictgroupids Group IDs to restrict the report to, or null
-     *                                         for no restriction. See resolve_group_restriction().
+     * @param int            $courseid        The course id.
+     * @param context_course $context         The course context.
+     * @param int            $filteruserid    User id to filter by (0 = all).
+     * @param int            $filtercmid      Course module id to filter by (0 = all).
+     * @param int[]          $callergroupids  Group IDs the caller belongs to. See resolve_group_restriction().
+     * @param int[]          $restrictedcmids Course module IDs to confine to $callergroupids.
      */
     public function __construct(
         int $courseid,
         context_course $context,
         int $filteruserid = 0,
         int $filtercmid = 0,
-        ?array $restrictgroupids = null
+        array $callergroupids = [],
+        array $restrictedcmids = []
     ) {
-        $this->courseid         = $courseid;
-        $this->context          = $context;
-        $this->filteruserid     = $filteruserid;
-        $this->filtercmid       = $filtercmid;
-        $this->restrictgroupids = $restrictgroupids;
+        $this->courseid        = $courseid;
+        $this->context         = $context;
+        $this->filteruserid    = $filteruserid;
+        $this->filtercmid      = $filtercmid;
+        $this->callergroupids  = $callergroupids;
+        $this->restrictedcmids = $restrictedcmids;
     }
 
     /**
-     * Resolve which groups, if any, a report caller must be restricted to.
+     * Resolve which activities, if any, a report caller must see only their own
+     * group's rows for, plus the caller's own group membership in the course.
      *
-     * Mirrors the standard Moodle separate-groups check: a user without
-     * moodle/site:accessallgroups in a course using SEPARATEGROUPS may only see
-     * their own group(s). Returns null when the report should be unrestricted
-     * (course not in separate-groups mode, or the caller can access all groups).
+     * A course's group mode does not, by itself, determine an activity's
+     * effective group mode: groups_get_activity_groupmode() shows the activity's
+     * own groupmode can apply instead of the course's, when the course does not
+     * force it. So this resolves the restriction per course module carrying an
+     * enabled rule, rather than once for the whole course.
      *
-     * @param \stdClass       $course  The course.
+     * @param \stdClass      $course  The course.
      * @param context_course $context The course context.
-     * @return int[]|null Group IDs to restrict to, or null for no restriction.
+     * @return array{groupids: int[], restrictedcmids: int[]} Caller's own group IDs, and the
+     *         course module IDs (among those with an enabled rule) that must be confined to them.
      */
-    public static function resolve_group_restriction(\stdClass $course, context_course $context): ?array {
-        global $USER;
+    public static function resolve_group_restriction(\stdClass $course, context_course $context): array {
+        global $USER, $DB;
 
-        if ((int) groups_get_course_groupmode($course) !== SEPARATEGROUPS) {
-            return null;
-        }
+        $groupids = array_keys(groups_get_all_groups($course->id, (int) $USER->id));
 
         if (has_capability('moodle/site:accessallgroups', $context)) {
-            return null;
+            return ['groupids' => $groupids, 'restrictedcmids' => []];
         }
 
-        return array_keys(groups_get_all_groups($course->id, (int) $USER->id));
+        $activecmids = array_keys($DB->get_records_sql(
+            "SELECT cm.id
+               FROM {local_latepenalty_rules} r
+               JOIN {course_modules} cm ON cm.id = r.cmid
+              WHERE cm.course = :courseid AND r.enabled = 1",
+            ['courseid' => $course->id]
+        ));
+
+        if (empty($activecmids)) {
+            return ['groupids' => $groupids, 'restrictedcmids' => []];
+        }
+
+        $modinfo = get_fast_modinfo($course);
+        $restrictedcmids = [];
+        foreach ($activecmids as $cmid) {
+            if (!isset($modinfo->cms[$cmid])) {
+                continue;
+            }
+            if ((int) groups_get_activity_groupmode($modinfo->cms[$cmid]) === SEPARATEGROUPS) {
+                $restrictedcmids[] = $cmid;
+            }
+        }
+
+        return ['groupids' => $groupids, 'restrictedcmids' => $restrictedcmids];
     }
 
     /**
-     * Build the WHERE fragment and params that restrict a query's grade_grades_history
-     * rows (aliased "ggh") to the caller's own groups, per $this->restrictgroupids.
+     * Build the WHERE fragment and params that confine a query's rows — for
+     * course modules in $this->restrictedcmids — to the caller's own groups.
+     *
+     * Activities outside $this->restrictedcmids are never filtered by group.
      *
      * @return array{0: string, 1: array} [SQL fragment starting with " AND ...", params].
      */
     private function group_scope_where(): array {
-        global $DB;
-
-        if ($this->restrictgroupids === null) {
+        if (empty($this->restrictedcmids)) {
             return ['', []];
         }
 
-        if (empty($this->restrictgroupids)) {
-            // Caller belongs to no group in this separate-groups course: nothing
-            // can legitimately match, so force the query to return no rows.
-            return [' AND 1 = 0', []];
+        global $DB;
+        [$notinsql, $notinparams] = $DB->get_in_or_equal($this->restrictedcmids, SQL_PARAMS_NAMED, 'sepcm', false);
+
+        if (empty($this->callergroupids)) {
+            // No groups of their own: restricted activities show nothing; other
+            // activities in the same report are unaffected.
+            return [" AND cm.id $notinsql", $notinparams];
         }
 
-        [$insql, $inparams] = $DB->get_in_or_equal($this->restrictgroupids, SQL_PARAMS_NAMED, 'grpscope');
-        $where = " AND ggh.userid IN (SELECT gm.userid FROM {groups_members} gm WHERE gm.groupid $insql)";
+        [$grpsql, $grpparams] = $DB->get_in_or_equal($this->callergroupids, SQL_PARAMS_NAMED, 'grpscope');
+        $where = " AND (cm.id $notinsql"
+            . " OR ggh.userid IN (SELECT gm.userid FROM {groups_members} gm WHERE gm.groupid $grpsql))";
 
-        return [$where, $inparams];
+        return [$where, array_merge($notinparams, $grpparams)];
     }
 
     /**
