@@ -189,10 +189,10 @@ class controller {
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
                   JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
-                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
                                           AND cm.course = :courseid2
-                                          AND cm.module = mod.id
+                                          AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
                        {$userwhere}
@@ -324,10 +324,10 @@ class controller {
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
                   JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
-                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
                                           AND cm.course = :courseid2
-                                          AND cm.module = mod.id
+                                          AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
                        {$userwhere}
@@ -430,10 +430,10 @@ class controller {
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
                   JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
-                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
                                           AND cm.course = :courseid2
-                                          AND cm.module = mod.id
+                                          AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
                        {$groupwhere}
@@ -483,10 +483,10 @@ class controller {
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
-                  JOIN {modules} mod ON mod.name = gi.itemmodule
+                  JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
                                           AND cm.course = :courseid2
-                                          AND cm.module = mod.id
+                                          AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
                        {$groupwhere}
