@@ -162,6 +162,41 @@ class controller {
     }
 
     /**
+     * Fetch an existing override row by id, scoped to this activity and to the
+     * caller's group restriction.
+     *
+     * Every read of an *existing* override (edit, delete, delete-confirm) must
+     * go through this, not just $DB->get_record() by id+cmid — otherwise a
+     * caller confined to their own group could still edit or delete an
+     * override belonging to a student outside it, by number-guessing or
+     * otherwise obtaining the overrideid, even though build_student_options()
+     * and render_list() correctly hide it from them.
+     *
+     * @param string $fields Field list, as accepted by $DB->get_record().
+     * @return stdClass|null The row, or null if it does not exist or is out of scope.
+     */
+    private function fetch_scoped_override(string $fields = '*'): ?stdClass {
+        global $DB;
+
+        $override = $DB->get_record(
+            'local_latepenalty_overrides',
+            ['id' => $this->overrideid, 'cmid' => $this->cmid],
+            $fields
+        );
+
+        if (!$override) {
+            return null;
+        }
+
+        $allowed = $this->allowed_student_ids();
+        if ($allowed !== null && !isset($allowed[(int) $override->userid])) {
+            return null;
+        }
+
+        return $override;
+    }
+
+    /**
      * Process the current action, executing any redirects before output begins.
      *
      * Must be called before $OUTPUT->header().
@@ -208,25 +243,22 @@ class controller {
 
         require_sesskey();
 
-        $overriderow = $DB->get_record(
-            'local_latepenalty_overrides',
-            ['id' => $this->overrideid, 'cmid' => $this->cmid],
-            'userid'
-        );
+        $overriderow = $this->fetch_scoped_override('userid');
+        if (!$overriderow) {
+            throw new \moodle_exception('invalidrecord');
+        }
 
         $DB->delete_records(
             'local_latepenalty_overrides',
             ['id' => $this->overrideid, 'cmid' => $this->cmid]
         );
 
-        if ($overriderow) {
-            recalculator::recalculate_for_student(
-                $this->cmid,
-                (int) $overriderow->userid,
-                (float) $this->rule->daily_penalty,
-                (float) $this->rule->max_penalty
-            );
-        }
+        recalculator::recalculate_for_student(
+            $this->cmid,
+            (int) $overriderow->userid,
+            (float) $this->rule->daily_penalty,
+            (float) $this->rule->max_penalty
+        );
 
         redirect(
             $this->listurl,
@@ -272,12 +304,10 @@ class controller {
         $existinguserid = 0;
 
         if ($this->action === 'edit' && $this->overrideid) {
-            $this->editingoverride = $DB->get_record(
-                'local_latepenalty_overrides',
-                ['id' => $this->overrideid, 'cmid' => $this->cmid],
-                '*',
-                MUST_EXIST
-            );
+            $this->editingoverride = $this->fetch_scoped_override('*');
+            if (!$this->editingoverride) {
+                throw new \moodle_exception('invalidrecord');
+            }
             $user           = $DB->get_record('user', ['id' => $this->editingoverride->userid], '*', MUST_EXIST);
             $studentname    = fullname($user);
             $existinguserid = (int) $this->editingoverride->userid;
@@ -393,12 +423,10 @@ class controller {
         global $DB;
 
         if ($this->overrideid) {
-            $override = $DB->get_record(
-                'local_latepenalty_overrides',
-                ['id' => $this->overrideid, 'cmid' => $this->cmid],
-                'id, userid',
-                MUST_EXIST
-            );
+            $override = $this->fetch_scoped_override('id, userid');
+            if (!$override) {
+                throw new \moodle_exception('invalidrecord');
+            }
             return (int) $override->userid;
         }
 
@@ -445,12 +473,10 @@ class controller {
             return '';
         }
 
-        $override = $DB->get_record(
-            'local_latepenalty_overrides',
-            ['id' => $this->overrideid, 'cmid' => $this->cmid],
-            '*',
-            MUST_EXIST
-        );
+        $override = $this->fetch_scoped_override('*');
+        if (!$override) {
+            throw new \moodle_exception('invalidrecord');
+        }
         $user = $DB->get_record('user', ['id' => $override->userid], '*', MUST_EXIST);
 
         return $output->confirm(

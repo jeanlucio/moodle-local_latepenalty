@@ -364,6 +364,89 @@ final class controller_test extends advanced_testcase {
         self::assertStringNotContainsString($s['group2']->name, $html);
     }
 
+    /**
+     * Editing a group override by ID must still be blocked when its group is
+     * outside the caller's restriction — build_group_options() and
+     * render_list() hiding it is not enough, since a caller who otherwise
+     * obtains the overrideid (sequential IDs, a stale link) could otherwise
+     * load and resubmit the edit form for a group outside their scope.
+     */
+    public function test_edit_rejects_override_outside_restriction(): void {
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+        $override2 = $this->insert_group_override((int) $s['cm']->id, (int) $s['group2']->id, null, 7.0, null);
+
+        $ctrl = $this->make_controller($s, 'edit', (int) $override2->id, false, [(int) $s['group1']->id]);
+
+        $caught = null;
+        try {
+            $ctrl->process();
+        } catch (\moodle_exception $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'moodle_exception must be thrown when editing an out-of-scope group override.');
+        self::assertSame('invalidrecord', $caught->errorcode);
+    }
+
+    /**
+     * Deleting a group override by ID must still be blocked when its group is
+     * outside the caller's restriction, and the row must survive.
+     */
+    public function test_process_delete_rejects_override_outside_restriction(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+        $override2 = $this->insert_group_override((int) $s['cm']->id, (int) $s['group2']->id, null, 7.0, null);
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST                     = ['sesskey' => sesskey()];
+
+        $ctrl = $this->make_controller($s, 'delete', (int) $override2->id, true, [(int) $s['group1']->id]);
+
+        $caught = null;
+        try {
+            $ctrl->process();
+        } catch (\moodle_exception $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'moodle_exception must be thrown when deleting an out-of-scope group override.');
+        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertTrue(
+            $DB->record_exists('local_latepenalty_group_overrides', ['id' => $override2->id]),
+            'An out-of-scope group override must survive a blocked delete attempt.'
+        );
+    }
+
+    /**
+     * The delete confirmation page must not reveal, or offer to delete, a
+     * group override outside the caller's restriction.
+     */
+    public function test_render_delete_confirm_rejects_override_outside_restriction(): void {
+        global $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+        $override2 = $this->insert_group_override((int) $s['cm']->id, (int) $s['group2']->id, null, 7.0, null);
+
+        $ctrl = $this->make_controller($s, 'delete', (int) $override2->id, false, [(int) $s['group1']->id]);
+
+        $caught = null;
+        try {
+            $ctrl->render($PAGE->get_renderer('core'));
+        } catch (\moodle_exception $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull(
+            $caught,
+            'moodle_exception must be thrown rendering an out-of-scope group delete confirmation.'
+        );
+        self::assertSame('invalidrecord', $caught->errorcode);
+    }
+
     // Tests: process() in delete mode.
 
     /**
@@ -465,7 +548,9 @@ final class controller_test extends advanced_testcase {
         try {
             $ctrl->process();
         } catch (\moodle_exception $e) {
-            self::assertSame('redirecterrordetected', $e->errorcode);
+            // Fetch_scoped_override() now rejects a cmid mismatch outright
+            // (invalidrecord) before process_delete() ever reaches redirect().
+            self::assertSame('invalidrecord', $e->errorcode);
         }
 
         self::assertTrue(

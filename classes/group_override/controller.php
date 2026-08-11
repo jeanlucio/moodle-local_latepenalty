@@ -124,6 +124,40 @@ class controller {
     }
 
     /**
+     * Fetch an existing group override row by id, scoped to this activity and
+     * to the caller's group restriction.
+     *
+     * Every read of an *existing* group override (edit, delete, delete-confirm)
+     * must go through this, not just $DB->get_record() by id+cmid — otherwise a
+     * caller confined to their own group could still edit or delete an
+     * override belonging to another group, by number-guessing or otherwise
+     * obtaining the overrideid, even though build_group_options() and
+     * render_list() correctly hide it from them.
+     *
+     * @param string $fields Field list, as accepted by $DB->get_record().
+     * @return stdClass|null The row, or null if it does not exist or is out of scope.
+     */
+    private function fetch_scoped_override(string $fields = '*'): ?stdClass {
+        global $DB;
+
+        $override = $DB->get_record(
+            'local_latepenalty_group_overrides',
+            ['id' => $this->overrideid, 'cmid' => $this->cmid],
+            $fields
+        );
+
+        if (!$override) {
+            return null;
+        }
+
+        if ($this->restrictgroupids !== null && !in_array((int) $override->groupid, $this->restrictgroupids, true)) {
+            return null;
+        }
+
+        return $override;
+    }
+
+    /**
      * Process the current action, executing any redirects before output begins.
      *
      * Must be called before $OUTPUT->header().
@@ -170,25 +204,22 @@ class controller {
 
         require_sesskey();
 
-        $overriderow = $DB->get_record(
-            'local_latepenalty_group_overrides',
-            ['id' => $this->overrideid, 'cmid' => $this->cmid],
-            'groupid'
-        );
+        $overriderow = $this->fetch_scoped_override('groupid');
+        if (!$overriderow) {
+            throw new \moodle_exception('invalidrecord');
+        }
 
         $DB->delete_records(
             'local_latepenalty_group_overrides',
             ['id' => $this->overrideid, 'cmid' => $this->cmid]
         );
 
-        if ($overriderow) {
-            recalculator::recalculate_for_group(
-                $this->cmid,
-                (int) $overriderow->groupid,
-                (float) $this->rule->daily_penalty,
-                (float) $this->rule->max_penalty
-            );
-        }
+        recalculator::recalculate_for_group(
+            $this->cmid,
+            (int) $overriderow->groupid,
+            (float) $this->rule->daily_penalty,
+            (float) $this->rule->max_penalty
+        );
 
         redirect(
             $this->listurl,
@@ -234,12 +265,10 @@ class controller {
         $existinggroupid = 0;
 
         if ($this->action === 'edit' && $this->overrideid) {
-            $this->editingoverride = $DB->get_record(
-                'local_latepenalty_group_overrides',
-                ['id' => $this->overrideid, 'cmid' => $this->cmid],
-                '*',
-                MUST_EXIST
-            );
+            $this->editingoverride = $this->fetch_scoped_override('*');
+            if (!$this->editingoverride) {
+                throw new \moodle_exception('invalidrecord');
+            }
             $group           = $DB->get_record('groups', ['id' => $this->editingoverride->groupid], '*', MUST_EXIST);
             $groupname       = format_string($group->name, true, ['context' => $this->modcontext]);
             $existinggroupid = (int) $this->editingoverride->groupid;
@@ -346,12 +375,10 @@ class controller {
         global $DB;
 
         if ($this->overrideid) {
-            $override = $DB->get_record(
-                'local_latepenalty_group_overrides',
-                ['id' => $this->overrideid, 'cmid' => $this->cmid],
-                'id, groupid',
-                MUST_EXIST
-            );
+            $override = $this->fetch_scoped_override('id, groupid');
+            if (!$override) {
+                throw new \moodle_exception('invalidrecord');
+            }
             return (int) $override->groupid;
         }
 
@@ -384,12 +411,10 @@ class controller {
             return '';
         }
 
-        $override = $DB->get_record(
-            'local_latepenalty_group_overrides',
-            ['id' => $this->overrideid, 'cmid' => $this->cmid],
-            '*',
-            MUST_EXIST
-        );
+        $override = $this->fetch_scoped_override('*');
+        if (!$override) {
+            throw new \moodle_exception('invalidrecord');
+        }
         $group = $DB->get_record('groups', ['id' => $override->groupid], '*', MUST_EXIST);
 
         return $output->confirm(
