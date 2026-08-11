@@ -1,0 +1,20 @@
+<div class="intro">
+  <h1 class="project-name">{{ site.title }}</h1>
+  <p class="project-tagline">
+    {% if page.lang == 'pt' %}
+      Descontos progressivos de nota por atraso na entrega, para qualquer atividade do Moodle —
+      documentação completa.
+    {% else %}
+      {{ site.description }}
+    {% endif %}
+  </p>
+  <p class="lang-switch">
+    {% if page.lang == 'pt' %}
+      <a href="{{ '/' | relative_url }}">English</a> | <strong>Português</strong>
+    {% else %}
+      <strong>English</strong> | <a href="{{ '/pt.html' | relative_url }}">Português</a>
+    {% endif %}
+  </p>
+  <a class="btn" href="https://github.com/{{ site.repository }}">View on GitHub</a>
+  <a class="btn" href="https://github.com/{{ site.repository }}/archive/refs/heads/main.zip">Download .zip</a>
+</div>

@@ -1,6 +1,16 @@
 name: Moodle Plugin CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGES.md'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGES.md'
 
 jobs:
   test:

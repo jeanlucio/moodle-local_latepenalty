@@ -1,0 +1,225 @@
+:root {
+  --accent: #159957;
+  --accent-dark: #155799;
+  --text: #24292f;
+  --text-muted: #57606a;
+  --border: #d0d7de;
+  --code-bg: #f6f8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Open Sans", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.intro {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  background: linear-gradient(120deg, var(--accent-dark), var(--accent));
+  color: #fff;
+  text-align: center;
+}
+
+.project-name {
+  margin: 0 0 0.3rem;
+  font-size: 2.25rem;
+  color: #fff;
+}
+
+.project-tagline {
+  margin: 0 0 1.2rem;
+  font-weight: normal;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.lang-switch {
+  margin: 0 0 1.2rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.lang-switch a {
+  color: #fff;
+}
+
+.btn {
+  display: inline-block;
+  margin: 0 0.4rem;
+  padding: 0.5rem 1.2rem;
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 0.3rem;
+  text-decoration: none;
+}
+
+.btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.layout {
+  display: flex;
+  align-items: flex-start;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  gap: 2.5rem;
+}
+
+.sidebar {
+  flex: 0 0 220px;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.sidebar-heading {
+  margin: 1.2rem 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.sidebar-group:first-child .sidebar-heading {
+  margin-top: 0;
+}
+
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.3rem 0.6rem;
+  margin-inline-start: -0.6rem;
+  border-inline-start: 3px solid transparent;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.sidebar-link:hover {
+  color: var(--accent-dark);
+}
+
+.sidebar-link.active {
+  border-inline-start-color: var(--accent);
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.back-link {
+  margin: 0 0 1.5rem;
+  font-weight: 600;
+}
+
+.content h1 {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--accent-dark);
+}
+
+.content > p:first-child,
+.content h1:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.content h2,
+.content h3 {
+  color: var(--accent-dark);
+}
+
+.content a {
+  color: #0969da;
+}
+
+.content code {
+  padding: 0.15rem 0.3rem;
+  font-size: 0.9em;
+  background-color: var(--code-bg);
+  border-radius: 0.3rem;
+}
+
+.content pre {
+  padding: 0.8rem;
+  overflow-x: auto;
+  background-color: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+}
+
+.content pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+.content table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.content th,
+.content td {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  text-align: start;
+}
+
+.content th {
+  background-color: var(--code-bg);
+}
+
+.site-footer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 800px) {
+  .layout {
+    flex-direction: column;
+    /* align-items: flex-start (set above for the desktop side-by-side row)
+       stops children from stretching to the full width once the axes swap
+       to column here — without this override, a wide child (e.g. a table
+       with long unbreakable filenames) grows to its own content width
+       instead of being constrained and scrolling horizontally. */
+    align-items: stretch;
+  }
+
+  .sidebar {
+    position: static;
+    max-height: none;
+    width: 100%;
+  }
+}

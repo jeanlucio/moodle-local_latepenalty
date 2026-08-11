@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="{{ page.lang | default: 'en' }}">
+<head>
+  {% include head.html %}
+</head>
+<body>
+  {% include header.html %}
+
+  <div class="layout">
+    <nav class="sidebar" aria-label="Table of contents">
+      {% if page.lang == 'pt' %}
+        <div class="sidebar-group">
+          <ul>
+            <li><a class="sidebar-link" href="#features">✨ Funcionalidades</a></li>
+            <li><a class="sidebar-link" href="#educational-purpose">🎓 Finalidade Educacional</a></li>
+            <li><a class="sidebar-link" href="#requirements">📦 Requisitos</a></li>
+            <li><a class="sidebar-link" href="#installation">🛠️ Instalação</a></li>
+            <li><a class="sidebar-link" href="#configuration">⚙️ Configuração</a></li>
+            <li><a class="sidebar-link" href="#usage">📖 Como Funciona</a></li>
+            <li><a class="sidebar-link" href="#report">📊 Relatório de Penalidades</a></li>
+            <li><a class="sidebar-link" href="#recalculation">🔁 Recálculo de Penalidades</a></li>
+            <li><a class="sidebar-link" href="#testing">🧪 Testes Automatizados</a></li>
+            <li><a class="sidebar-link" href="#security">🔐 Segurança e Conformidade</a></li>
+            <li><a class="sidebar-link" href="#privacy">🔒 Privacidade</a></li>
+            <li><a class="sidebar-link" href="#license">📄 Licença</a></li>
+          </ul>
+        </div>
+      {% else %}
+        <div class="sidebar-group">
+          <ul>
+            <li><a class="sidebar-link" href="#features">✨ Features</a></li>
+            <li><a class="sidebar-link" href="#educational-purpose">🎓 Educational Purpose</a></li>
+            <li><a class="sidebar-link" href="#requirements">📦 Requirements</a></li>
+            <li><a class="sidebar-link" href="#installation">🛠️ Installation</a></li>
+            <li><a class="sidebar-link" href="#configuration">⚙️ Configuration</a></li>
+            <li><a class="sidebar-link" href="#usage">📖 How It Works</a></li>
+            <li><a class="sidebar-link" href="#report">📊 Penalty Report</a></li>
+            <li><a class="sidebar-link" href="#recalculation">🔁 Penalty Recalculation</a></li>
+            <li><a class="sidebar-link" href="#testing">🧪 Automated Tests</a></li>
+            <li><a class="sidebar-link" href="#security">🔐 Security &amp; Compliance</a></li>
+            <li><a class="sidebar-link" href="#privacy">🔒 Privacy</a></li>
+            <li><a class="sidebar-link" href="#license">📄 License</a></li>
+          </ul>
+        </div>
+      {% endif %}
+    </nav>
+
+    <main class="content">
+      {{ content }}
+    </main>
+  </div>
+
+  {% include footer.html %}
+</body>
+</html>
