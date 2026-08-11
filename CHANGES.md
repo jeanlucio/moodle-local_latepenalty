@@ -1,5 +1,14 @@
 # Changes
 
+## [v1.1.0] — 2026-08-11
+
+- Fix a backup data leak, orphaned rows left behind when an activity or course is deleted, and an information leak that exposed hidden activities' deadlines and penalty rates to students
+- Restrict the late penalty report and the per-user/per-group override management pages to the caller's own group(s) in courses using separate groups, including when editing or deleting an override directly by its ID
+- Replace two developer-facing error messages with proper translated messages for the business rules they represent
+- Show the exact deadline time, not just the date, in course notices and activity badges, formatted according to the site's language
+- Add regression test coverage for all of the above, plus the group-scope resolver and the Privacy API provider
+- Move the full documentation to a GitHub Pages site, keeping the README as a short overview with links
+
 ## [v1.0.3] — 2026-06-17
 
 - Fix a fatal error when restoring a course: the restore step resolved the host course module with `MUST_EXIST` before the activity instance was linked, aborting the restore of any course whose modules carry a penalty rule. The deadline seed now degrades gracefully and is recomputed on the first save.
