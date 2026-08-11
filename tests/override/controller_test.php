@@ -399,8 +399,11 @@ final class controller_test extends advanced_testcase {
         $ctrl->process();
         $html = $ctrl->render($OUTPUT);
 
-        self::assertStringContainsString(fullname($s['student1']), $html);
-        self::assertStringNotContainsString(fullname($s['student2']), $html);
+        // Matched on userid rather than fullname(): the data generator can
+        // produce non-ASCII names, and this only needs to prove which users
+        // the select offers, not how their name renders.
+        self::assertStringContainsString('value="' . $s['student1']->id . '"', $html);
+        self::assertStringNotContainsString('value="' . $s['student2']->id . '"', $html);
     }
 
     /**
@@ -457,15 +460,18 @@ final class controller_test extends advanced_testcase {
 
         $this->setAdminUser();
         $s = $this->make_group_scenario();
-        $this->insert_override((int) $s['cm']->id, (int) $s['student1']->id, null, 5.0, null);
-        $this->insert_override((int) $s['cm']->id, (int) $s['student2']->id, null, 7.0, null);
+        $override1 = $this->insert_override((int) $s['cm']->id, (int) $s['student1']->id, null, 5.0, null);
+        $override2 = $this->insert_override((int) $s['cm']->id, (int) $s['student2']->id, null, 7.0, null);
 
         $ctrl = $this->make_controller($s, 'list', 0, false, [(int) $s['group1']->id]);
         $ctrl->process();
         $html = $ctrl->render($PAGE->get_renderer('core'));
 
-        self::assertStringContainsString(fullname($s['student1']), $html);
-        self::assertStringNotContainsString(fullname($s['student2']), $html);
+        // Matched on overrideid (from the row's edit/delete links) rather than
+        // fullname(): the data generator can produce non-ASCII names, and this
+        // only needs to prove which override rows the list shows.
+        self::assertStringContainsString('overrideid=' . $override1->id, $html);
+        self::assertStringNotContainsString('overrideid=' . $override2->id, $html);
     }
 
     // Tests: process() in delete mode.
