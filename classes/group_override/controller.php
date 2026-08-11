@@ -63,6 +63,17 @@ class controller {
     /** @var bool Whether the delete confirmation was submitted. */
     private bool $confirm;
 
+    /**
+     * Group IDs the caller is confined to, or null for no restriction.
+     *
+     * See \local_latepenalty\group_scope::resolve_activity_restriction(). An
+     * empty array (as opposed to null) means the caller belongs to no group at
+     * all in this separate-groups activity, so they may act on no group.
+     *
+     * @var int[]|null
+     */
+    private ?array $restrictgroupids;
+
     /** @var moodle_url URL of the group override list page. */
     private moodle_url $listurl;
 
@@ -83,9 +94,11 @@ class controller {
      * @param stdClass       $cm         Course module record.
      * @param context_module $modcontext Module context.
      * @param stdClass       $rule       Active penalty rule record.
-     * @param string         $action     Requested action (list, add, edit, delete).
-     * @param int            $overrideid Override ID (0 = none).
-     * @param bool           $confirm    Whether delete confirmation was posted.
+     * @param string         $action           Requested action (list, add, edit, delete).
+     * @param int            $overrideid       Override ID (0 = none).
+     * @param bool           $confirm          Whether delete confirmation was posted.
+     * @param int[]|null     $restrictgroupids Group IDs to confine the caller to, or null.
+     *                                         See \local_latepenalty\group_scope.
      */
     public function __construct(
         int $cmid,
@@ -95,17 +108,19 @@ class controller {
         stdClass $rule,
         string $action,
         int $overrideid,
-        bool $confirm
+        bool $confirm,
+        ?array $restrictgroupids = null
     ) {
-        $this->cmid       = $cmid;
-        $this->course     = $course;
-        $this->cm         = $cm;
-        $this->modcontext = $modcontext;
-        $this->rule       = $rule;
-        $this->action     = $action;
-        $this->overrideid = $overrideid;
-        $this->confirm    = $confirm;
-        $this->listurl    = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'group']);
+        $this->cmid             = $cmid;
+        $this->course           = $course;
+        $this->cm               = $cm;
+        $this->modcontext       = $modcontext;
+        $this->rule             = $rule;
+        $this->action           = $action;
+        $this->overrideid       = $overrideid;
+        $this->confirm          = $confirm;
+        $this->restrictgroupids = $restrictgroupids;
+        $this->listurl          = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => 'group']);
     }
 
     /**
@@ -259,6 +274,13 @@ class controller {
 
         $allgroups = groups_get_all_groups($this->course->id);
 
+        if ($this->restrictgroupids !== null) {
+            $allgroups = array_filter(
+                $allgroups,
+                fn($g): bool => in_array((int) $g->id, $this->restrictgroupids, true)
+            );
+        }
+
         $existinggroupids = array_map(
             'intval',
             array_column(
@@ -335,6 +357,10 @@ class controller {
 
         $groupid = (int) ($formdata->groupid ?? 0);
         if (!$groupid || !$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $this->course->id])) {
+            throw new \moodle_exception('invalidrecord');
+        }
+
+        if ($this->restrictgroupids !== null && !in_array($groupid, $this->restrictgroupids, true)) {
             throw new \moodle_exception('invalidrecord');
         }
 
@@ -437,6 +463,14 @@ class controller {
             ['cmid' => $this->cmid],
             'groupid ASC'
         );
+
+        if ($this->restrictgroupids !== null) {
+            $overrides = array_filter(
+                $overrides,
+                fn($o): bool => in_array((int) $o->groupid, $this->restrictgroupids, true)
+            );
+        }
+
         $addurl    = new moodle_url(
             '/local/latepenalty/overrides.php',
             ['cmid' => $this->cmid, 'mode' => 'group', 'action' => 'add']

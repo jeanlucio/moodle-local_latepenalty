@@ -143,17 +143,19 @@ final class controller_test extends advanced_testcase {
     /**
      * Build a controller instance for the given scenario and action.
      *
-     * @param array  $s          Scenario array from make_scenario().
-     * @param string $action
-     * @param int    $overrideid
-     * @param bool   $confirm
+     * @param array      $s                Scenario array from make_scenario().
+     * @param string     $action
+     * @param int        $overrideid
+     * @param bool       $confirm
+     * @param int[]|null $restrictgroupids Group IDs to confine the caller to, or null.
      * @return controller
      */
     private function make_controller(
         array $s,
         string $action,
         int $overrideid = 0,
-        bool $confirm = false
+        bool $confirm = false,
+        ?array $restrictgroupids = null
     ): controller {
         return new controller(
             (int) $s['cm']->id,
@@ -163,8 +165,51 @@ final class controller_test extends advanced_testcase {
             $s['rule'],
             $action,
             $overrideid,
-            $confirm
+            $confirm,
+            $restrictgroupids
         );
+    }
+
+    /**
+     * Create a SEPARATEGROUPS-forced course with two groups, plus an assign
+     * with an active penalty rule.
+     *
+     * @return array{course: stdClass, group1: stdClass, group2: stdClass, cm: stdClass,
+     *               ctx: context_module, rule: stdClass}
+     */
+    private function make_group_restriction_scenario(): array {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/group/lib.php');
+
+        $course = $this->getDataGenerator()->create_course([
+            'groupmode'      => SEPARATEGROUPS,
+            'groupmodeforce' => 1,
+        ]);
+
+        $group1 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $group2 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $assign = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'grade'  => 100,
+        ]);
+        $cm  = get_coursemodule_from_id('', $assign->cmid, 0, false, MUST_EXIST);
+        $ctx = context_module::instance($assign->cmid);
+
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $assign->cmid], '*', MUST_EXIST);
+        $rule->enabled       = 1;
+        $rule->daily_penalty = 10.0;
+        $rule->max_penalty   = 50.0;
+        $DB->update_record('local_latepenalty_rules', $rule);
+
+        return [
+            'course' => $course,
+            'group1' => $group1,
+            'group2' => $group2,
+            'cm'     => $cm,
+            'ctx'    => $ctx,
+            'rule'   => $rule,
+        ];
     }
 
     // Tests: render() in list mode.
@@ -249,6 +294,74 @@ final class controller_test extends advanced_testcase {
             get_string('group_override_no_groups', 'local_latepenalty'),
             $html
         );
+    }
+
+    // Tests: group restriction (separate groups).
+
+    /**
+     * build_group_options(), exercised via render() in add mode, must not offer
+     * a group the caller is not confined to.
+     */
+    public function test_render_add_excludes_group_outside_restriction(): void {
+        global $OUTPUT;
+
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+
+        $ctrl = $this->make_controller($s, 'add', 0, false, [(int) $s['group1']->id]);
+        $ctrl->process();
+        $html = $ctrl->render($OUTPUT);
+
+        self::assertStringContainsString($s['group1']->name, $html);
+        self::assertStringNotContainsString($s['group2']->name, $html);
+    }
+
+    /**
+     * resolve_override_groupid(), exercised via the form data path, rejects a
+     * group outside the caller's restriction even though it genuinely belongs
+     * to the course.
+     */
+    public function test_save_add_rejects_group_outside_restriction(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+
+        $ctrl = $this->make_controller($s, 'add', 0, false, [(int) $s['group1']->id]);
+        $method = new \ReflectionMethod($ctrl, 'save_override');
+        $method->setAccessible(true);
+
+        $caught = null;
+        try {
+            $method->invoke($ctrl, (object) ['groupid' => $s['group2']->id]);
+        } catch (\moodle_exception $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'moodle_exception must be thrown for a group outside the restriction.');
+        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertFalse(
+            $DB->record_exists('local_latepenalty_group_overrides', ['cmid' => $s['cm']->id, 'groupid' => $s['group2']->id])
+        );
+    }
+
+    /**
+     * render_list() must not reveal a group override outside the caller's restriction.
+     */
+    public function test_render_list_excludes_override_outside_restriction(): void {
+        global $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_group_restriction_scenario();
+        $this->insert_group_override((int) $s['cm']->id, (int) $s['group1']->id, null, 5.0, null);
+        $this->insert_group_override((int) $s['cm']->id, (int) $s['group2']->id, null, 7.0, null);
+
+        $ctrl = $this->make_controller($s, 'list', 0, false, [(int) $s['group1']->id]);
+        $ctrl->process();
+        $html = $ctrl->render($PAGE->get_renderer('core'));
+
+        self::assertStringContainsString($s['group1']->name, $html);
+        self::assertStringNotContainsString($s['group2']->name, $html);
     }
 
     // Tests: process() in delete mode.

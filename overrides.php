@@ -25,6 +25,7 @@
 require(__DIR__ . '/../../config.php');
 
 use local_latepenalty\group_override\controller as group_controller;
+use local_latepenalty\group_scope;
 use local_latepenalty\override\controller as user_controller;
 
 $cmid       = required_param('cmid', PARAM_INT);
@@ -61,10 +62,32 @@ $PAGE->navbar->add(
 );
 $PAGE->navbar->add(get_string('overrides', 'local_latepenalty'));
 
+$restrictgroupids = group_scope::resolve_activity_restriction($cm, $modcontext);
+
 if ($mode === 'group') {
-    $ctrl = new group_controller($cmid, $course, $cm, $modcontext, $rule, $action, $overrideid, (bool) $confirm);
+    $ctrl = new group_controller(
+        $cmid,
+        $course,
+        $cm,
+        $modcontext,
+        $rule,
+        $action,
+        $overrideid,
+        (bool) $confirm,
+        $restrictgroupids
+    );
 } else {
-    $ctrl = new user_controller($cmid, $course, $cm, $modcontext, $rule, $action, $overrideid, (bool) $confirm);
+    $ctrl = new user_controller(
+        $cmid,
+        $course,
+        $cm,
+        $modcontext,
+        $rule,
+        $action,
+        $overrideid,
+        (bool) $confirm,
+        $restrictgroupids
+    );
 }
 
 $ctrl->process();

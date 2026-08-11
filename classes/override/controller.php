@@ -64,6 +64,24 @@ class controller {
     /** @var bool Whether the delete confirmation was submitted. */
     private bool $confirm;
 
+    /**
+     * Group IDs the caller is confined to, or null for no restriction.
+     *
+     * See \local_latepenalty\group_scope::resolve_activity_restriction(). An
+     * empty array (as opposed to null) means the caller belongs to no group at
+     * all in this separate-groups activity, so they may act on no student.
+     *
+     * @var int[]|null
+     */
+    private ?array $restrictgroupids;
+
+    /**
+     * Cache of userids allowed under $restrictgroupids, computed once.
+     *
+     * @var array<int,bool>|null
+     */
+    private ?array $allowedstudentids = null;
+
     /** @var moodle_url URL of the override list page. */
     private moodle_url $listurl;
 
@@ -84,9 +102,11 @@ class controller {
      * @param stdClass       $cm         Course module record.
      * @param context_module $modcontext Module context.
      * @param stdClass       $rule       Active penalty rule record.
-     * @param string         $action     Requested action (list, add, edit, delete).
-     * @param int            $overrideid Override ID (0 = none).
-     * @param bool           $confirm    Whether delete confirmation was posted.
+     * @param string         $action           Requested action (list, add, edit, delete).
+     * @param int            $overrideid       Override ID (0 = none).
+     * @param bool           $confirm          Whether delete confirmation was posted.
+     * @param int[]|null     $restrictgroupids Group IDs to confine the caller to, or null.
+     *                                         See \local_latepenalty\group_scope.
      */
     public function __construct(
         int $cmid,
@@ -96,17 +116,49 @@ class controller {
         stdClass $rule,
         string $action,
         int $overrideid,
-        bool $confirm
+        bool $confirm,
+        ?array $restrictgroupids = null
     ) {
-        $this->cmid       = $cmid;
-        $this->course     = $course;
-        $this->cm         = $cm;
-        $this->modcontext = $modcontext;
-        $this->rule       = $rule;
-        $this->action     = $action;
-        $this->overrideid = $overrideid;
-        $this->confirm    = $confirm;
-        $this->listurl    = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid]);
+        $this->cmid             = $cmid;
+        $this->course           = $course;
+        $this->cm               = $cm;
+        $this->modcontext       = $modcontext;
+        $this->rule             = $rule;
+        $this->action           = $action;
+        $this->overrideid       = $overrideid;
+        $this->confirm          = $confirm;
+        $this->restrictgroupids = $restrictgroupids;
+        $this->listurl          = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid]);
+    }
+
+    /**
+     * Resolve the set of userids the caller may act upon, given $restrictgroupids.
+     *
+     * Cached after the first call — the group membership query never changes
+     * within a single request.
+     *
+     * @return array<int,bool>|null Set of allowed userids (userid => true), or null when unrestricted.
+     */
+    private function allowed_student_ids(): ?array {
+        global $DB;
+
+        if ($this->restrictgroupids === null) {
+            return null;
+        }
+        if ($this->allowedstudentids !== null) {
+            return $this->allowedstudentids;
+        }
+        if (empty($this->restrictgroupids)) {
+            return $this->allowedstudentids = [];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($this->restrictgroupids, SQL_PARAMS_NAMED, 'grp');
+        $rows = $DB->get_records_sql(
+            "SELECT DISTINCT userid FROM {groups_members} WHERE groupid $insql",
+            $inparams
+        );
+
+        return $this->allowedstudentids = array_flip(array_map('intval', array_column($rows, 'userid')));
     }
 
     /**
@@ -271,6 +323,11 @@ class controller {
             'u.lastname ASC, u.firstname ASC'
         );
 
+        $allowed = $this->allowed_student_ids();
+        if ($allowed !== null) {
+            $enrolled = array_filter($enrolled, static fn($u): bool => isset($allowed[(int) $u->id]));
+        }
+
         $existinguserids = array_map(
             'intval',
             array_column(
@@ -358,14 +415,21 @@ class controller {
     }
 
     /**
-     * Check whether a user is actively enrolled in this controller's course.
+     * Check whether a user is actively enrolled in this controller's course and,
+     * when the caller is confined to specific groups, that the user belongs to
+     * one of them.
      *
      * @param int $userid User ID to check.
-     * @return bool True when the user is enrolled.
+     * @return bool True when the user is enrolled and within the caller's scope.
      */
     private function is_user_enrolled(int $userid): bool {
         $coursecontext = context_course::instance($this->course->id);
-        return is_enrolled($coursecontext, $userid, '', true);
+        if (!is_enrolled($coursecontext, $userid, '', true)) {
+            return false;
+        }
+
+        $allowed = $this->allowed_student_ids();
+        return $allowed === null || isset($allowed[$userid]);
     }
 
     /**
@@ -451,6 +515,12 @@ class controller {
         global $DB;
 
         $overrides = $DB->get_records('local_latepenalty_overrides', ['cmid' => $this->cmid], 'userid ASC');
+
+        $allowed = $this->allowed_student_ids();
+        if ($allowed !== null) {
+            $overrides = array_filter($overrides, static fn($o): bool => isset($allowed[(int) $o->userid]));
+        }
+
         $addurl    = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $this->cmid, 'action' => 'add']);
         $addbutton = $output->single_button($addurl, get_string('override_add', 'local_latepenalty'), 'get');
 
