@@ -28,6 +28,7 @@ use context_module;
 use core\output\notification;
 use html_writer;
 use local_latepenalty\form\group_override_form;
+use local_latepenalty\penalty_helper;
 use local_latepenalty\recalculator;
 use moodle_url;
 use renderer_base;
@@ -525,8 +526,7 @@ class controller {
         [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'grp');
         $groups     = $DB->get_records_sql("SELECT id, name FROM {groups} WHERE id $insql", $inparams);
 
-        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
-        $inherit    = get_string('override_inherit', 'local_latepenalty');
+        $inherit = get_string('override_inherit', 'local_latepenalty');
 
         $rows = [];
         foreach ($overrides as $override) {
@@ -536,7 +536,7 @@ class controller {
                     ? format_string($group->name, true, ['context' => $this->modcontext])
                     : get_string('unknown', 'local_latepenalty'),
                 'deadline'      => ($override->deadline !== null)
-                    ? userdate((int) $override->deadline, $dateformat)
+                    ? penalty_helper::format_deadline((int) $override->deadline)
                     : $inherit,
                 'daily_penalty' => ($override->daily_penalty !== null)
                     ? get_string('percent', 'local_latepenalty', $override->daily_penalty)

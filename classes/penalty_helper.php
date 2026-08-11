@@ -95,6 +95,28 @@ class penalty_helper {
     }
 
     /**
+     * Format a deadline timestamp as a locale-aware date and time string.
+     *
+     * Combines core's own per-language date and time format strings (e.g. the
+     * en_us langpack overrides strftimedatefullshort to %m/%d/%y, while en
+     * keeps %d/%m/%y) rather than a single hardcoded field order, so every
+     * installed language renders the correct day/month/year order on its
+     * own. Only the separator between the two parts is this plugin's own.
+     *
+     * @param int $timestamp Deadline timestamp.
+     * @return string Formatted date and time, e.g. "12/08/26 - 09:07".
+     */
+    public static function format_deadline(int $timestamp): string {
+        $date = userdate($timestamp, get_string('strftimedatefullshort', 'langconfig'));
+        $time = userdate($timestamp, get_string('strftimetime24', 'langconfig'));
+
+        return get_string('deadline_datetime', 'local_latepenalty', (object) [
+            'date' => $date,
+            'time' => $time,
+        ]);
+    }
+
+    /**
      * Get the submission timestamp for a user in a given course module.
      *
      * Returns null for unsupported module types or when no submission exists.

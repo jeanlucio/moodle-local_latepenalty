@@ -93,7 +93,6 @@ class hook_listener {
         $completedrows = $DB->get_records_sql($completedsql, ['courseid' => $courseid, 'userid' => (int) $USER->id]);
         $completedcmids = array_flip(array_column($completedrows, 'coursemoduleid'));
 
-        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $now = time();
         $notices = [];
         $activitydeadlines = self::load_activity_deadlines($records);
@@ -121,8 +120,7 @@ class hook_listener {
                     $deadline,
                     $daily,
                     $max,
-                    $now,
-                    $dateformat
+                    $now
                 );
 
                 if ($badgestate !== 'ontime') {
@@ -135,7 +133,6 @@ class hook_listener {
                         $daily,
                         $max,
                         $now,
-                        $dateformat,
                         $pending,
                         $badgestate
                     );
@@ -235,8 +232,7 @@ class hook_listener {
                     $deadline,
                     $daily,
                     $max,
-                    $now,
-                    $dateformat
+                    $now
                 );
 
                 $notices[] = [
@@ -285,7 +281,6 @@ class hook_listener {
             return;
         }
 
-        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $isteacher = has_capability(
             'local/latepenalty:viewreport',
             \context_course::instance((int) $cm->course)
@@ -304,7 +299,7 @@ class hook_listener {
 
             $daily = (float) $rule->daily_penalty;
             $max   = (float) $rule->max_penalty;
-            [, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
+            [, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, time());
 
             if ($badgestate !== 'ontime') {
                 $pending = self::count_pending_students((int) $cm->id, (int) $cm->course);
@@ -316,7 +311,6 @@ class hook_listener {
                     $daily,
                     $max,
                     time(),
-                    $dateformat,
                     $pending,
                     $badgestate
                 );
@@ -373,7 +367,7 @@ class hook_listener {
             : (($groupoverride && $groupoverride->max_penalty !== null)
                 ? (float) $groupoverride->max_penalty
                 : (float) $rule->max_penalty);
-        [, , $notice] = self::compute_badge($deadline, $daily, $max, time(), $dateformat);
+        [, , $notice] = self::compute_badge($deadline, $daily, $max, time());
 
         $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
     }
@@ -384,13 +378,12 @@ class hook_listener {
      * Called only when the current user is a teacher and there are pending students.
      * Reuses the CSS state already determined by compute_badge().
      *
-     * @param int    $deadline   Unix timestamp of the activity deadline.
-     * @param float  $daily      Daily penalty percentage.
-     * @param float  $max        Maximum penalty percentage.
-     * @param int    $now        Current Unix timestamp.
-     * @param string $dateformat Moodle date format string.
-     * @param int    $pending    Number of students who have not yet completed the activity.
-     * @param string $state      Badge state: 'warning' or 'danger'.
+     * @param int    $deadline Unix timestamp of the activity deadline.
+     * @param float  $daily    Daily penalty percentage.
+     * @param float  $max      Maximum penalty percentage.
+     * @param int    $now      Current Unix timestamp.
+     * @param int    $pending  Number of students who have not yet completed the activity.
+     * @param string $state    Badge state: 'warning' or 'danger'.
      * @return array{string, string} [badgelabel, notice].
      */
     private static function compute_teacher_badge(
@@ -398,11 +391,10 @@ class hook_listener {
         float $daily,
         float $max,
         int $now,
-        string $dateformat,
         int $pending,
         string $state
     ): array {
-        $datestr = userdate($deadline, $dateformat);
+        $datestr = penalty_helper::format_deadline($deadline);
         $daysoverdue = (int) ceil(($now - $deadline) / DAYSECS);
         $penalty = min($daysoverdue * $daily, $max);
 
@@ -529,21 +521,19 @@ class hook_listener {
     /**
      * Compute the badge label, CSS state, and tooltip notice for a given deadline and penalty rule.
      *
-     * @param int    $deadline   Unix timestamp of the activity deadline.
-     * @param float  $daily      Daily penalty percentage.
-     * @param float  $max        Maximum penalty percentage.
-     * @param int    $now        Current Unix timestamp.
-     * @param string $dateformat Moodle date format string.
+     * @param int   $deadline Unix timestamp of the activity deadline.
+     * @param float $daily    Daily penalty percentage.
+     * @param float $max      Maximum penalty percentage.
+     * @param int   $now      Current Unix timestamp.
      * @return array{string, string, string} [badgelabel, badgestate, notice] where state is ontime|warning|danger.
      */
     private static function compute_badge(
         int $deadline,
         float $daily,
         float $max,
-        int $now,
-        string $dateformat
+        int $now
     ): array {
-        $datestr = userdate($deadline, $dateformat);
+        $datestr = penalty_helper::format_deadline($deadline);
 
         if ($deadline > $now) {
             $label  = get_string('badge_ontime', 'local_latepenalty', ['date' => $datestr]);
