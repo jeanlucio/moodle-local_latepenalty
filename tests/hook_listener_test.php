@@ -119,7 +119,15 @@ final class hook_listener_test extends advanced_testcase {
     public function test_hidden_activity_excluded_from_student_payload(): void {
         global $DB, $PAGE;
 
-        $course  = $this->getDataGenerator()->create_course();
+        $course = $this->getDataGenerator()->create_course();
+
+        // Set the theme-affecting $PAGE state before any enrolment call: enrolling a
+        // user can trigger a course-welcome-message send, whose HTML rendering lazily
+        // initialises $PAGE's theme via get_renderer() — after which moodle_page::
+        // set_course() throws "the theme has already been set up for this page".
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+
         $student = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
 
@@ -139,8 +147,6 @@ final class hook_listener_test extends advanced_testcase {
         rebuild_course_cache($course->id);
 
         $this->setUser($student);
-        $PAGE->set_course($course);
-        $PAGE->set_pagetype('course-view-topics');
 
         hook_listener::inject_course_notices($this->make_hook());
 
@@ -166,7 +172,13 @@ final class hook_listener_test extends advanced_testcase {
     public function test_teacher_still_sees_hidden_activity(): void {
         global $DB, $PAGE;
 
-        $course  = $this->getDataGenerator()->create_course();
+        $course = $this->getDataGenerator()->create_course();
+
+        // See test_hidden_activity_excluded_from_student_payload() for why $PAGE's
+        // theme-affecting state must be set before any enrolment call.
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+
         $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
         $student = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
@@ -183,8 +195,6 @@ final class hook_listener_test extends advanced_testcase {
         rebuild_course_cache($course->id);
 
         $this->setUser($teacher);
-        $PAGE->set_course($course);
-        $PAGE->set_pagetype('course-view-topics');
 
         hook_listener::inject_course_notices($this->make_hook());
 
