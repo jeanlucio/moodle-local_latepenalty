@@ -40,8 +40,7 @@ use advanced_testcase;
 /**
  * Tests for penalty_helper::get_group_override() and get_group_overrides_bulk().
  *
- * @covers \local_latepenalty\penalty_helper::get_group_override
- * @covers \local_latepenalty\penalty_helper::get_group_overrides_bulk
+ * @covers \local_latepenalty\penalty_helper
  */
 final class penalty_helper_group_test extends advanced_testcase {
     #[\Override]
