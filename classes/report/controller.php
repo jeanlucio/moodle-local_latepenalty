@@ -48,6 +48,18 @@ class controller {
     private int $filtercmid;
 
     /**
+     * Group IDs the report is restricted to, or null for no restriction.
+     *
+     * Set by resolve_group_restriction() when the caller is a teacher without
+     * moodle/site:accessallgroups in a course using separate groups. An empty
+     * array (as opposed to null) means the caller belongs to no group at all,
+     * so the report must show nothing rather than everything.
+     *
+     * @var int[]|null
+     */
+    private ?array $restrictgroupids;
+
+    /**
      * Deadline field per module type, mirroring the observer's map.
      *
      * @var array<string,string>
@@ -65,21 +77,76 @@ class controller {
     /**
      * Constructor.
      *
-     * @param int            $courseid     The course id.
-     * @param context_course $context      The course context.
-     * @param int            $filteruserid User id to filter by (0 = all).
-     * @param int            $filtercmid   Course module id to filter by (0 = all).
+     * @param int            $courseid         The course id.
+     * @param context_course $context          The course context.
+     * @param int            $filteruserid     User id to filter by (0 = all).
+     * @param int            $filtercmid       Course module id to filter by (0 = all).
+     * @param int[]|null     $restrictgroupids Group IDs to restrict the report to, or null
+     *                                         for no restriction. See resolve_group_restriction().
      */
     public function __construct(
         int $courseid,
         context_course $context,
         int $filteruserid = 0,
-        int $filtercmid = 0
+        int $filtercmid = 0,
+        ?array $restrictgroupids = null
     ) {
-        $this->courseid     = $courseid;
-        $this->context      = $context;
-        $this->filteruserid = $filteruserid;
-        $this->filtercmid   = $filtercmid;
+        $this->courseid         = $courseid;
+        $this->context          = $context;
+        $this->filteruserid     = $filteruserid;
+        $this->filtercmid       = $filtercmid;
+        $this->restrictgroupids = $restrictgroupids;
+    }
+
+    /**
+     * Resolve which groups, if any, a report caller must be restricted to.
+     *
+     * Mirrors the standard Moodle separate-groups check: a user without
+     * moodle/site:accessallgroups in a course using SEPARATEGROUPS may only see
+     * their own group(s). Returns null when the report should be unrestricted
+     * (course not in separate-groups mode, or the caller can access all groups).
+     *
+     * @param \stdClass       $course  The course.
+     * @param context_course $context The course context.
+     * @return int[]|null Group IDs to restrict to, or null for no restriction.
+     */
+    public static function resolve_group_restriction(\stdClass $course, context_course $context): ?array {
+        global $USER;
+
+        if ((int) groups_get_course_groupmode($course) !== SEPARATEGROUPS) {
+            return null;
+        }
+
+        if (has_capability('moodle/site:accessallgroups', $context)) {
+            return null;
+        }
+
+        return array_keys(groups_get_all_groups($course->id, (int) $USER->id));
+    }
+
+    /**
+     * Build the WHERE fragment and params that restrict a query's grade_grades_history
+     * rows (aliased "ggh") to the caller's own groups, per $this->restrictgroupids.
+     *
+     * @return array{0: string, 1: array} [SQL fragment starting with " AND ...", params].
+     */
+    private function group_scope_where(): array {
+        global $DB;
+
+        if ($this->restrictgroupids === null) {
+            return ['', []];
+        }
+
+        if (empty($this->restrictgroupids)) {
+            // Caller belongs to no group in this separate-groups course: nothing
+            // can legitimately match, so force the query to return no rows.
+            return [' AND 1 = 0', []];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($this->restrictgroupids, SQL_PARAMS_NAMED, 'grpscope');
+        $where = " AND ggh.userid IN (SELECT gm.userid FROM {groups_members} gm WHERE gm.groupid $insql)";
+
+        return [$where, $inparams];
     }
 
     /**
@@ -107,6 +174,9 @@ class controller {
             $params['filtercmid'] = $this->filtercmid;
         }
 
+        [$groupwhere, $groupparams] = $this->group_scope_where();
+        $params = array_merge($params, $groupparams);
+
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
                        gi.grademax, gi.itemmodule, gi.iteminstance,
@@ -127,6 +197,7 @@ class controller {
                  WHERE ggh.source = 'local_latepenalty'
                        {$userwhere}
                        {$cmwhere}
+                       {$groupwhere}
                  ORDER BY u.lastname, u.firstname, cm.id, ggh.timemodified DESC";
 
         $rows = $DB->get_records_sql($sql, $params);
@@ -238,6 +309,9 @@ class controller {
             $params['filtercmid'] = $this->filtercmid;
         }
 
+        [$groupwhere, $groupparams] = $this->group_scope_where();
+        $params = array_merge($params, $groupparams);
+
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
                        gi.grademax, gi.itemmodule, gi.iteminstance,
@@ -258,6 +332,7 @@ class controller {
                  WHERE ggh.source = 'local_latepenalty'
                        {$userwhere}
                        {$cmwhere}
+                       {$groupwhere}
                  ORDER BY u.lastname, u.firstname, cm.id, ggh.timemodified DESC";
 
         $rows = $DB->get_records_sql($sql, $params);
@@ -345,6 +420,8 @@ class controller {
     private function build_user_options(): array {
         global $DB;
 
+        [$groupwhere, $groupparams] = $this->group_scope_where();
+
         $sql = "SELECT DISTINCT u.id, u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
                        u.middlename, u.alternatename
@@ -359,12 +436,13 @@ class controller {
                                           AND cm.module = mod.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
+                       {$groupwhere}
                  ORDER BY u.lastname, u.firstname";
 
-        $rows = $DB->get_records_sql($sql, [
+        $rows = $DB->get_records_sql($sql, array_merge([
             'courseid'  => $this->courseid,
             'courseid2' => $this->courseid,
-        ]);
+        ], $groupparams));
 
         $options = [[
             'value'    => 0,
@@ -398,6 +476,8 @@ class controller {
     private function build_cm_options(): array {
         global $DB;
 
+        [$groupwhere, $groupparams] = $this->group_scope_where();
+
         $sql = "SELECT DISTINCT cm.id, gi.itemname
                   FROM {grade_grades_history} ggh
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
@@ -409,12 +489,13 @@ class controller {
                                           AND cm.module = mod.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
+                       {$groupwhere}
                  ORDER BY gi.itemname";
 
-        $rows = $DB->get_records_sql($sql, [
+        $rows = $DB->get_records_sql($sql, array_merge([
             'courseid'  => $this->courseid,
             'courseid2' => $this->courseid,
-        ]);
+        ], $groupparams));
 
         $modinfo = get_fast_modinfo($this->courseid);
 

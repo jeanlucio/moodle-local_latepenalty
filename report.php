@@ -42,7 +42,8 @@ $PAGE->set_title(get_string('report', 'local_latepenalty'));
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
 
-$controller = new controller($courseid, $context, $filteruserid, $filtercmid);
+$restrictgroupids = controller::resolve_group_restriction($course, $context);
+$controller = new controller($courseid, $context, $filteruserid, $filtercmid, $restrictgroupids);
 
 echo $OUTPUT->header();
 echo $OUTPUT->render_from_template('local_latepenalty/report', $controller->get_template_context());

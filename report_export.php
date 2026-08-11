@@ -39,7 +39,8 @@ require_capability('local/latepenalty:viewreport', $context);
 
 // Note: require_sesskey() is intentionally omitted — data export is a read-only GET request.
 
-$reportcontroller = new controller($courseid, $context, $filteruserid, $filtercmid);
+$restrictgroupids = controller::resolve_group_restriction($course, $context);
+$reportcontroller = new controller($courseid, $context, $filteruserid, $filtercmid, $restrictgroupids);
 [$columns, $rows] = $reportcontroller->get_export_data();
 
 $filename = clean_filename('latepenalty_' . $course->shortname . '_' . date('Ymd'));
