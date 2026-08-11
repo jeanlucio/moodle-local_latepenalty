@@ -110,4 +110,5 @@ $string['report_export_grademax'] = 'Grade max';
 $string['report_export_override'] = 'Override';
 $string['report_override_group'] = 'Group override';
 $string['report_override_user'] = 'User override';
+$string['strftimedatetimedash'] = '%d/%m/%y - %H:%M';
 $string['unknown'] = 'Unknown';

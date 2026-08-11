@@ -93,7 +93,7 @@ class hook_listener {
         $completedrows = $DB->get_records_sql($completedsql, ['courseid' => $courseid, 'userid' => (int) $USER->id]);
         $completedcmids = array_flip(array_column($completedrows, 'coursemoduleid'));
 
-        $dateformat = get_string('strftimedatetimeshort', 'langconfig');
+        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $now = time();
         $notices = [];
         $activitydeadlines = self::load_activity_deadlines($records);
@@ -285,7 +285,7 @@ class hook_listener {
             return;
         }
 
-        $dateformat = get_string('strftimedatetimeshort', 'langconfig');
+        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $isteacher = has_capability(
             'local/latepenalty:viewreport',
             \context_course::instance((int) $cm->course)

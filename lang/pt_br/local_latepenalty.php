@@ -110,4 +110,5 @@ $string['report_export_grademax'] = 'Nota máxima';
 $string['report_export_override'] = 'Sobreposição';
 $string['report_override_group'] = 'Sobreposição de grupo';
 $string['report_override_user'] = 'Sobreposição de usuário';
+$string['strftimedatetimedash'] = '%d/%m/%y - %H:%M';
 $string['unknown'] = 'Desconhecido';

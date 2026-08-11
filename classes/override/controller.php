@@ -577,7 +577,7 @@ class controller {
             $inparams
         );
 
-        $dateformat = get_string('strftimedatefullshort', 'langconfig');
+        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $inherit    = get_string('override_inherit', 'local_latepenalty');
 
         $rows = [];

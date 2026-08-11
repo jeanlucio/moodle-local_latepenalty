@@ -525,7 +525,7 @@ class controller {
         [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'grp');
         $groups     = $DB->get_records_sql("SELECT id, name FROM {groups} WHERE id $insql", $inparams);
 
-        $dateformat = get_string('strftimedatefullshort', 'langconfig');
+        $dateformat = get_string('strftimedatetimedash', 'local_latepenalty');
         $inherit    = get_string('override_inherit', 'local_latepenalty');
 
         $rows = [];
