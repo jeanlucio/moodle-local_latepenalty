@@ -24,3 +24,6 @@ phpunit.xml
 SCOPE.md
 CLAUDE.md
 .docs/
+
+# AI assistant session/workspace directories, not part of the plugin.
+.plans

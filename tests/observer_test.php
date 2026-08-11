@@ -1148,4 +1148,93 @@ final class observer_test extends advanced_testcase {
             'Grade should not be penalised when student has no forum posts.'
         );
     }
+
+    // Cleanup on course module deletion.
+
+    /**
+     * Deleting a course module removes the plugin's rule, per-user override and
+     * per-group override rows for that cmid, and leaves other activities untouched.
+     *
+     * Exercises the real course_delete_module() call (not a hand-rolled event
+     * trigger) so the assertion covers the actual deletion path, including
+     * context removal happening before the event fires.
+     */
+    public function test_course_module_deleted_cleans_up_plugin_tables(): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $group   = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+        $this->upsert_override($assign->cmid, $student->id, null, 5.0, null);
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid'          => $assign->cmid,
+            'groupid'       => $group->id,
+            'deadline'      => null,
+            'daily_penalty' => null,
+            'max_penalty'   => null,
+            'timecreated'   => time(),
+            'timemodified'  => time(),
+        ]);
+
+        // A second, untouched activity proves the cleanup is scoped to the deleted cmid.
+        $otherassign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $this->upsert_rule($otherassign->cmid, true, 10.0, 50.0);
+
+        course_delete_module($assign->cmid);
+
+        self::assertSame(0, $DB->count_records('local_latepenalty_rules', ['cmid' => $assign->cmid]));
+        self::assertSame(0, $DB->count_records('local_latepenalty_overrides', ['cmid' => $assign->cmid]));
+        self::assertSame(0, $DB->count_records('local_latepenalty_group_overrides', ['cmid' => $assign->cmid]));
+
+        self::assertSame(1, $DB->count_records('local_latepenalty_rules', ['cmid' => $otherassign->cmid]));
+    }
+
+    /**
+     * Deleting the whole course removes the plugin's rows for every course module
+     * in it, even though remove_course_contents() never fires course_module_deleted.
+     *
+     * Regression guard for the gap found in course_module_deleted() alone: a
+     * whole-course delete_course() call does not go through course_delete_module()
+     * for its activities, so only the before_course_deleted hook catches this path.
+     */
+    public function test_course_deleted_cleans_up_plugin_tables(): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
+
+        $course  = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $group   = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
+        $this->upsert_override($assign->cmid, $student->id, null, 5.0, null);
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid'          => $assign->cmid,
+            'groupid'       => $group->id,
+            'deadline'      => null,
+            'daily_penalty' => null,
+            'max_penalty'   => null,
+            'timecreated'   => time(),
+            'timemodified'  => time(),
+        ]);
+
+        // A second course, untouched, proves the cleanup is scoped to the deleted course.
+        $othercourse = $this->getDataGenerator()->create_course();
+        $otherassign = $this->getDataGenerator()->create_module('assign', ['course' => $othercourse->id]);
+        $this->upsert_rule($otherassign->cmid, true, 10.0, 50.0);
+
+        delete_course($course, false);
+
+        self::assertSame(0, $DB->count_records('local_latepenalty_rules', ['cmid' => $assign->cmid]));
+        self::assertSame(0, $DB->count_records('local_latepenalty_overrides', ['cmid' => $assign->cmid]));
+        self::assertSame(0, $DB->count_records('local_latepenalty_group_overrides', ['cmid' => $assign->cmid]));
+
+        self::assertSame(1, $DB->count_records('local_latepenalty_rules', ['cmid' => $otherassign->cmid]));
+    }
 }

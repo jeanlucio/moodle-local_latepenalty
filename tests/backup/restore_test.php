@@ -133,6 +133,50 @@ final class restore_test extends advanced_testcase {
     }
 
     /**
+     * Without user data, the backup XML itself must not contain the override nodes
+     * at all — not merely have them discarded on restore.
+     *
+     * Regression guard: overrides carry a userid (or a groupid tied to a specific
+     * cohort) plus individually negotiated deadlines/penalties, so a backup made
+     * with "Include enrolled user data" off must not leak them into the .mbz, even
+     * though the restore side already discards unmapped records defensively.
+     */
+    public function test_backup_excludes_overrides_without_userinfo(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        [$course, ] = $this->create_fixture(withusers: true);
+
+        $backupid = $this->backup_only($course, false);
+        $modulexml = $this->read_module_xml($backupid);
+
+        $this->assertStringNotContainsString('<override ', $modulexml);
+        $this->assertStringNotContainsString('<groupoverride ', $modulexml);
+        // The rule (configuration, not personal data) must still travel unconditionally.
+        $this->assertStringContainsString('<rule ', $modulexml);
+    }
+
+    /**
+     * With user data included, the backup XML must contain both override nodes.
+     *
+     * Positive control for the test above: proves the userinfo gate actually
+     * switches the nodes on and off, rather than always excluding them.
+     */
+    public function test_backup_includes_overrides_with_userinfo(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        [$course, ] = $this->create_fixture(withusers: true);
+
+        $backupid = $this->backup_only($course, true);
+        $modulexml = $this->read_module_xml($backupid);
+
+        $this->assertStringContainsString('<override ', $modulexml);
+        $this->assertStringContainsString('<groupoverride ', $modulexml);
+        $this->assertStringContainsString('<rule ', $modulexml);
+    }
+
+    /**
      * Restoring into a new course leaves the source course's rule untouched.
      */
     public function test_original_course_unaffected(): void {
@@ -286,5 +330,52 @@ final class restore_test extends advanced_testcase {
         $rc->destroy();
 
         return $newcourseid;
+    }
+
+    /**
+     * Runs only the backup half of the cycle, leaving the temp XML on disk for
+     * direct inspection instead of proceeding to restore.
+     *
+     * @param stdClass $srccourse Source course.
+     * @param bool $userinfo Whether to include user data in the backup.
+     * @return string The backup ID, whose temp directory holds the generated XML.
+     */
+    private function backup_only(stdClass $srccourse, bool $userinfo): string {
+        global $USER, $CFG;
+
+        $CFG->backup_file_logger_level = backup::LOG_NONE;
+
+        $bc = new backup_controller(
+            backup::TYPE_1COURSE,
+            $srccourse->id,
+            backup::FORMAT_MOODLE,
+            backup::INTERACTIVE_NO,
+            backup::MODE_IMPORT,
+            $USER->id
+        );
+
+        $bc->get_plan()->get_setting('users')->set_status(backup_setting::NOT_LOCKED);
+        $bc->get_plan()->get_setting('users')->set_value($userinfo);
+
+        $backupid = $bc->get_backupid();
+        $bc->execute_plan();
+        $bc->destroy();
+
+        return $backupid;
+    }
+
+    /**
+     * Reads the generated module.xml for the single assign in a backup's temp directory.
+     *
+     * @param string $backupid Backup ID returned by backup_only().
+     * @return string Raw XML content of activities/assign_<id>/module.xml.
+     */
+    private function read_module_xml(string $backupid): string {
+        $backupdir = make_backup_temp_directory($backupid, false);
+        $matches = glob($backupdir . '/activities/assign_*/module.xml');
+
+        $this->assertNotEmpty($matches, 'module.xml not found in backup temp directory');
+
+        return file_get_contents($matches[0]);
     }
 }

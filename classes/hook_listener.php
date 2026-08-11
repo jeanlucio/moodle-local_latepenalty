@@ -149,6 +149,20 @@ class hook_listener {
                 ];
             }
         } else {
+            // Drop rules for activities hidden, stealth, or access-restricted for this
+            // student — the query above has no visibility filter, so without this the
+            // notices payload below would reveal the deadline/rate of activities the
+            // course UI hides from them.
+            $modinfo = get_fast_modinfo($courseid, (int) $USER->id);
+            $records = array_filter(
+                $records,
+                fn($record) => ($modinfo->cms[(int) $record->cmid] ?? null)?->uservisible ?? false
+            );
+
+            if (empty($records)) {
+                return;
+            }
+
             $userdeadlines = self::load_user_module_deadlines($records, (int) $USER->id);
 
             // Load all per-user overrides for this user in this course (single query).

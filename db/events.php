@@ -29,4 +29,8 @@ $observers = [
         'eventname' => '\core\event\user_graded',
         'callback' => '\local_latepenalty\observer::user_graded',
     ],
+    [
+        'eventname' => '\core\event\course_module_deleted',
+        'callback' => '\local_latepenalty\observer::course_module_deleted',
+    ],
 ];

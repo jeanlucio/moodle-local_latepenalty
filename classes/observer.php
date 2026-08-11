@@ -257,4 +257,64 @@ class observer {
     public static function register_pending_grade(string $key, float $value): void {
         self::$pendingpenalty[$key] = $value;
     }
+
+    /**
+     * Delete the plugin's own rows for a single course module that is being removed.
+     *
+     * Fires only for the "delete this activity" path (course_delete_module()).
+     * Whole-course deletion does not go through that function — see
+     * course_deleted() below — so this alone does not cover course removal.
+     * Without this cleanup, rules/overrides/group overrides keyed by the dead
+     * cmid would remain orphaned forever, including per-student data the Privacy
+     * API can no longer reach once the module's context_module row is gone.
+     *
+     * @param \core\event\course_module_deleted $event The event.
+     * @return void
+     */
+    public static function course_module_deleted(\core\event\course_module_deleted $event): void {
+        global $DB;
+
+        $cmid = (int) $event->objectid;
+
+        $DB->delete_records('local_latepenalty_overrides', ['cmid' => $cmid]);
+        $DB->delete_records('local_latepenalty_group_overrides', ['cmid' => $cmid]);
+        $DB->delete_records('local_latepenalty_rules', ['cmid' => $cmid]);
+    }
+
+    /**
+     * Delete the plugin's own rows for every course module in a course that is
+     * about to be removed.
+     *
+     * remove_course_contents() (called by delete_course()) deletes course_modules
+     * rows through its own duplicated code path — its source literally flags
+     * "very similar code in course_delete_module" — and never fires
+     * course_module_deleted per module. So course_module_deleted() above never
+     * runs during a whole-course deletion, confirmed by exercising the real
+     * delete_course() and finding orphaned rows survive it. This hook fires
+     * before remove_course_contents() runs, while course_modules rows for the
+     * course still exist, so the affected cmids can still be resolved.
+     *
+     * @param \core_course\hook\before_course_deleted $hook The hook instance.
+     * @return void
+     */
+    public static function course_deleted(\core_course\hook\before_course_deleted $hook): void {
+        global $DB;
+
+        $cmids = array_keys($DB->get_records(
+            'course_modules',
+            ['course' => (int) $hook->course->id],
+            '',
+            'id'
+        ));
+
+        if (empty($cmids)) {
+            return;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED);
+
+        $DB->delete_records_select('local_latepenalty_overrides', "cmid $insql", $inparams);
+        $DB->delete_records_select('local_latepenalty_group_overrides', "cmid $insql", $inparams);
+        $DB->delete_records_select('local_latepenalty_rules', "cmid $insql", $inparams);
+    }
 }

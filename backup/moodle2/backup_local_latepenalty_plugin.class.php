@@ -41,6 +41,11 @@ class backup_local_latepenalty_plugin extends backup_local_plugin {
      * @return backup_nested_element
      */
     protected function define_module_plugin_structure(): backup_nested_element {
+        // To know if we are including userinfo. Overrides carry a userid (or a groupid tied
+        // to a specific cohort of students) plus individually negotiated deadlines/penalties,
+        // so they must not travel in a backup made with "Include enrolled user data" off.
+        $userinfo = $this->get_setting_value('userinfo');
+
         $plugin = $this->get_plugin_element();
 
         $wrapper = new backup_nested_element($this->get_recommended_name());
@@ -81,8 +86,13 @@ class backup_local_latepenalty_plugin extends backup_local_plugin {
 
         // Backup::VAR_MODID is resolved to the course_modules.id at backup time.
         $rule->set_source_table('local_latepenalty_rules', ['cmid' => backup::VAR_MODID]);
-        $override->set_source_table('local_latepenalty_overrides', ['cmid' => backup::VAR_MODID]);
-        $groupoverride->set_source_table('local_latepenalty_group_overrides', ['cmid' => backup::VAR_MODID]);
+
+        // Without userinfo, leave the override elements sourceless: they remain children of
+        // the tree (so the XML shape is stable) but the backup engine emits zero rows for them.
+        if ($userinfo) {
+            $override->set_source_table('local_latepenalty_overrides', ['cmid' => backup::VAR_MODID]);
+            $groupoverride->set_source_table('local_latepenalty_group_overrides', ['cmid' => backup::VAR_MODID]);
+        }
 
         // Annotate IDs so the restore framework can remap them.
         $override->annotate_ids('user', 'userid');
