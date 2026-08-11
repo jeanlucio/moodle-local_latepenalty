@@ -39,6 +39,10 @@ require_capability('local/latepenalty:viewreport', $context);
 
 // Note: require_sesskey() is intentionally omitted — data export is a read-only GET request.
 
+if (!array_key_exists($format, \core\plugininfo\dataformat::get_enabled_plugins())) {
+    throw new moodle_exception('invaliddataformat', 'local_latepenalty', '', $format);
+}
+
 $groupscope = controller::resolve_group_restriction($course, $context);
 $reportcontroller = new controller(
     $courseid,

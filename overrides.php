@@ -24,6 +24,7 @@
 
 require(__DIR__ . '/../../config.php');
 
+use core\output\notification;
 use local_latepenalty\group_override\controller as group_controller;
 use local_latepenalty\group_scope;
 use local_latepenalty\override\controller as user_controller;
@@ -46,7 +47,15 @@ require_login($course, true, $cm);
 $modcontext = context_module::instance($cmid);
 require_capability('local/latepenalty:manageoverrides', $modcontext);
 
-$rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid, 'enabled' => 1], '*', MUST_EXIST);
+$rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid, 'enabled' => 1]);
+if (!$rule) {
+    redirect(
+        new moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cmid]),
+        get_string('overrides_rule_disabled', 'local_latepenalty'),
+        null,
+        notification::NOTIFY_WARNING
+    );
+}
 
 $listurl = new moodle_url('/local/latepenalty/overrides.php', ['cmid' => $cmid, 'mode' => $mode]);
 
