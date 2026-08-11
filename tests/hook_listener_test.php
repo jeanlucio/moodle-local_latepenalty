@@ -200,4 +200,43 @@ final class hook_listener_test extends advanced_testcase {
 
         self::assertStringContainsString('"cmid":' . $hidden->cmid, $this->amd_code());
     }
+
+    /**
+     * The course-page notice payload carries the deadline formatted with
+     * both date and time (via penalty_helper::format_deadline()), not just
+     * a date — integration-level regression guard for the date/time
+     * formatting introduced this session, at the actual point it reaches
+     * the student.
+     */
+    public function test_notice_includes_formatted_deadline_date_and_time(): void {
+        global $DB, $PAGE;
+
+        $course = $this->getDataGenerator()->create_course();
+
+        // See test_hidden_activity_excluded_from_student_payload() for why $PAGE's
+        // theme-affecting state must be set before any enrolment call.
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+
+        $deadline = time() + 5 * DAYSECS;
+
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
+        $this->enable_rule($assign->cmid);
+
+        rebuild_course_cache($course->id);
+
+        $this->setUser($student);
+
+        hook_listener::inject_course_notices($this->make_hook());
+
+        // The AMD payload is JSON-encoded with plain json_encode(), which escapes
+        // "/" as "\/" by default — the raw formatted string never appears
+        // literally in the emitted JS, only its JSON-escaped form.
+        $expected = trim(json_encode(penalty_helper::format_deadline($deadline)), '"');
+        self::assertStringContainsString($expected, $this->amd_code());
+    }
 }

@@ -20,6 +20,8 @@
  * Covers:
  *  - calculate_days_late(): pure timestamp arithmetic
  *  - apply_penalty(): discount formula and edge cases
+ *  - format_deadline(): combines the locale's date and time strings via the
+ *    plugin's own separator string, rather than a hardcoded format
  *  - get_submission_time(): forum with no posts returns null
  *  - Full observer chain via assign: no rule, rule disabled, no deadline,
  *    on-time, 1 day late, 2 days late, penalty capped at max
@@ -339,6 +341,51 @@ final class observer_test extends advanced_testcase {
     public function test_penalty_non_round_grade(): void {
         // 75.5 × 0.9 = 67.95.
         self::assertEqualsWithDelta(67.95, $this->apply(75.5, 1, 10.0, 50.0), 0.01);
+    }
+
+    // Tests for format_deadline: locale-aware date+time combination.
+
+    /**
+     * format_deadline() must combine the current locale's own short-date and
+     * 24-hour time strings (strftimedatefullshort / strftimetime24 from
+     * langconfig) via the plugin's own deadline_datetime string, never a
+     * format hardcoded in code. This pins the exact bug fixed this session:
+     * an earlier version used a plugin-owned literal '%d/%m/%y - %H:%M',
+     * which silently ignored languages that override the field order (e.g.
+     * en_us renders month/day instead of day/month).
+     *
+     * The PHPUnit test environment only ships the 'en' language pack, so
+     * this cannot assert the per-locale field order actually differs — that
+     * was verified manually, across en/en_us/es/fr/pt_br, in a real browser
+     * this session. What this test does verify is the wiring: the exact
+     * core strings combined, in the exact order, via the exact plugin
+     * string — a regression here (wrong string, wrong order, dropped
+     * placeholder) fails even though the literal 'en' output can't change.
+     */
+    public function test_format_deadline_combines_locale_date_and_time(): void {
+        $timestamp = mktime(9, 7, 0, 8, 12, 2027);
+
+        $expected = get_string('deadline_datetime', 'local_latepenalty', (object) [
+            'date' => userdate($timestamp, get_string('strftimedatefullshort', 'langconfig')),
+            'time' => userdate($timestamp, get_string('strftimetime24', 'langconfig')),
+        ]);
+
+        self::assertSame($expected, penalty_helper::format_deadline($timestamp));
+    }
+
+    /**
+     * The combined string must contain a dash-separated, 24-hour clock time
+     * component — a structural guard, independent of locale, that catches a
+     * regression dropping the time portion entirely and reverting to a
+     * date-only display.
+     */
+    public function test_format_deadline_contains_dash_separated_time(): void {
+        $timestamp = mktime(9, 7, 0, 8, 12, 2027);
+
+        $result = penalty_helper::format_deadline($timestamp);
+
+        self::assertStringContainsString(' - ', $result);
+        self::assertMatchesRegularExpression('/\d{2}:\d{2}/', $result);
     }
 
     // Tests for get_submission_time: targeted reflection tests.

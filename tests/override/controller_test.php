@@ -21,6 +21,7 @@
  *  - render(): notification when no overrides exist (list mode)
  *  - render(): table rows contain student name, penalty values, and
  *              "inherit" placeholder for null fields (list mode)
+ *  - render(): a non-null deadline is formatted with date and time (list mode)
  *  - render(): add button always present (list mode)
  *  - render(): "no students available" notice when all enrolled students
  *              already have an override (add mode)
@@ -39,6 +40,7 @@ namespace local_latepenalty\override;
 use advanced_testcase;
 use context_module;
 use context_system;
+use local_latepenalty\penalty_helper;
 use moodle_url;
 use stdClass;
 
@@ -279,6 +281,27 @@ final class controller_test extends advanced_testcase {
             get_string('override_inherit', 'local_latepenalty'),
             $html
         );
+    }
+
+    /**
+     * render() formats a non-null deadline with both date and time via
+     * penalty_helper::format_deadline(), not a bare userdate() date-only
+     * call — regression guard for the date/time formatting introduced this
+     * session on this exact list column.
+     */
+    public function test_render_list_formats_deadline_with_date_and_time(): void {
+        global $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $deadline = mktime(9, 7, 0, 8, 12, 2027);
+        $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, $deadline, null, null);
+
+        $ctrl = $this->make_controller($s, 'list');
+        $ctrl->process();
+        $html = $ctrl->render($PAGE->get_renderer('core'));
+
+        self::assertStringContainsString(penalty_helper::format_deadline($deadline), $html);
     }
 
     /**
