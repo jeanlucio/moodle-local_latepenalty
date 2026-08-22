@@ -8,7 +8,7 @@ lang: en
 ![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat)
 ![Status](https://img.shields.io/badge/Status-Stable-green?style=flat)
 [![Latest Release](https://img.shields.io/github/v/release/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/releases)
-[![Author](https://img.shields.io/badge/by-Jean_Lucio-6f42c1?style=flat)](https://marketplace.moodle.com/user/984)
+[![Author](https://img.shields.io/badge/by-Jean_Lucio-6f42c1?style=flat)](https://github.com/jeanlucio/)
 
 [![Moodle Plugin CI](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml/badge.svg)](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml)
 [![Last Commit](https://img.shields.io/github/last-commit/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/commits)
@@ -19,9 +19,7 @@ activity when a student submits after the deadline. Unlike Moodle's native late-
 penalty — limited to Assignments — this plugin listens to the Gradebook's `user_graded` event
 and works with every activity type that records a grade.
 
-Use the sidebar to jump to any section on this page.
-
-Source code: [github.com/jeanlucio/moodle-local_latepenalty](https://github.com/jeanlucio/moodle-local_latepenalty)
+<p class="page-hint">👈 Use the sidebar to jump to any section on this page.</p>
 
 ---
 

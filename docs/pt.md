@@ -8,7 +8,7 @@ lang: pt
 ![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat)
 ![Status](https://img.shields.io/badge/Status-Stable-green?style=flat)
 [![Latest Release](https://img.shields.io/github/v/release/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/releases)
-[![Author](https://img.shields.io/badge/by-Jean_Lucio-6f42c1?style=flat)](https://marketplace.moodle.com/user/984)
+[![Author](https://img.shields.io/badge/by-Jean_Lucio-6f42c1?style=flat)](https://github.com/jeanlucio/)
 
 [![Moodle Plugin CI](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml/badge.svg)](https://github.com/jeanlucio/moodle-local_latepenalty/actions/workflows/ci.yml)
 [![Last Commit](https://img.shields.io/github/last-commit/jeanlucio/moodle-local_latepenalty?style=flat)](https://github.com/jeanlucio/moodle-local_latepenalty/commits)
@@ -19,9 +19,7 @@ atividade do Moodle quando o aluno entrega após o prazo. Ao contrário da penal
 tardia nativa do Moodle — restrita apenas a Tarefas — este plugin escuta o evento `user_graded`
 do Livro de Notas e funciona com qualquer tipo de atividade que registra nota.
 
-Use a barra lateral para pular direto a qualquer seção desta página.
-
-Código-fonte: [github.com/jeanlucio/moodle-local_latepenalty](https://github.com/jeanlucio/moodle-local_latepenalty)
+<p class="page-hint">👈 Use a barra lateral para pular direto a qualquer seção desta página.</p>
 
 ---
 

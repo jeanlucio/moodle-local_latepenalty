@@ -158,6 +158,13 @@ body {
   color: #0969da;
 }
 
+.page-hint {
+  margin: 0.4rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
 .content code {
   padding: 0.15rem 0.3rem;
   font-size: 0.9em;
