@@ -1,77 +1,39 @@
 # See https://github.com/moodlehq/moodle-plugin-release
 #
-# Whenever a new tag starting with "v" is pushed, publish the version
-# to the Moodle Plugins directory at https://moodle.org/plugins
+# Calls the moodlehq/moodle-plugin-release reusable workflow, which builds the plugin
+# zip from the tagged commit and submits it to the Moodle Marketplace API
+# (https://marketplace.moodle.com/api/plugins/{component}/versions).
 #
-# Required secret: MOODLE_ORG_TOKEN
-# (generate at https://moodle.org/user/profile.php → Security keys)
+# Required secret: MOODLE_MARKETPLACE_TOKEN
+# (generate at https://marketplace.moodle.com/account/security)
 #
-# NOTE: automatic publishing is disabled below (the "push: tags" trigger is commented
-# out). Moodle Marketplace replaced the Plugins directory and does not support version
-# upload via API at launch (Moodle's own "Launch limitations" documentation, checked
-# 2026-07-20); this workflow targets the legacy `local_plugins_add_version` endpoint,
-# which no longer works. Upload new versions manually through the Plugin dashboard for
-# now, and re-enable the trigger below once Moodle documents the Marketplace API upload
-# mechanism.
+# The previous version of this file targeted the legacy Plugins directory endpoint
+# (local_plugins_add_version at moodle.org), retired when the Plugins directory went
+# read-only on 2026-07-14 in favour of the Marketplace. This replaces it with the
+# current Marketplace API.
 #
-name: Releasing in the Plugins directory
+# Automatic publishing on tag push, already confirmed working end to end on
+# mod_playergroup (2026-09-04, two manual workflow_dispatch runs, both HTTP 201, the
+# second one passing the Marketplace's own automated test) before being rolled out here.
+#
+name: Releasing in Moodle Marketplace
 
 on:
-  # push:
-  #   tags:
-  #     - v*
+  push:
+    tags:
+      - v*
 
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to be released'
+        description: 'Tag to be released (e.g. v1.4.0)'
         required: true
-
-defaults:
-  run:
-    shell: bash
+        type: string
 
 jobs:
-  release-at-moodle-org:
-    runs-on: ubuntu-latest
-    env:
-      PLUGIN: local_latepenalty
-      CURL: curl -s
-      ENDPOINT: https://moodle.org/webservice/rest/server.php
-      TOKEN: ${{ secrets.MOODLE_ORG_TOKEN }}
-      FUNCTION: local_plugins_add_version
-
-    steps:
-      - name: Call the service function
-        id: add-version
-        run: |
-          if [[ -n "${{ github.event.inputs.tag }}" ]]; then
-            TAGNAME="${{ github.event.inputs.tag }}"
-          elif [[ $GITHUB_REF = refs/tags/* ]]; then
-            TAGNAME="${GITHUB_REF##*/}"
-          fi
-          if [[ -z "${TAGNAME}" ]]; then
-            echo "No tag name has been provided!"
-            exit 1
-          fi
-          ZIPURL="https://api.github.com/repos/${{ github.repository }}/zipball/${TAGNAME}"
-          RESPONSE=$(${CURL} ${ENDPOINT} \
-            --data-urlencode "wstoken=${TOKEN}" \
-            --data-urlencode "wsfunction=${FUNCTION}" \
-            --data-urlencode "moodlewsrestformat=json" \
-            --data-urlencode "frankenstyle=${PLUGIN}" \
-            --data-urlencode "zipurl=${ZIPURL}" \
-            --data-urlencode "vcssystem=git" \
-            --data-urlencode "vcsrepositoryurl=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            --data-urlencode "vcstag=${TAGNAME}" \
-            --data-urlencode "changelogurl=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commits/${TAGNAME}" \
-            --data-urlencode "altdownloadurl=${ZIPURL}")
-          echo "response=${RESPONSE}" >> $GITHUB_OUTPUT
-
-      - name: Evaluate the response
-        id: evaluate-response
-        env:
-          RESPONSE: ${{ steps.add-version.outputs.response }}
-        run: |
-          jq <<< ${RESPONSE}
-          jq --exit-status ".id" <<< ${RESPONSE} > /dev/null
+  release-to-marketplace:
+    uses: moodlehq/moodle-plugin-release/.github/workflows/moodle-release.yml@main
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets:
+      MOODLE_MARKETPLACE_TOKEN: ${{ secrets.MOODLE_MARKETPLACE_TOKEN }}
