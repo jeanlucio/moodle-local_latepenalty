@@ -1,5 +1,11 @@
 # Changes
 
+## [v1.1.1] — 2026-09-07
+
+- Restrict the teacher-facing pending-student count on course and activity badges to the caller's own group(s) in courses using separate groups, matching the same boundary already enforced on the report and override pages
+- Restore `db/upgrade.php` as a no-op stub required by the Moodle Plugins Directory packaging validator
+- Add the MDL Shield badge to the README and documentation
+
 ## [v1.1.0] — 2026-08-11
 
 - Fix a backup data leak, orphaned rows left behind when an activity or course is deleted, and an information leak that exposed hidden activities' deadlines and penalty rates to students
