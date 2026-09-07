@@ -15,18 +15,19 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Upgrade script for the Late Penalty plugin.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026090700;
-$plugin->requires = 2024042200;
-$plugin->supported = [405, 502];
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = 'v1.1.0';
+/**
+ * Execute upgrade steps for the plugin.
+ *
+ * @param int $oldversion The old version of the plugin.
+ * @return bool Always returns true.
+ */
+function xmldb_local_latepenalty_upgrade(int $oldversion): bool {
+    return true;
+}
