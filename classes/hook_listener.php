@@ -302,7 +302,7 @@ class hook_listener {
             [, $badgestate, $notice] = self::compute_badge($deadline, $daily, $max, time());
 
             if ($badgestate !== 'ontime') {
-                $pending = self::count_pending_students((int) $cm->id, (int) $cm->course);
+                $pending = self::count_pending_students($cm);
                 if ($pending === 0) {
                     return;
                 }
@@ -428,68 +428,110 @@ class hook_listener {
     /**
      * Count enrolled students who have not yet completed a given course module.
      *
-     * Uses role archetype 'student' to exclude teachers and managers.
-     * Returns 0 if no students are enrolled.
+     * Uses role archetype 'student' to exclude teachers and managers. Honours the
+     * activity's separate-groups scoping: a caller without moodle/site:accessallgroups
+     * only counts students in their own group(s), mirroring group_scope::resolve_activity_restriction()
+     * as already applied on the override management pages. Returns 0 if no students
+     * are enrolled, or if the caller belongs to no group at all in a restricted activity.
      *
-     * @param int $cmid     Course module ID.
-     * @param int $courseid Course ID.
+     * @param \cm_info $cm Course module info for the activity.
      * @return int Number of students without completionstate >= 1 for this CM.
      */
-    private static function count_pending_students(int $cmid, int $courseid): int {
-        global $DB;
-
+    private static function count_pending_students(\cm_info $cm): int {
+        $courseid = (int) $cm->course;
         $contextid = \context_course::instance($courseid)->id;
+        $modcontext = \context_module::instance((int) $cm->id);
+        $restrictgroupids = group_scope::resolve_activity_restriction($cm, $modcontext);
 
-        $total = (int) $DB->count_records_sql(
-            "SELECT COUNT(DISTINCT ra.userid)
-               FROM {role_assignments} ra
-               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
-              WHERE ra.contextid = :contextid",
-            ['contextid' => $contextid]
-        );
+        $counts = self::count_pending_for_cmids([(int) $cm->id], $contextid, $restrictgroupids);
 
-        if ($total === 0) {
-            return 0;
-        }
-
-        $completed = (int) $DB->count_records_sql(
-            "SELECT COUNT(DISTINCT cmc.userid)
-               FROM {course_modules_completion} cmc
-               JOIN {role_assignments} ra ON ra.userid = cmc.userid AND ra.contextid = :contextid
-               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
-              WHERE cmc.coursemoduleid = :cmid
-                AND cmc.completionstate >= 1",
-            ['contextid' => $contextid, 'cmid' => $cmid]
-        );
-
-        return max(0, $total - $completed);
+        return $counts[(int) $cm->id] ?? 0;
     }
 
     /**
      * Bulk-load pending student counts for multiple course modules.
      *
-     * Runs two queries for the whole set: one for total enrolled students,
-     * one for per-CM completion counts. No per-activity loop queries.
+     * Mirrors report\controller::resolve_group_restriction(): a caller without
+     * moodle/site:accessallgroups in the course is confined to their own group(s)
+     * for every course module whose effective group mode is SEPARATEGROUPS, using
+     * a single get_fast_modinfo() call to resolve each cm's groupmode (no query in
+     * the loop — get_fast_modinfo() preloads every module context/groupmode for
+     * the course in bulk). Unrestricted and restricted CMs are then each counted
+     * in one shared query, not per-activity.
      *
      * @param int[] $cmids    Course module IDs to count for.
      * @param int   $courseid Course ID.
      * @return array<int, int> Map of cmid => pending student count.
      */
     private static function load_pending_counts(array $cmids, int $courseid): array {
-        global $DB;
+        global $USER;
 
         if (empty($cmids)) {
             return [];
         }
 
-        $contextid = \context_course::instance($courseid)->id;
+        $coursecontext = \context_course::instance($courseid);
+        $contextid = $coursecontext->id;
+
+        if (has_capability('moodle/site:accessallgroups', $coursecontext)) {
+            return self::count_pending_for_cmids($cmids, $contextid, null);
+        }
+
+        $modinfo = get_fast_modinfo($courseid);
+        $restrictedcmids = [];
+        $unrestrictedcmids = [];
+        foreach ($cmids as $cmid) {
+            $cm = $modinfo->cms[$cmid] ?? null;
+            if ($cm && (int) groups_get_activity_groupmode($cm) === SEPARATEGROUPS) {
+                $restrictedcmids[] = $cmid;
+            } else {
+                $unrestrictedcmids[] = $cmid;
+            }
+        }
+
+        $result = self::count_pending_for_cmids($unrestrictedcmids, $contextid, null);
+
+        if (!empty($restrictedcmids)) {
+            $callergroupids = array_keys(groups_get_all_groups($courseid, (int) $USER->id));
+            $result += self::count_pending_for_cmids($restrictedcmids, $contextid, $callergroupids);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk-count pending students for a set of course modules, optionally confined
+     * to specific group IDs.
+     *
+     * Runs at most two queries for the whole set: one for total eligible students,
+     * one for per-CM completion counts. No per-activity loop queries.
+     *
+     * @param int[]      $cmids     Course module IDs to count for.
+     * @param int        $contextid Course context ID.
+     * @param int[]|null $groupids  Group IDs to confine the count to, or null for no restriction.
+     * @return array<int, int> Map of cmid => pending student count.
+     */
+    private static function count_pending_for_cmids(array $cmids, int $contextid, ?array $groupids): array {
+        if (empty($cmids)) {
+            return [];
+        }
+
+        if ($groupids === []) {
+            // Caller belongs to no group at all in a restricted activity: sees nothing.
+            return array_fill_keys($cmids, 0);
+        }
+
+        global $DB;
+
+        [$groupjoin, $groupparams] = self::group_scope_join('ra.userid', $groupids);
 
         $total = (int) $DB->count_records_sql(
             "SELECT COUNT(DISTINCT ra.userid)
                FROM {role_assignments} ra
                JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+               $groupjoin
               WHERE ra.contextid = :contextid",
-            ['contextid' => $contextid]
+            array_merge(['contextid' => $contextid], $groupparams)
         );
 
         if ($total === 0) {
@@ -502,10 +544,11 @@ class hook_listener {
                FROM {course_modules_completion} cmc
                JOIN {role_assignments} ra ON ra.userid = cmc.userid AND ra.contextid = :contextid
                JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
+               $groupjoin
               WHERE cmc.coursemoduleid $insql
                 AND cmc.completionstate >= 1
            GROUP BY cmc.coursemoduleid",
-            array_merge(['contextid' => $contextid], $inparams)
+            array_merge(['contextid' => $contextid], $groupparams, $inparams)
         );
 
         $result = [];
@@ -516,6 +559,30 @@ class hook_listener {
         }
 
         return $result;
+    }
+
+    /**
+     * Build a group-membership JOIN restricting a pending-count query to specific
+     * groups, or no restriction when $groupids is null.
+     *
+     * Callers must handle an empty $groupids array before reaching this method —
+     * get_in_or_equal() rejects an empty list, and an empty group set means the
+     * caller belongs to no group at all (sees nothing), not "every group".
+     *
+     * @param string $useridcolumn Column holding the user ID to join against, e.g. 'ra.userid'.
+     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
+     * @return array{0: string, 1: array} [JOIN SQL fragment ('' when unrestricted), params].
+     */
+    private static function group_scope_join(string $useridcolumn, ?array $groupids): array {
+        if ($groupids === null) {
+            return ['', []];
+        }
+
+        global $DB;
+
+        [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'gscope');
+
+        return [" JOIN {groups_members} gms ON gms.userid = $useridcolumn AND gms.groupid $insql", $inparams];
     }
 
     /**

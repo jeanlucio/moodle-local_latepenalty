@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Activity-level group scope resolution, shared by the override management pages.
+ * Activity-level group scope resolution, shared across the plugin's group-restricted views.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -24,6 +24,7 @@
 
 namespace local_latepenalty;
 
+use cm_info;
 use context_module;
 use stdClass;
 
@@ -32,8 +33,7 @@ use stdClass;
  */
 class group_scope {
     /**
-     * Resolve which groups, if any, a caller must be restricted to on an activity's
-     * override pages.
+     * Resolve which groups, if any, a caller must be restricted to for an activity.
      *
      * Mirrors the standard Moodle separate-groups check, but scoped to the
      * activity's effective group mode (course.groupmode unless the activity's own
@@ -41,11 +41,11 @@ class group_scope {
      * course's group mode alone. Returns null when the caller should see every
      * group (activity not in separate groups, or the caller can access all groups).
      *
-     * @param stdClass       $cm         Course module record (needs course, groupmode, groupingid, id).
-     * @param context_module $modcontext The module context.
+     * @param cm_info|stdClass $cm         Course module record (needs course, groupmode, groupingid, id).
+     * @param context_module   $modcontext The module context.
      * @return int[]|null Group IDs to restrict to, or null for no restriction.
      */
-    public static function resolve_activity_restriction(stdClass $cm, context_module $modcontext): ?array {
+    public static function resolve_activity_restriction(cm_info|stdClass $cm, context_module $modcontext): ?array {
         if ((int) groups_get_activity_groupmode($cm) !== SEPARATEGROUPS) {
             return null;
         }

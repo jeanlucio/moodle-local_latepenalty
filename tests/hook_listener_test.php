@@ -28,6 +28,7 @@ namespace local_latepenalty;
 use advanced_testcase;
 use core\hook\output\before_standard_footer_html_generation;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 
 /**
@@ -238,5 +239,166 @@ final class hook_listener_test extends advanced_testcase {
         // literally in the emitted JS, only its JSON-escaped form.
         $expected = trim(json_encode(penalty_helper::format_deadline($deadline)), '"');
         self::assertStringContainsString($expected, $this->amd_code());
+    }
+
+    /**
+     * Invokes the private static hook_listener::count_pending_students() via reflection.
+     *
+     * @param \cm_info $cm Course module info for the activity.
+     * @return int Pending student count.
+     */
+    private function count_pending_students(\cm_info $cm): int {
+        $method = new ReflectionMethod(hook_listener::class, 'count_pending_students');
+        $method->setAccessible(true);
+
+        return $method->invoke(null, $cm);
+    }
+
+    /**
+     * Regression guard for the activity-page badge (inject_activity_notice()):
+     * a non-editing teacher confined to one group in a separate-groups activity
+     * must only count pending students from their own group, not the whole course.
+     *
+     * Before this fix, count_pending_students() counted every enrolled student in
+     * the course context, leaking the existence/size of activity in groups the
+     * caller cannot otherwise see on the report or override pages.
+     */
+    public function test_count_pending_students_scoped_to_callers_group(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/group/lib.php');
+
+        $course = $this->getDataGenerator()->create_course([
+            'groupmode'      => SEPARATEGROUPS,
+            'groupmodeforce' => 1,
+        ]);
+
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $groupb = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        groups_add_member($groupa->id, $teacher->id);
+
+        $studenta = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupa->id, $studenta->id);
+        $studentb = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupb->id, $studentb->id);
+
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $this->enable_rule($assign->cmid);
+        rebuild_course_cache($course->id);
+
+        $this->setUser($teacher);
+        $cm = get_fast_modinfo($course->id)->get_cm($assign->cmid);
+
+        self::assertSame(1, $this->count_pending_students($cm));
+    }
+
+    /**
+     * Control case for the fix above: a caller with moodle/site:accessallgroups
+     * (editingteacher) must still see the full course-wide count, unaffected by
+     * the new group scoping.
+     */
+    public function test_count_pending_students_unrestricted_for_accessallgroups(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/group/lib.php');
+
+        $course = $this->getDataGenerator()->create_course([
+            'groupmode'      => SEPARATEGROUPS,
+            'groupmodeforce' => 1,
+        ]);
+
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $groupb = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+
+        $studenta = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupa->id, $studenta->id);
+        $studentb = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupb->id, $studentb->id);
+
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $this->enable_rule($assign->cmid);
+        rebuild_course_cache($course->id);
+
+        $this->setUser($teacher);
+        $cm = get_fast_modinfo($course->id)->get_cm($assign->cmid);
+
+        self::assertSame(2, $this->count_pending_students($cm));
+    }
+
+    /**
+     * A restricted caller belonging to no group at all in a separate-groups
+     * activity must see zero pending students, not the unrestricted total —
+     * mirrors group_scope::resolve_activity_restriction()'s own empty-array
+     * semantics (see group_scope_test::test_returns_empty_array_when_caller_has_no_group()).
+     */
+    public function test_count_pending_students_zero_when_caller_has_no_group(): void {
+        $course = $this->getDataGenerator()->create_course([
+            'groupmode'      => SEPARATEGROUPS,
+            'groupmodeforce' => 1,
+        ]);
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $this->enable_rule($assign->cmid);
+        rebuild_course_cache($course->id);
+
+        $this->setUser($teacher);
+        $cm = get_fast_modinfo($course->id)->get_cm($assign->cmid);
+
+        self::assertSame(0, $this->count_pending_students($cm));
+    }
+
+    /**
+     * Regression guard for the course-page badge (inject_course_notices()): the
+     * bulk load_pending_counts() path must apply the same group scoping as the
+     * single-activity path, not just report a course-wide count for every caller.
+     */
+    public function test_course_notice_pending_count_scoped_to_callers_group(): void {
+        global $DB, $PAGE, $CFG;
+        require_once($CFG->dirroot . '/group/lib.php');
+
+        $course = $this->getDataGenerator()->create_course([
+            'groupmode'      => SEPARATEGROUPS,
+            'groupmodeforce' => 1,
+        ]);
+
+        // See test_hidden_activity_excluded_from_student_payload() for why $PAGE's
+        // theme-affecting state must be set before any enrolment call.
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $groupb = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        groups_add_member($groupa->id, $teacher->id);
+
+        $studenta = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupa->id, $studenta->id);
+        $studentb = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        groups_add_member($groupb->id, $studentb->id);
+
+        $deadline = time() - 5 * DAYSECS;
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $assign->cmid]);
+        $this->enable_rule($assign->cmid);
+
+        rebuild_course_cache($course->id);
+
+        $this->setUser($teacher);
+
+        hook_listener::inject_course_notices($this->make_hook());
+
+        $code = $this->amd_code();
+
+        // The badge label embeds a middle-dot separator ("Penalty: 50% (max) ·
+        // 1 pending") that json_encode() escapes as non-ASCII, so assert on the
+        // plain-ASCII tail of the string instead of the literal character.
+        self::assertStringContainsString('1 pending', $code);
+        self::assertStringNotContainsString('2 pending', $code);
     }
 }
