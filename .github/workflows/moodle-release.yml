@@ -11,7 +11,7 @@
 #
 # Previously delegated the whole submission to the moodlehq/moodle-plugin-release
 # reusable workflow (see https://github.com/moodlehq/moodle-plugin-release). Vendored
-# inline instead of two problems found on the v1.1.1 release of this plugin
+# inline instead of two problems found on local_latepenalty's v1.1.1 release
 # (2026-09-07), neither fixable from a caller workflow alone:
 #
 # 1. That reusable workflow's "Extract Release Notes" step reads the GitHub Release
@@ -29,6 +29,18 @@
 #    workflow has no way to supply them through that interface. Submitting the
 #    request directly here lets this repository's URL and branch be included on
 #    every release, not just fixed once by hand in the Marketplace UI.
+#
+# Reported the missing vcsRepositoryUrl/vcsBranch fields upstream as
+# https://github.com/moodlehq/moodle-plugin-release/issues/20 (open, unaddressed as
+# of 2026-09-17) — revisit delegating to the reusable workflow again if that lands.
+#
+# All string fields below use curl's `--form-string`, not `-F`. `-F name=value` parses
+# an unescaped `;` in the value as introducing a `;type=`/`;filename=`/`;headers=`
+# modifier — any semicolon genuinely in the text (e.g. a release note like "...directly;
+# the screen, its...") silently truncates the value there with no error. Found on the
+# v1.9.1 release (2026-09-17): the Marketplace accepted the request (HTTP 201) with
+# releaseNotes cut off mid-sentence. `--form-string` sends the value literally, with no
+# special handling of `@`/`;type=`.
 #
 name: Releasing in Moodle Marketplace
 
@@ -122,10 +134,10 @@ jobs:
             -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -F "file=@${ZIP_FILE}" \
-            -F "releaseNotes=${NOTES}" \
-            -F "vcsRepositoryUrl=${REPO_URL}" \
-            -F "vcsBranch=${REPO_BRANCH}" \
-            -F "vcsTag=${TAGNAME}" \
+            --form-string "releaseNotes=${NOTES}" \
+            --form-string "vcsRepositoryUrl=${REPO_URL}" \
+            --form-string "vcsBranch=${REPO_BRANCH}" \
+            --form-string "vcsTag=${TAGNAME}" \
             "${ENDPOINT}")
 
           echo "Response HTTP Status: ${HTTP_STATUS}"
