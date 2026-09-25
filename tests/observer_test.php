@@ -1202,9 +1202,13 @@ final class observer_test extends advanced_testcase {
      * Deleting a course module removes the plugin's rule, per-user override and
      * per-group override rows for that cmid, and leaves other activities untouched.
      *
-     * Exercises the real course_delete_module() call (not a hand-rolled event
-     * trigger) so the assertion covers the actual deletion path, including
-     * context removal happening before the event fires.
+     * Exercises the real deletion call (not a hand-rolled event trigger) so the
+     * assertion covers the actual deletion path, including context removal
+     * happening before the event fires. course_delete_module() is deprecated
+     * since Moodle 5.2 (MDL-86856) in favour of
+     * core_courseformat\local\cmactions::delete(), but that method does not
+     * exist yet on Moodle 4.5, which this plugin still supports — guarded with
+     * method_exists() rather than a hardcoded version check.
      */
     public function test_course_module_deleted_cleans_up_plugin_tables(): void {
         global $DB, $CFG;
@@ -1232,7 +1236,11 @@ final class observer_test extends advanced_testcase {
         $otherassign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
         $this->upsert_rule($otherassign->cmid, true, 10.0, 50.0);
 
-        course_delete_module($assign->cmid);
+        if (method_exists(\core_courseformat\local\cmactions::class, 'delete')) {
+            \core_courseformat\formatactions::cm($course->id)->delete($assign->cmid);
+        } else {
+            course_delete_module($assign->cmid);
+        }
 
         self::assertSame(0, $DB->count_records('local_latepenalty_rules', ['cmid' => $assign->cmid]));
         self::assertSame(0, $DB->count_records('local_latepenalty_overrides', ['cmid' => $assign->cmid]));

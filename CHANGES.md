@@ -1,5 +1,12 @@
 # Changes
 
+## [v1.1.2] — 2026-09-25
+
+- Confirmed: tested and confirmed compatible with Moodle 5.3.
+- Fix: the test suite no longer triggers a Moodle 5.2+ deprecation notice for
+  `course_delete_module()`, guarded to keep using it on Moodle 4.5 where the
+  replacement API does not exist yet.
+
 ## [v1.1.1] — 2026-09-07
 
 - Restrict the teacher-facing pending-student count on course and activity badges to the caller's own group(s) in courses using separate groups, matching the same boundary already enforced on the report and override pages
