@@ -138,7 +138,7 @@ class penalty_helper {
                         AND status = 'submitted'
                    ORDER BY timemodified DESC",
                     ['assignment' => $cm->instance, 'userid' => $userid],
-                    IGNORE_MISSING
+                    IGNORE_MULTIPLE
                 );
                 if ($row) {
                     return (int) $row->timemodified;
@@ -164,7 +164,7 @@ class penalty_helper {
                         AND groupid $insql
                    ORDER BY timemodified DESC",
                     array_merge(['assignment' => $cm->instance], $inparams),
-                    IGNORE_MISSING
+                    IGNORE_MULTIPLE
                 );
                 return $row ? (int) $row->timemodified : null;
 
@@ -177,7 +177,7 @@ class penalty_helper {
                         AND state = 'finished'
                    ORDER BY timefinish DESC",
                     ['quiz' => $cm->instance, 'userid' => $userid],
-                    IGNORE_MISSING
+                    IGNORE_MULTIPLE
                 );
                 return ($row && !empty($row->timefinish)) ? (int) $row->timefinish : null;
 
@@ -189,7 +189,7 @@ class penalty_helper {
                         AND authorid = :userid
                    ORDER BY timemodified DESC",
                     ['workshopid' => $cm->instance, 'userid' => $userid],
-                    IGNORE_MISSING
+                    IGNORE_MULTIPLE
                 );
                 return $row ? (int) $row->timemodified : null;
 
