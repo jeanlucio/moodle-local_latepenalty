@@ -615,6 +615,82 @@ final class observer_test extends advanced_testcase {
     }
 
     /**
+     * Reopen the assignment for a student and record a new submitted attempt.
+     *
+     * Mirrors assign's "reopen submission" flow: the previous attempt stops being the latest
+     * one and a new attempt row is created.
+     *
+     * @param array $s Scenario array returned by make_scenario().
+     * @param int $submissiontime Timestamp of the new attempt.
+     * @return void
+     */
+    private function add_resubmission(array $s, int $submissiontime): void {
+        global $DB;
+
+        $DB->set_field('assign_submission', 'latest', 0, [
+            'assignment' => $s['assign']->id,
+            'userid'     => $s['student']->id,
+        ]);
+        $DB->insert_record('assign_submission', (object) [
+            'assignment'    => $s['assign']->id,
+            'userid'        => $s['student']->id,
+            'timecreated'   => $submissiontime,
+            'timemodified'  => $submissiontime,
+            'status'        => 'submitted',
+            'groupid'       => 0,
+            'attemptnumber' => 1,
+            'latest'        => 1,
+        ]);
+    }
+
+    /**
+     * On-time submission graded, then resubmitted late: the penalty is applied only at the regrade.
+     *
+     * The plugin listens to user_graded, so a late resubmission changes nothing until the teacher
+     * grades again. At that point the last submission time is what is measured against the deadline.
+     */
+    public function test_late_resubmission_penalised_only_when_regraded(): void {
+        // First attempt one day before the deadline: graded with no penalty.
+        $s = $this->make_scenario(-DAYSECS);
+        self::assertEqualsWithDelta(100.0, $this->grade_and_read($s, 100.0), 0.01);
+
+        // Reopened and resubmitted two days after the deadline; nobody has regraded yet.
+        $this->add_resubmission($s, $s['deadline'] + 2 * DAYSECS);
+        $grade = new grade_grade(['itemid' => $s['gradeitem']->id, 'userid' => $s['student']->id]);
+        self::assertEqualsWithDelta(100.0, (float) $grade->finalgrade, 0.01);
+
+        // The teacher regrades the new attempt: 2 days late at 10%/day → 90 becomes 72.
+        self::assertEqualsWithDelta(72.0, $this->grade_and_read($s, 90.0), 0.01);
+    }
+
+    /**
+     * Manually marking the activity as complete on time does not shield a late resubmission.
+     *
+     * The plugin never reads the completion state to measure lateness; only the last submission
+     * time and the resolved deadline matter.
+     */
+    public function test_manual_completion_does_not_shield_late_resubmission(): void {
+        global $DB;
+
+        $s = $this->make_scenario(-DAYSECS);
+        self::assertEqualsWithDelta(100.0, $this->grade_and_read($s, 100.0), 0.01);
+
+        $DB->insert_record('course_modules_completion', (object) [
+            'coursemoduleid'  => $s['assign']->cmid,
+            'userid'          => $s['student']->id,
+            'completionstate' => COMPLETION_COMPLETE,
+            'viewed'          => 0,
+            'overrideby'      => null,
+            'timemodified'    => $s['deadline'] - DAYSECS,
+        ]);
+
+        $this->add_resubmission($s, $s['deadline'] + DAYSECS);
+
+        // 1 day late at 10%/day → 90 becomes 81.
+        self::assertEqualsWithDelta(81.0, $this->grade_and_read($s, 90.0), 0.01);
+    }
+
+    /**
      * When completionexpected is 0, penalty_helper falls back to assign.duedate.
      *
      * This exercises the module-specific deadline field path in penalty_helper::get_deadline().
