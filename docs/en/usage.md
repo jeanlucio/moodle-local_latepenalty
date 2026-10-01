@@ -16,7 +16,7 @@
 
 ## Calculation
 
-1. **Days late** — counted from the deadline to the moment the student handed in. Any fraction of a day counts as a full day: 25 hours late is 2 days.
+1. **Days late** — counted from the deadline to the moment the student handed in. Every day started counts as a whole day: 1 minute late is already 1 day, and 25 hours are 2 days.
 2. **Discount** — days late × daily rate, never above the maximum.
 3. **Final grade** — the grade minus the discount percentage. A grade never goes below the item's minimum.
 

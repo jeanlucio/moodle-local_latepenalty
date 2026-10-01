@@ -16,7 +16,7 @@
 
 ## Cálculo
 
-1. **Dias de atraso** — contados do prazo até o momento em que o estudante entregou. Qualquer fração de dia conta como um dia inteiro: 25 horas de atraso são 2 dias.
+1. **Dias de atraso** — contados do prazo até o momento em que o estudante entregou. Cada dia começado conta como um dia inteiro: 1 minuto de atraso já é 1 dia, e 25 horas são 2 dias.
 2. **Desconto** — dias de atraso × desconto diário, nunca acima do máximo.
 3. **Nota final** — a nota menos o percentual de desconto. A nota nunca fica abaixo do mínimo do item.
 

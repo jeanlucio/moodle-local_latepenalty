@@ -7,14 +7,14 @@ do questionário a partir do 5.3, as notas com dedução a partir da correção 
 atraso do core) e são pulados nas demais versões.
 
 Todo teste movimenta o outro módulo pela própria API dele — envios, tentativas de questionário,
-avaliações, prorrogações e substituições reais —, nunca gravando linhas direto nas tabelas, de
+avaliações, extensões e sobreposições reais —, nunca gravando linhas direto nas tabelas, de
 modo que um teste não passa com uma suposição errada sobre onde o módulo guarda os dados.
 
 ### PHPUnit (`tests/`)
 
 | Arquivo de teste | O que cobre |
 |------------------|-------------|
-| `module_assign_test` | Tarefas: envio mais recente, envios em equipe, nova avaliação depois, prorrogações, reescala |
+| `module_assign_test` | Tarefas: envio mais recente, envios em equipe, nova avaliação depois, extensões, reescala |
 | `module_quiz_test` | Questionários: tentativa escolhida pelo método de avaliação, avaliação manual, tentativas abandonadas, prazo final (5.3) e data de fechamento |
 | `module_lesson_test` | Lições: novas tentativas e a opção "usar a nota máxima" |
 | `module_forum_test`, `module_glossary_test`, `module_data_test` | Atividades com avaliação: cada tipo de agregação, vários avaliadores, avaliação do fórum inteiro |
@@ -22,18 +22,18 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `attempt_methods_test` | H5P e SCORM por primeira, última e média das tentativas, com as mesmas regras do questionário |
 | `module_generic_test` | Ferramentas externas (LTI 1.1 e 1.3) e H5P: a data de envio informada pelo módulo, ou o momento em que a nota chegou |
 | `grade_items_test` | Quais itens de nota são penalizados (só numéricos; nunca escalas, resultados de aprendizagem ou a avaliação do laboratório) |
-| `local/deadline_resolver_test` | A cadeia de prazos: substituições do plugin, prorrogações, substituições da atividade, data de entrega, conclusão esperada, isenções |
-| `local/penalty_writer_test` | Como as penalidades são gravadas, alteradas e removidas — dedução ou substituição de nota — e as invariantes de toda gravação |
+| `local/deadline_resolver_test` | A cadeia de prazos: sobreposições do plugin, extensões, sobreposições da atividade, data de entrega, conclusão esperada, isenções |
+| `local/penalty_writer_test` | Como as penalidades são gravadas, alteradas e removidas — nota com dedução ou nota sobreposta — e as invariantes de toda gravação |
 | `keepbest_test` | Atividades com "nota mais alta": uma tentativa atrasada nunca rebaixa um resultado anterior melhor |
-| `recalculator_test`, `activity_overrides_test` | Recálculo quando muda uma regra, uma substituição ou uma prorrogação |
-| `observer_test`, `penalty_helper_group_test` | A cadeia do evento de nota, substituições por estudante e por grupo |
+| `recalculator_test`, `activity_overrides_test` | Recálculo quando muda uma regra, uma sobreposição ou uma extensão |
+| `observer_test`, `penalty_helper_group_test` | A cadeia do evento de nota, sobreposições por estudante e por grupo |
 | `lib_test`, `lib_callbacks_test` | A seção do formulário da atividade, o que salvá-la faz, validação e links de navegação |
 | `hook_listener_test`, `activity_notice_test` | Avisos na página do curso e na página da atividade, para estudantes e professores |
 | `report/controller_test`, `report/deadline_column_test` | O relatório: restrição por grupos, filtros, exportação, cada origem de prazo, número de consultas |
-| `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Páginas de substituição e restrição por grupos separados |
+| `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Páginas de sobreposição e restrição por grupos separados |
 | `engine_edges_test` | Casos de borda do motor, dos observadores e da tarefa agendada |
 | `privacy/provider_test` | Exportação e exclusão da API de Privacidade |
-| `backup/restore_test` | Regras e substituições no backup e na restauração |
+| `backup/restore_test` | Regras e sobreposições no backup e na restauração |
 | `upgrade_test` | A atualização a partir da 1.1.x e o passo de instalação |
 
 Rode a suíte inteira num Moodle com o PHPUnit inicializado:
@@ -76,7 +76,7 @@ vendor/bin/behat --config /var/www/behatdata/behatrun/behat/behat.yml --tags @lo
 | `group_override\controller` | 72% |
 | **Total** | **87%** |
 
-> Os dois controllers de substituição parecem menos cobertos do que estão: seus formulários
+> Os dois controllers de sobreposição parecem menos cobertos do que estão: seus formulários
 > (`classes/form/override_form.php`, `classes/form/group_override_form.php`) são instanciados em
 > todo cenário de adição/salvamento, mas o Xdebug não registra hits de linha de uma subclasse de
 > `moodleform` instanciada em muitos métodos de teste da mesma classe de teste — um artefato da
