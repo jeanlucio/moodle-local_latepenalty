@@ -30,7 +30,7 @@ use local_latepenalty\tests\latepenalty_testcase;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers ::local_latepenalty_coursemodule_standard_elements
  * @covers ::local_latepenalty_coursemodule_edit_post_actions
- * @covers ::local_latepenalty_graded_without_numbers
+ * @covers ::local_latepenalty_without_numeric_grade
  * @covers \local_latepenalty\recalculator
  * @covers \local_latepenalty\observer
  * @covers \local_latepenalty\penalty_helper
@@ -311,23 +311,39 @@ final class lib_test extends latepenalty_testcase {
     }
 
     /**
-     * Form: scale-graded activities show the "numeric grades only" notice (F18).
+     * Form: activities without a numeric grade show the "numeric grades only" notice (F18).
+     *
+     * Scale grades, "none" grades and activities with no grade item at all (a forum
+     * without ratings or whole-forum grading) are covered; a numeric grade and an
+     * activity not saved yet are not.
      *
      * @return void
      */
-    public function test_form_scale_warning(): void {
+    public function test_form_no_numeric_grade_warning(): void {
         $this->resetAfterTest();
         $this->setAdminUser();
         [$course] = $this->create_course_with_users();
         $scale = $this->getDataGenerator()->create_scale(['courseid' => $course->id]);
+        $deadline = time() + DAYSECS;
 
-        $points = $this->create_assign_activity($course);
+        $points = $this->create_assign_activity($course, ['duedate' => $deadline]);
         $this->assertFalse($this->plugin_section($points->cmid, 'assign')->elementExists('latepenalty_scalewarning'));
-        $this->assertFalse(local_latepenalty_graded_without_numbers($points->cmid));
+        $this->assertTrue($this->plugin_section($points->cmid, 'assign')->elementExists('latepenalty_deadlineused'));
+        $this->assertFalse(local_latepenalty_without_numeric_grade($points->cmid));
+        $this->assertFalse($this->plugin_section(0, 'assign')->elementExists('latepenalty_scalewarning'), 'Not saved yet');
 
-        $scaled = $this->create_assign_activity($course, ['grade' => -$scale->id]);
-        $this->assertTrue($this->plugin_section($scaled->cmid, 'assign')->elementExists('latepenalty_scalewarning'));
-        $this->assertTrue(local_latepenalty_graded_without_numbers($scaled->cmid));
+        $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id, 'duedate' => $deadline]);
+        $without = [
+            'scale' => [$this->create_assign_activity($course, ['grade' => -$scale->id, 'duedate' => $deadline]), 'assign'],
+            'none' => [$this->create_assign_activity($course, ['grade' => 0, 'duedate' => $deadline]), 'assign'],
+            'no grade item' => [$forum, 'forum'],
+        ];
+        foreach ($without as $case => [$module, $modname]) {
+            $section = $this->plugin_section($module->cmid, $modname);
+            $this->assertTrue($section->elementExists('latepenalty_scalewarning'), $case);
+            $this->assertFalse($section->elementExists('latepenalty_deadlineused'), $case);
+            $this->assertTrue(local_latepenalty_without_numeric_grade($module->cmid), $case);
+        }
     }
 
     /**

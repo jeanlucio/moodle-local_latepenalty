@@ -152,9 +152,9 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         $mform->hideIf('latepenalty_disablewarning', 'latepenalty_enabled', 'checked');
     }
 
-    // Scale or "none" grades are never discounted.
-    $graded = $cmid && local_latepenalty_graded_without_numbers($cmid);
-    if ($graded) {
+    // Only numeric grades are discounted: warn when the saved activity has none.
+    $nonumbers = $cmid && local_latepenalty_without_numeric_grade($cmid);
+    if ($nonumbers) {
         $elements['latepenalty_scalewarning'] = $mform->addElement(
             'static',
             'latepenalty_scalewarning',
@@ -165,7 +165,7 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
 
     // The saved deadline the rule uses, unless a warning above already says the plugin does not act.
     $cm = $cmid ? get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING) : false;
-    if ($cm && !$graded && !\local_latepenalty\penalty_helper::native_penalty_active($cm)) {
+    if ($cm && !$nonumbers && !\local_latepenalty\penalty_helper::native_penalty_active($cm)) {
         $deadline = \local_latepenalty\local\deadline_resolver::activity_deadline($cm);
         $text = $deadline->exists()
             ? get_string('deadline_used', 'local_latepenalty', (object) [
@@ -224,27 +224,17 @@ function local_latepenalty_offers_keepbest(string $modname): bool {
 }
 
 /**
- * Whether an activity is graded, but never with a number (scale or "none" grade items only).
+ * Whether a saved activity has no numeric grade to discount (scale, "none" or no grade item at all).
  *
  * @param int $cmid Course module ID.
  * @return bool
  */
-function local_latepenalty_graded_without_numbers(int $cmid): bool {
-    global $CFG;
-    require_once($CFG->libdir . '/gradelib.php');
-
+function local_latepenalty_without_numeric_grade(int $cmid): bool {
     $cm = get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING);
     if (!$cm) {
         return false;
     }
-    $items = grade_item::fetch_all([
-        'itemtype' => 'mod',
-        'itemmodule' => $cm->modname,
-        'iteminstance' => $cm->instance,
-        'courseid' => $cm->course,
-    ]) ?: [];
-    $items = array_filter($items, fn(grade_item $item): bool => empty($item->outcomeid));
-    return !empty($items) && empty(\local_latepenalty\penalty_helper::get_penalisable_items($cm));
+    return empty(\local_latepenalty\penalty_helper::get_penalisable_items($cm));
 }
 
 /**

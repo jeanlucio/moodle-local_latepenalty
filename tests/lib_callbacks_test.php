@@ -29,7 +29,7 @@ use local_latepenalty\tests\latepenalty_testcase;
  * @covers ::local_latepenalty_extend_navigation_course
  * @covers ::local_latepenalty_coursemodule_standard_elements
  * @covers ::local_latepenalty_coursemodule_edit_post_actions
- * @covers ::local_latepenalty_graded_without_numbers
+ * @covers ::local_latepenalty_without_numeric_grade
  */
 final class lib_callbacks_test extends latepenalty_testcase {
     /**
@@ -207,6 +207,6 @@ final class lib_callbacks_test extends latepenalty_testcase {
 
         $this->assertSame($data, local_latepenalty_coursemodule_edit_post_actions($data, get_site()));
         $this->assertSame($before, $DB->count_records('local_latepenalty_rules'));
-        $this->assertFalse(local_latepenalty_graded_without_numbers(999999));
+        $this->assertFalse(local_latepenalty_without_numeric_grade(999999));
     }
 }
