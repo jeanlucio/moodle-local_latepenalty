@@ -10,7 +10,7 @@
 
 4. Quando a atividade já existe, a seção mostra a linha **"Prazo usado para a penalidade: <data> (<origem>)"**, ou avisa que não há prazo. Ela mostra o valor salvo; salve o formulário depois de mudar as datas.
 
-5. Um **badge** ao lado da atividade, na página do curso, mostra o prazo e, depois que ele passa, a penalidade acumulada: cinza dentro do prazo, amarelo em atraso, vermelho no máximo. Ele some quando o estudante conclui a atividade. Professores veem uma variação com o número de estudantes que ainda não entregaram.
+5. Um **badge** ao lado da atividade, na página do curso, mostra o prazo e, depois que ele passa, a penalidade acumulada: cinza dentro do prazo, amarelo em atraso, vermelho no máximo. Ele some quando o estudante entrega (envia a tarefa, finaliza uma tentativa, publica no fórum, cria o verbete…), mesmo antes da nota, e não depende da conclusão da atividade: uma condição como "ver" não o esconde. Professores veem uma variação com o número de estudantes que ainda não entregaram.
 
 6. Quando a atividade dá nota a um estudante, o plugin mede o atraso da entrega e desconta a nota.
 

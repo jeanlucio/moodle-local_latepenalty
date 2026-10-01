@@ -10,7 +10,7 @@
 
 4. When the activity already exists, the section shows the line **"Deadline used for the penalty: <date> (<origin>)"**, or warns that there is no deadline. It shows the value as saved; save the form after changing the dates.
 
-5. A **badge** next to the activity on the course page shows the deadline, then the accumulated penalty once it has passed: grey while on time, yellow when overdue, red at the maximum. It disappears once the student completes the activity. Teachers see a variant with the number of students who have not submitted yet.
+5. A **badge** next to the activity on the course page shows the deadline, then the accumulated penalty once it has passed: grey while on time, yellow when overdue, red at the maximum. It disappears once the student hands the work in (submits the assignment, finishes an attempt, posts in the forum, adds the entry…), even before it is graded, and does not depend on activity completion: a condition such as "view" does not hide it. Teachers see a variant with the number of students who have not submitted yet.
 
 6. When the activity grades a student, the plugin measures how late the student handed in and discounts the grade.
 

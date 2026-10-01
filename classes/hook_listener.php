@@ -25,6 +25,7 @@
 namespace local_latepenalty;
 
 use local_latepenalty\local\deadline_resolver;
+use local_latepenalty\local\submission_resolver;
 
 /**
  * Hook listener class.
@@ -73,16 +74,6 @@ class hook_listener {
             return;
         }
 
-        // Load cmids already completed by this user to suppress their badges.
-        $completedsql = "SELECT cmc.coursemoduleid
-                           FROM {course_modules_completion} cmc
-                           JOIN {course_modules} cm ON cm.id = cmc.coursemoduleid
-                          WHERE cm.course = :courseid
-                            AND cmc.userid = :userid
-                            AND cmc.completionstate >= 1";
-        $completedrows = $DB->get_records_sql($completedsql, ['courseid' => $courseid, 'userid' => (int) $USER->id]);
-        $completedcmids = array_flip(array_column($completedrows, 'coursemoduleid'));
-
         $now = time();
         $notices = [];
         $cms = [];
@@ -120,8 +111,7 @@ class hook_listener {
         );
 
         if ($isteacher) {
-            $cmids = array_map(fn($r) => (int) $r->cmid, $records);
-            $pendingcounts = self::load_pending_counts($cmids, $courseid);
+            $pendingcounts = self::load_pending_counts($cms, $courseid);
             $activitydeadlines = deadline_resolver::activity_deadlines($cms);
 
             foreach ($records as $record) {
@@ -179,11 +169,14 @@ class hook_listener {
             }
 
             // Records are keyed by cmid, so this keeps only the visible activities.
-            $userdeadlines = deadline_resolver::for_user_in_cms(array_intersect_key($cms, $records), (int) $USER->id);
+            $visiblecms = array_intersect_key($cms, $records);
+            $userdeadlines = deadline_resolver::for_user_in_cms($visiblecms, (int) $USER->id);
+            // No badge once the student has handed the work in (activity completion may not involve that).
+            $handedin = submission_resolver::handed_in($visiblecms, [(int) $USER->id]);
 
             foreach ($records as $record) {
                 $cmid = (int) $record->cmid;
-                if (isset($completedcmids[$cmid])) {
+                if (!empty($handedin[$cmid])) {
                     continue;
                 }
 
@@ -295,13 +288,8 @@ class hook_listener {
             return;
         }
 
-        // Suppress notice once the student has completed the activity.
-        $completed = $DB->get_field(
-            'course_modules_completion',
-            'completionstate',
-            ['coursemoduleid' => $cm->id, 'userid' => (int) $USER->id]
-        );
-        if ($completed !== false && (int) $completed >= 1) {
+        // No notice once the student has handed the work in.
+        if (!empty(submission_resolver::handed_in([$cmrecord], [(int) $USER->id])[$cmrecord->id])) {
             return;
         }
 
@@ -327,7 +315,7 @@ class hook_listener {
      * @param float  $daily    Daily penalty percentage.
      * @param float  $max      Maximum penalty percentage.
      * @param int    $now      Current Unix timestamp.
-     * @param int    $pending  Number of students who have not yet completed the activity.
+     * @param int    $pending  Number of students who have not handed the work in yet.
      * @param string $state    Badge state: 'warning' or 'danger'.
      * @return array{string, string} [badgelabel, notice].
      */
@@ -371,7 +359,7 @@ class hook_listener {
     }
 
     /**
-     * Count enrolled students who have not yet completed a given course module.
+     * Count enrolled students who have not handed a given activity in yet.
      *
      * Uses role archetype 'student' to exclude teachers and managers. Honours the
      * activity's separate-groups scoping: a caller without moodle/site:accessallgroups
@@ -380,17 +368,16 @@ class hook_listener {
      * are enrolled, or if the caller belongs to no group at all in a restricted activity.
      *
      * @param \cm_info $cm Course module info for the activity.
-     * @return int Number of students without completionstate >= 1 for this CM.
+     * @return int Number of students who have not handed the activity in.
      */
     private static function count_pending_students(\cm_info $cm): int {
-        $courseid = (int) $cm->course;
-        $contextid = \context_course::instance($courseid)->id;
-        $modcontext = \context_module::instance((int) $cm->id);
-        $restrictgroupids = group_scope::resolve_activity_restriction($cm, $modcontext);
+        $contextid = \context_course::instance((int) $cm->course)->id;
+        $restrictgroupids = group_scope::resolve_activity_restriction($cm, \context_module::instance((int) $cm->id));
 
-        $counts = self::count_pending_for_cmids([(int) $cm->id], $contextid, $restrictgroupids);
-
-        return $counts[(int) $cm->id] ?? 0;
+        $students = self::student_ids($contextid, $restrictgroupids);
+        $cmrecord = (object) ['id' => (int) $cm->id, 'modname' => $cm->modname, 'instance' => (int) $cm->instance];
+        $handedin = submission_resolver::handed_in([$cmrecord], $students);
+        return count($students) - count($handedin[$cmrecord->id]);
     }
 
     /**
@@ -400,110 +387,70 @@ class hook_listener {
      * moodle/site:accessallgroups in the course is confined to their own group(s)
      * for every course module whose effective group mode is SEPARATEGROUPS, using
      * a single get_fast_modinfo() call to resolve each cm's groupmode (no query in
-     * the loop — get_fast_modinfo() preloads every module context/groupmode for
-     * the course in bulk). Unrestricted and restricted CMs are then each counted
-     * in one shared query, not per-activity.
+     * the loop). The students are loaded at most twice (all, and the caller's
+     * groups) and who handed what in is loaded once for every activity.
      *
-     * @param int[] $cmids    Course module IDs to count for.
-     * @param int   $courseid Course ID.
-     * @return array<int, int> Map of cmid => pending student count.
+     * @param \stdClass[] $cms Course modules (id, modname, instance), keyed by ID.
+     * @param int $courseid Course ID.
+     * @return array Pending student counts keyed by course module ID.
      */
-    private static function load_pending_counts(array $cmids, int $courseid): array {
+    private static function load_pending_counts(array $cms, int $courseid): array {
         global $USER;
-
-        if (empty($cmids)) {
-            return [];
-        }
 
         $coursecontext = \context_course::instance($courseid);
         $contextid = $coursecontext->id;
 
-        if (has_capability('moodle/site:accessallgroups', $coursecontext)) {
-            return self::count_pending_for_cmids($cmids, $contextid, null);
-        }
-
-        $modinfo = get_fast_modinfo($courseid);
-        $restrictedcmids = [];
-        $unrestrictedcmids = [];
-        foreach ($cmids as $cmid) {
-            $cm = $modinfo->cms[$cmid] ?? null;
-            if ($cm && (int) groups_get_activity_groupmode($cm) === SEPARATEGROUPS) {
-                $restrictedcmids[] = $cmid;
-            } else {
-                $unrestrictedcmids[] = $cmid;
+        $restricted = [];
+        if (!has_capability('moodle/site:accessallgroups', $coursecontext)) {
+            $modinfo = get_fast_modinfo($courseid);
+            foreach ($cms as $cmid => $cm) {
+                $info = $modinfo->cms[$cmid] ?? null;
+                if ($info && (int) groups_get_activity_groupmode($info) === SEPARATEGROUPS) {
+                    $restricted[$cmid] = true;
+                }
             }
         }
 
-        $result = self::count_pending_for_cmids($unrestrictedcmids, $contextid, null);
-
-        if (!empty($restrictedcmids)) {
+        $allstudents = count($restricted) < count($cms) ? self::student_ids($contextid, null) : [];
+        $groupstudents = [];
+        if (!empty($restricted)) {
             $callergroupids = array_keys(groups_get_all_groups($courseid, (int) $USER->id));
-            $result += self::count_pending_for_cmids($restrictedcmids, $contextid, $callergroupids);
+            $groupstudents = self::student_ids($contextid, $callergroupids);
         }
 
+        $handedin = submission_resolver::handed_in($cms, array_merge($allstudents, $groupstudents));
+        $result = [];
+        foreach ($cms as $cmid => $cm) {
+            $students = isset($restricted[$cmid]) ? $groupstudents : $allstudents;
+            $result[$cmid] = count(array_diff_key(array_flip($students), $handedin[$cmid]));
+        }
         return $result;
     }
 
     /**
-     * Bulk-count pending students for a set of course modules, optionally confined
-     * to specific group IDs.
+     * Students of a course, optionally confined to some groups.
      *
-     * Runs at most two queries for the whole set: one for total eligible students,
-     * one for per-CM completion counts. No per-activity loop queries.
-     *
-     * @param int[]      $cmids     Course module IDs to count for.
-     * @param int        $contextid Course context ID.
-     * @param int[]|null $groupids  Group IDs to confine the count to, or null for no restriction.
-     * @return array<int, int> Map of cmid => pending student count.
+     * @param int $contextid Course context ID.
+     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
+     * @return int[] Student IDs.
      */
-    private static function count_pending_for_cmids(array $cmids, int $contextid, ?array $groupids): array {
-        if (empty($cmids)) {
-            return [];
-        }
+    private static function student_ids(int $contextid, ?array $groupids): array {
+        global $DB;
 
         if ($groupids === []) {
             // Caller belongs to no group at all in a restricted activity: sees nothing.
-            return array_fill_keys($cmids, 0);
+            return [];
         }
 
-        global $DB;
-
         [$groupjoin, $groupparams] = self::group_scope_join('ra.userid', $groupids);
-
-        $total = (int) $DB->count_records_sql(
-            "SELECT COUNT(DISTINCT ra.userid)
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT DISTINCT ra.userid
                FROM {role_assignments} ra
                JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
                $groupjoin
               WHERE ra.contextid = :contextid",
             array_merge(['contextid' => $contextid], $groupparams)
-        );
-
-        if ($total === 0) {
-            return array_fill_keys($cmids, 0);
-        }
-
-        [$insql, $inparams] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED, 'cm');
-        $completedrows = $DB->get_records_sql(
-            "SELECT cmc.coursemoduleid AS cmid, COUNT(DISTINCT cmc.userid) AS cnt
-               FROM {course_modules_completion} cmc
-               JOIN {role_assignments} ra ON ra.userid = cmc.userid AND ra.contextid = :contextid
-               JOIN {role} r ON r.id = ra.roleid AND r.archetype = 'student'
-               $groupjoin
-              WHERE cmc.coursemoduleid $insql
-                AND cmc.completionstate >= 1
-           GROUP BY cmc.coursemoduleid",
-            array_merge(['contextid' => $contextid], $groupparams, $inparams)
-        );
-
-        $result = [];
-        foreach ($cmids as $cmid) {
-            $cmid = (int) $cmid;
-            $done = isset($completedrows[$cmid]) ? (int) $completedrows[$cmid]->cnt : 0;
-            $result[$cmid] = max(0, $total - $done);
-        }
-
-        return $result;
+        ));
     }
 
     /**

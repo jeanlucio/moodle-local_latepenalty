@@ -105,6 +105,118 @@ final class submission_resolver {
     }
 
     /**
+     * Students who have handed something in, for several activities of one course.
+     *
+     * Handed in means the work the penalty measures exists, graded or not: a
+     * submitted assignment (the student's own or their team's), a finished quiz
+     * attempt, a finished lesson, a forum post, a glossary entry, a database
+     * record, a workshop submission, and for any other module a grade on one of
+     * its numeric items. Activity completion is not used: its conditions (viewing
+     * the page, for instance) need not involve handing anything in.
+     *
+     * One query per module type (two for assignments), whatever the number of activities.
+     *
+     * @param \stdClass[] $cms Course modules (id, modname, instance).
+     * @param int[]|null $userids Students to look at, or null for all of them.
+     * @return array Sets of user IDs (user ID => true) keyed by course module ID; every given activity has an entry.
+     */
+    public static function handed_in(array $cms, ?array $userids): array {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/grade/constants.php');
+
+        $result = [];
+        $bymodule = [];
+        foreach ($cms as $cm) {
+            $result[(int) $cm->id] = [];
+            $bymodule[$cm->modname][(int) $cm->instance] = (int) $cm->id;
+        }
+        if ($userids !== null) {
+            $userids = array_values(array_unique(array_map('intval', $userids)));
+            if (empty($userids)) {
+                return $result;
+            }
+        }
+
+        foreach ($bymodule as $modname => $instances) {
+            [$isql, $params] = $DB->get_in_or_equal(array_keys($instances), SQL_PARAMS_NAMED, 'ins');
+            $queries = [];
+            switch ($modname) {
+                case 'assign':
+                    $queries[] = ["SELECT DISTINCT assignment AS instanceid, userid
+                                     FROM {assign_submission}
+                                    WHERE assignment $isql AND userid <> 0 AND status = 'submitted'", 'userid'];
+                    $queries[] = ["SELECT DISTINCT s.assignment AS instanceid, gm.userid
+                                     FROM {assign_submission} s
+                                     JOIN {groups_members} gm ON gm.groupid = s.groupid
+                                    WHERE s.assignment $isql AND s.userid = 0 AND s.status = 'submitted'", 'gm.userid'];
+                    break;
+                case 'quiz':
+                    // The same states as the finished attempts of quiz_get_user_attempts().
+                    $states = [\mod_quiz\quiz_attempt::FINISHED, \mod_quiz\quiz_attempt::ABANDONED];
+                    if (defined(\mod_quiz\quiz_attempt::class . '::SUBMITTED')) {
+                        $states[] = constant(\mod_quiz\quiz_attempt::class . '::SUBMITTED');
+                    }
+                    [$ssql, $sparams] = $DB->get_in_or_equal($states, SQL_PARAMS_NAMED, 'st');
+                    $params += $sparams;
+                    $queries[] = ["SELECT DISTINCT quiz AS instanceid, userid
+                                     FROM {quiz_attempts}
+                                    WHERE quiz $isql AND preview = 0 AND state $ssql", 'userid'];
+                    break;
+                case 'lesson':
+                    $queries[] = ["SELECT DISTINCT lessonid AS instanceid, userid
+                                     FROM {lesson_grades}
+                                    WHERE lessonid $isql", 'userid'];
+                    break;
+                case 'forum':
+                    $queries[] = ["SELECT DISTINCT d.forum AS instanceid, p.userid
+                                     FROM {forum_posts} p
+                                     JOIN {forum_discussions} d ON d.id = p.discussion
+                                    WHERE d.forum $isql", 'p.userid'];
+                    break;
+                case 'glossary':
+                    $queries[] = ["SELECT DISTINCT glossaryid AS instanceid, userid
+                                     FROM {glossary_entries}
+                                    WHERE glossaryid $isql", 'userid'];
+                    break;
+                case 'data':
+                    $queries[] = ["SELECT DISTINCT dataid AS instanceid, userid
+                                     FROM {data_records}
+                                    WHERE dataid $isql", 'userid'];
+                    break;
+                case 'workshop':
+                    $queries[] = ["SELECT DISTINCT workshopid AS instanceid, authorid AS userid
+                                     FROM {workshop_submissions}
+                                    WHERE workshopid $isql AND example = 0", 'authorid'];
+                    break;
+                default:
+                    $params += ['modname' => $modname, 'gradetype' => GRADE_TYPE_VALUE];
+                    $queries[] = ["SELECT DISTINCT gi.iteminstance AS instanceid, g.userid
+                                     FROM {grade_grades} g
+                                     JOIN {grade_items} gi ON gi.id = g.itemid
+                                    WHERE gi.itemtype = 'mod' AND gi.itemmodule = :modname AND gi.iteminstance $isql
+                                      AND gi.gradetype = :gradetype AND gi.outcomeid IS NULL
+                                      AND (g.rawgrade IS NOT NULL OR g.finalgrade IS NOT NULL)", 'g.userid'];
+                    break;
+            }
+
+            foreach ($queries as [$sql, $usercolumn]) {
+                $queryparams = $params;
+                if ($userids !== null) {
+                    [$usql, $uparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+                    $sql .= " AND $usercolumn $usql";
+                    $queryparams += $uparams;
+                }
+                $rs = $DB->get_recordset_sql($sql, $queryparams);
+                foreach ($rs as $row) {
+                    $result[$instances[(int) $row->instanceid]][(int) $row->userid] = true;
+                }
+                $rs->close();
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Assignment: latest submitted submission, the student's own or else their group's.
      *
      * @param int $assignid Assignment ID.

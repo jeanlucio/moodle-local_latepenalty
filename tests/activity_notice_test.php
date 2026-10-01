@@ -141,40 +141,96 @@ final class activity_notice_test extends latepenalty_testcase {
     }
 
     /**
-     * Student: no notice once the activity is complete.
+     * Student: the notice stays until the work is handed in, however the activity is completed.
+     *
+     * Completing the activity (here by hand, as a "view" condition would on opening
+     * the page) is not handing anything in, so the notice stays; submitting removes it.
      *
      * @return void
      */
-    public function test_no_notice_when_completed(): void {
+    public function test_notice_until_handed_in(): void {
         $assign = $this->assignment(['duedate' => time() - DAYSECS]);
         [, $cm] = get_course_and_cm_from_cmid($assign->cmid, 'assign');
-        (new \completion_info($this->course))->update_state($cm, COMPLETION_COMPLETE, $this->student->id);
 
-        $this->assertNull($this->notice($assign, $this->student));
+        (new \completion_info($this->course))->update_state($cm, COMPLETION_COMPLETE, $this->student->id);
+        $this->assertNotNull($this->notice($assign, $this->student), 'Completed without a submission');
+
+        $this->submit_assign($assign, $this->student);
+        $this->assertNull($this->notice($assign, $this->student), 'Submitted');
     }
 
     /**
-     * Teacher: the overdue notice counts pending students; none pending, no notice; on time, the plain notice.
+     * Teacher: the overdue notice counts students who have not handed in; none left, no notice; on time, the plain notice.
      *
      * @return void
      */
     public function test_teacher_notice(): void {
         $past = time() - 2 * DAYSECS + HOURSECS;
         $assign = $this->assignment(['duedate' => $past]);
-        $this->assertSame(get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
+        $expected = get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
             'deadline' => penalty_helper::format_deadline($past),
             'pct' => '20',
             'daily' => '10',
             'max' => '50',
             'pending' => 1,
-        ]), $this->notice($assign, $this->teacher));
+        ]);
+        $this->assertSame($expected, $this->notice($assign, $this->teacher));
 
         [, $cm] = get_course_and_cm_from_cmid($assign->cmid, 'assign');
         (new \completion_info($this->course))->update_state($cm, COMPLETION_COMPLETE, $this->student->id);
+        $this->assertSame($expected, $this->notice($assign, $this->teacher), 'Completion alone changes nothing');
+
+        $this->submit_assign($assign, $this->student);
         $this->assertNull($this->notice($assign, $this->teacher));
 
         $future = $this->assignment(['duedate' => time() + DAYSECS]);
         $this->assertStringContainsString('10', (string) $this->notice($future, $this->teacher));
+    }
+
+    /**
+     * The course page payload for a user: the badges queued by the plugin, keyed by course module ID.
+     *
+     * @param \stdClass $user User.
+     * @return array Badge data keyed by course module ID.
+     */
+    private function course_badges(\stdClass $user): array {
+        global $PAGE;
+
+        $this->setUser($user);
+        $PAGE = new \moodle_page();
+        $PAGE->set_course($this->course);
+        $PAGE->set_pagetype('course-view-topics');
+        $PAGE->set_url('/course/view.php', ['id' => $this->course->id]);
+        $hook = (new \ReflectionClass(\core\hook\output\before_standard_footer_html_generation::class))
+            ->newInstanceWithoutConstructor();
+        hook_listener::inject_course_notices($hook);
+
+        $code = implode("\n", (new \ReflectionProperty($PAGE->requires, 'amdjscode'))->getValue($PAGE->requires));
+        if (!preg_match("/courseinfo'\\], function\\(amd\\) \\{amd\\.init\\((\\[.*?\\])\\);/s", $code, $matches)) {
+            return [];
+        }
+        return array_column(json_decode($matches[1], true), null, 'cmid');
+    }
+
+    /**
+     * Course page: the student's badge stays until the work is handed in; the teacher counts who has not.
+     *
+     * @return void
+     */
+    public function test_course_badge_until_handed_in(): void {
+        $assign = $this->assignment(['duedate' => time() - DAYSECS]);
+        [, $cm] = get_course_and_cm_from_cmid($assign->cmid, 'assign');
+
+        $this->assertArrayHasKey($assign->cmid, $this->course_badges($this->student));
+        $this->assertStringContainsString('1', $this->course_badges($this->teacher)[$assign->cmid]['badgelabel']);
+
+        (new \completion_info($this->course))->update_state($cm, COMPLETION_COMPLETE, $this->student->id);
+        $this->assertArrayHasKey($assign->cmid, $this->course_badges($this->student), 'Completed without a submission');
+        $this->assertArrayHasKey($assign->cmid, $this->course_badges($this->teacher), 'Completed without a submission');
+
+        $this->submit_assign($assign, $this->student);
+        $this->assertArrayNotHasKey($assign->cmid, $this->course_badges($this->student), 'Submitted');
+        $this->assertArrayNotHasKey($assign->cmid, $this->course_badges($this->teacher), 'Nobody pending');
     }
 
     /**

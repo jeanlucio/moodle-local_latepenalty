@@ -1,6 +1,6 @@
 # 🧪 Testes Automatizados
 
-O Late Penalty inclui **331 testes PHPUnit** e **14 cenários Behat**, executados em todo push de
+O Late Penalty inclui **341 testes PHPUnit** e **14 cenários Behat**, executados em todo push de
 CI na matriz completa: Moodle 4.5, 5.0, 5.1, 5.2 e 5.3 (`main`), cada um com PostgreSQL e
 MariaDB. Alguns testes só se aplicam onde o core oferece o recurso que verificam (o prazo final
 do questionário a partir do 5.3, as notas com dedução a partir da correção da penalidade por
@@ -23,6 +23,7 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `module_generic_test` | Ferramentas externas (LTI 1.1 e 1.3) e H5P: a data de envio informada pelo módulo, ou o momento em que a nota chegou |
 | `grade_items_test` | Quais itens de nota são penalizados (só numéricos; nunca escalas, resultados de aprendizagem ou a avaliação do laboratório) |
 | `local/deadline_resolver_test` | A cadeia de prazos: sobreposições do plugin, extensões, sobreposições da atividade, data de entrega, conclusão esperada, isenções |
+| `local/handed_in_test` | Quem já entregou cada atividade, para as badges e os avisos: o trabalho de cada módulo, avaliado ou não, nunca a conclusão da atividade |
 | `local/penalty_writer_test` | Como as penalidades são gravadas, alteradas e removidas — nota com dedução ou nota sobreposta — e as invariantes de toda gravação |
 | `keepbest_test` | Atividades com "nota mais alta": uma tentativa atrasada nunca rebaixa um resultado anterior melhor |
 | `recalculator_test`, `activity_overrides_test` | Recálculo quando muda uma regra, uma sobreposição ou uma extensão |
