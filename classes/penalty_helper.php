@@ -59,7 +59,9 @@ class penalty_helper {
      * @return array True for each course module ID with a penalisable item.
      */
     public static function cms_with_penalisable_items(array $cms, int $courseid): array {
-        global $DB;
+        global $CFG, $DB;
+        // Runs on any activity page through the hooks; pages such as the quiz review never load the gradebook.
+        require_once($CFG->libdir . '/grade/constants.php');
 
         $rows = $DB->get_recordset_select(
             'grade_items',

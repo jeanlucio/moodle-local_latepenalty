@@ -176,3 +176,35 @@ Feature: Late Penalty discounts late work and explains its deadline
     Then the following should exist in the "user-grade" table:
       | Grade item | Grade |
       | Quiz 1     | 80    |
+
+  Scenario: Activity pages that do not load the gradebook still open with a rule enabled
+    Given the following "question categories" exist:
+      | contextlevel | reference | name           |
+      | Course       | C1        | Test questions |
+    And the following "questions" exist:
+      | questioncategory | qtype     | name | questiontext   |
+      | Test questions   | truefalse | TF1  | First question |
+    And the following "activities" exist:
+      | activity | course | name   | idnumber | grade |
+      | quiz     | C1     | Quiz 2 | quiz2    | 100   |
+    And the following "activities" exist:
+      | activity | course | name     | idnumber  | assessed | scale |
+      | glossary | C1     | Glossary | glossary1 | 1        | 100   |
+    And quiz "Quiz 2" contains the following questions:
+      | question | page |
+      | TF1      | 1    |
+    And the following "local_latepenalty > rules" exist:
+      | activity  | enabled | daily_penalty | max_penalty |
+      | quiz2     | 1       | 10            | 50          |
+      | glossary1 | 1       | 10            | 50          |
+    And user "student1" has attempted "Quiz 2" with responses:
+      | slot | response |
+      | 1    | True     |
+    When I am on the "Quiz 2 > student1 > Attempt 1" "mod_quiz > Attempt review" page logged in as "teacher1"
+    Then I should see "First question"
+    And I am on the "Glossary" "glossary activity" page
+    And I should see "Glossary"
+    And I am on the "Quiz 2 > student1 > Attempt 1" "mod_quiz > Attempt review" page logged in as "student1"
+    And I should see "First question"
+    And I am on the "Glossary" "glossary activity" page
+    And I should see "Glossary"
