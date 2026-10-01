@@ -3,7 +3,7 @@
 1. O professor acessa qualquer atividade do Moodle que registre nota.
 
 2. A atividade precisa de um **prazo** para medir o atraso:
-   - **Tarefa**, **Fórum** e, a partir do Moodle 5.3, **Questionário** têm uma data de entrega que ainda aceita entrega tardia. O Late Penalty usa essa data. (Não confundir com a data limite da Tarefa nem com o fechamento do Questionário, que bloqueiam a entrega.)
+   - **Tarefa**, **Fórum** e, a partir do Moodle 5.3, **Questionário** têm uma data de entrega: passada essa data, o estudante continua podendo entregar, só que com atraso. O Late Penalty usa essa data. (Não confundir com a data limite da Tarefa nem com o fechamento do Questionário, que bloqueiam a entrega.)
    - **Todas as outras atividades** (Lição, SCORM, H5P, Glossário, Base de dados, ferramentas externas…): preencha **"Definir lembrete na linha do tempo"** (*Condições de conclusão*). Esse campo não bloqueia nada e serve como prazo da penalidade. Sem ele não há prazo nem penalidade.
 
 3. O professor abre a seção **Penalidade por atraso**, marca **Habilitar penalidade progressiva?** e informa o **Desconto por dia de atraso (%)** e o **Limite máximo de desconto (%)**. Exemplo: 10% ao dia, máximo de 50%.
