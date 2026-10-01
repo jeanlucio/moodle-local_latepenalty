@@ -1,5 +1,36 @@
 # Changes
 
+## [v1.2.0] — 2026-10-01
+
+### Deadlines
+
+- Use the quiz due date of Moodle 5.3 as the penalty deadline, including the due date of student and group quiz overrides; the quiz close date is used only when a quiz has no due date, since it blocks new attempts
+- The activity due date (assignment, forum, quiz) now takes priority over "Set reminder in Timeline"; this only changes activities where both dates are set and differ
+- Honour assignment extensions ("Grant extension"), which were ignored, and follow the assignment's own rules for overrides: group overrides by priority, and a due date left empty on a student override exempts that student
+- Recalculate a student or group at once when an override or extension is created, changed or deleted in the assignment, quiz or lesson itself
+
+### Submission time and multiple attempts
+
+- Measure lateness on the attempt or item that produced the grade, following the grading method (quiz, lesson, SCORM, H5P, rated forum, glossary and database posts), instead of always the latest one
+- Use the time of the student's own action: grading a lesson essay, or rating a glossary entry or database record, after the deadline no longer counts as a late submission
+- For other modules, use the submission date the module reports with the grade, when it does
+- With "highest grade", a late attempt never lowers a better grade obtained on time; external tools and third-party activities offer an option for this, as their grading method cannot be read
+
+### Grades
+
+- On up-to-date Moodle 5.1 and 5.2, and on 5.3, the penalty is stored as the core deducted mark: the gradebook shows the standard late penalty indicator and a better later grade appears at once; elsewhere it stays an overridden grade, and a new hourly scheduled task brings in grades the activity changed after a penalty
+- Workshops are now penalised (the submission grade only, never the assessment grade), and so are both grades of a forum with ratings and whole-forum grading
+- Scale and "no grade" activities are never discounted, and the form says so
+- Assignments using Moodle's own grade penalties (5.0+) are left alone, so a grade is never discounted twice
+- Removing the deadline, or disabling the rule, gives the original grades back; enabling a rule for the first time leaves existing grades as they are
+- Grades discounted by earlier versions stay as they are; untick *Overridden* for a grade in the grader report to have it recalculated the new way
+
+### Screens
+
+- The report shows each student's effective deadline and where it comes from, also in the export
+- The activity form explains each setting and shows the deadline in use
+- Badges and notices stay until the student hands the work in, whatever the activity completion conditions; viewing an activity no longer hides them
+
 ## [v1.1.2] — 2026-09-25
 
 - Confirmed: tested and confirmed compatible with Moodle 5.3.
