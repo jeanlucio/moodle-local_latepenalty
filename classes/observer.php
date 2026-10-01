@@ -24,26 +24,18 @@
 
 namespace local_latepenalty;
 
+use local_latepenalty\local\penalty_writer;
+
 /**
  * Observer class for handling grade events.
  */
 class observer {
     /**
-     * Map of "userid_cmid" => expected penalised grade (float).
+     * Apply the late penalty when a module grades a student.
      *
-     * Moodle's event system buffers events fired during an observer and
-     * dispatches them only after the current observer returns.  A simple
-     * "processing" flag would already be unset by then, so every event
-     * would re-trigger the penalty loop.  Instead we record the exact
-     * bounded grade we just wrote; when the next user_graded arrives with
-     * that same value we know it is our own event and skip it.
-     *
-     * @var array<string, float>
-     */
-    private static array $pendingpenalty = [];
-
-    /**
-     * Handle the user_graded event and apply late penalty if applicable.
+     * The event carries the graded item, which matters because an activity may
+     * own several items. Events fired by the plugin's own writes are recognised
+     * and skipped.
      *
      * @param \core\event\user_graded $event The grade event.
      * @return void
@@ -51,26 +43,19 @@ class observer {
     public static function user_graded(\core\event\user_graded $event): void {
         global $DB;
 
-        // Extract event data.
-        $eventdata = $event->get_data();
-        $userid = $event->relateduserid;
-
-        if (empty($userid)) {
-            debugging('local_latepenalty: Invalid event data (missing relateduserid)', DEBUG_DEVELOPER);
+        $userid = (int) $event->relateduserid;
+        $itemid = (int) ($event->other['itemid'] ?? 0);
+        if (empty($userid) || empty($itemid)) {
             return;
         }
 
-        // The user_graded event always uses context_course, not context_module.
-        // The grade item ID is stored in $event->other['itemid'] — use it to find the cmid.
-        $itemid = $eventdata['other']['itemid'] ?? null;
-
-        if (empty($itemid)) {
+        $finalgrade = $event->other['finalgrade'] ?? null;
+        if (penalty_writer::is_own_echo($userid, $itemid, $finalgrade === null ? null : (float) $finalgrade)) {
             return;
         }
 
-        $gradeitem = $DB->get_record('grade_items', ['id' => $itemid], 'itemtype,itemmodule,iteminstance,courseid');
-
-        if (!$gradeitem || $gradeitem->itemtype !== 'mod') {
+        $gradeitem = \grade_item::fetch(['id' => $itemid]);
+        if (!$gradeitem || !penalty_helper::is_penalisable_item($gradeitem)) {
             return;
         }
 
@@ -81,181 +66,55 @@ class observer {
             false,
             IGNORE_MISSING
         );
-
         if (!$cm) {
             return;
         }
 
-        $cmid = $cm->id;
-        $key  = $userid . '_' . $cmid;
-
-        // Skip events that were fired by our own penalty application.
-        // Moodle's event manager buffers new events while dispatching
-        // (self::$dispatching = true) and processes them after the current
-        // observer returns — meaning a simple "processing" lock would be
-        // unset before the buffered event fires.  Comparing the incoming
-        // other['finalgrade'] against the value we just stored is the only
-        // reliable guard against the re-entrant loop.
-        if (isset(self::$pendingpenalty[$key])) {
-            $eventfinalgrade = isset($eventdata['other']['finalgrade'])
-                ? (float) $eventdata['other']['finalgrade']
-                : null;
-            if (
-                $eventfinalgrade !== null
-                && abs($eventfinalgrade - self::$pendingpenalty[$key]) < 0.001
-            ) {
-                unset(self::$pendingpenalty[$key]);
-                return;
-            }
-            // A different grade arrived (e.g. teacher re-graded); clear and proceed.
-            unset(self::$pendingpenalty[$key]);
-        }
-
-        self::process_penalty($userid, $cmid, $eventdata);
-    }
-
-    /**
-     * Process the late penalty calculation and application.
-     *
-     * @param int $userid User ID.
-     * @param int $cmid Course module ID.
-     * @param array $eventdata Event data array.
-     * @return void
-     */
-    private static function process_penalty(int $userid, int $cmid, array $eventdata): void {
-        global $DB;
-
-        // Get penalty rule for this course module.
-        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
-
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cm->id]);
         if (!$rule || !$rule->enabled) {
             return;
         }
 
-        // Get course module details.
-        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
-
-        // Resolve effective deadline and rates: user override > group override > rule default.
-        $override = penalty_helper::get_override($cmid, $userid);
-        $groupoverride = penalty_helper::get_group_override($cmid, $userid);
-
-        if ($override && $override->deadline !== null) {
-            $deadline = (int) $override->deadline;
-        } else if ($groupoverride && $groupoverride->deadline !== null) {
-            $deadline = (int) $groupoverride->deadline;
-        } else {
-            $deadline = penalty_helper::get_module_user_deadline($cm->modname, $cm->instance, $userid)
-                ?? penalty_helper::get_deadline($cm);
-        }
-
-        if (!$deadline) {
-            return;
-        }
-
-        $daily = ($override && $override->daily_penalty !== null)
-            ? (float) $override->daily_penalty
-            : (($groupoverride && $groupoverride->daily_penalty !== null)
-                ? (float) $groupoverride->daily_penalty
-                : (float) $rule->daily_penalty);
-
-        $max = ($override && $override->max_penalty !== null)
-            ? (float) $override->max_penalty
-            : (($groupoverride && $groupoverride->max_penalty !== null)
-                ? (float) $groupoverride->max_penalty
-                : (float) $rule->max_penalty);
-
-        // Get submission timestamp (when the student submitted, not when graded).
-        // For auto-graded modules the grade event itself is the student action, so
-        // use the event timestamp when no explicit submission record exists.
-        // For manually-graded modules (e.g. forum), if no student action is found
-        // there is nothing to measure lateness against — skip the penalty.
-        $submissiontime = penalty_helper::get_submission_time($userid, $cm);
-
-        if ($submissiontime === null) {
-            if (!in_array($cm->modname, penalty_helper::$submissionmodules)) {
-                // No submission table for this module type; the grade event fires when
-                // the student completes the activity, so use its timestamp as a proxy.
-                $submissiontime = (int) ($eventdata['timecreated'] ?? time());
-            } else {
-                return;
-            }
-        }
-
-        // Calculate days late.
-        $dayslate = penalty_helper::calculate_days_late($submissiontime, $deadline);
-
-        if ($dayslate <= 0) {
-            return;
-        }
-
-        // Get the grade item.
-        $gradeitem = \grade_item::fetch([
-            'itemtype' => 'mod',
-            'itemmodule' => $cm->modname,
-            'iteminstance' => $cm->instance,
-            'courseid' => $cm->course,
-        ]);
-
-        if (!$gradeitem) {
-            debugging('local_latepenalty: Grade item not found for cmid ' . $cmid, DEBUG_DEVELOPER);
-            return;
-        }
-
-        // Get the user's current grade.
-        $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $userid]);
-        $grade->load_optional_fields();
-
-        if (!empty($grade->overridden)) {
-            return;
-        }
-
-        if (!empty($grade->locked) || !empty($gradeitem->locked)) {
-            return;
-        }
-
-        $rawgrade = $grade->rawgrade ?? $grade->finalgrade;
-        if (empty($rawgrade)) {
-            return;
-        }
-
-        if ((float) $rawgrade <= (float) $gradeitem->grademin) {
-            return;
-        }
-
-        // Calculate penalty.
-        $finalgrade = penalty_helper::apply_penalty($rawgrade, $dayslate, $daily, $max, (float) $gradeitem->grademin);
-
-        // Apply only when the change is meaningful (avoids spurious DB writes).
-        if (abs($finalgrade - $rawgrade) > 0.01) {
-            // Store the bounded value that will appear in other['finalgrade'] of the
-            // user_graded event fired by update_final_grade, so we can skip it.
-            $key = $userid . '_' . $cmid;
-            self::$pendingpenalty[$key] = (float) $gradeitem->bounded_grade($finalgrade);
-            $gradeitem->update_final_grade(
-                $userid,
-                $finalgrade,
-                'local_latepenalty',
-                false,
-                FORMAT_MOODLE,
-                null,
-                null,
-                true
-            );
-        }
+        recalculator::run($cm, $gradeitem, [$userid], (float) $rule->daily_penalty, (float) $rule->max_penalty, null);
     }
 
     /**
-     * Register a grade value that this plugin is about to write, so the next
-     * user_graded event with that value is recognised as our own and skipped.
+     * Recalculate when an activity override or extension changes a deadline (F7).
      *
-     * Called by recalculator before each update_final_grade() call.
+     * Handles the student and group override events of assignments, quizzes and
+     * lessons, and assignment extensions. A student event recalculates that
+     * student; a group event recalculates the group's members.
      *
-     * @param string $key   "{userid}_{cmid}" composite key.
-     * @param float  $value Bounded grade value that will appear in the event.
+     * @param \core\event\base $event Override or extension event, in the activity context.
      * @return void
      */
-    public static function register_pending_grade(string $key, float $value): void {
-        self::$pendingpenalty[$key] = $value;
+    public static function activity_deadline_changed(\core\event\base $event): void {
+        global $DB;
+
+        if ((int) $event->contextlevel !== CONTEXT_MODULE) {
+            return;
+        }
+        $cmid = (int) $event->contextinstanceid;
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid, 'enabled' => 1]);
+        if (!$rule) {
+            return;
+        }
+
+        if (!empty($event->relateduserid)) {
+            recalculator::recalculate_for_student(
+                $cmid,
+                (int) $event->relateduserid,
+                (float) $rule->daily_penalty,
+                (float) $rule->max_penalty
+            );
+        } else if (!empty($event->other['groupid'])) {
+            recalculator::recalculate_for_group(
+                $cmid,
+                (int) $event->other['groupid'],
+                (float) $rule->daily_penalty,
+                (float) $rule->max_penalty
+            );
+        }
     }
 
     /**

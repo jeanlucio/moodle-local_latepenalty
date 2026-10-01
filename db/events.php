@@ -33,4 +33,83 @@ $observers = [
         'eventname' => '\core\event\course_module_deleted',
         'callback' => '\local_latepenalty\observer::course_module_deleted',
     ],
+    // Overrides and extensions of the activities themselves change a student's deadline.
+    // Optional integration: these modules are not dependencies; without them the observers
+    // never fire (see SCOPE_FEATURE.md, DA9).
+    [
+        'eventname' => '\mod_assign\event\user_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\user_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\user_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\group_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\group_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\group_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_assign\event\extension_granted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\user_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\user_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\user_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\group_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\group_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_lesson\event\group_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\user_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\user_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\user_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\group_override_created',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\group_override_updated',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\group_override_deleted',
+        'callback' => '\local_latepenalty\observer::activity_deadline_changed',
+    ],
 ];

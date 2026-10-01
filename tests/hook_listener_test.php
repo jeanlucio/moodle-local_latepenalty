@@ -242,6 +242,110 @@ final class hook_listener_test extends advanced_testcase {
     }
 
     /**
+     * Course notices follow the deadline chain: extension for the student who has one,
+     * the due date (not the reminder) for everyone else and for the teacher (F6-08, F3-01).
+     */
+    public function test_course_notices_follow_deadline_chain(): void {
+        global $CFG, $DB, $PAGE;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+
+        // See test_hidden_activity_excluded_from_student_payload() for why $PAGE's
+        // theme-affecting state must be set before any enrolment call.
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $extended = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $other = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $duedate = time() + 3 * DAYSECS;
+        $reminder = time() + 6 * DAYSECS;
+        $extension = time() + 9 * DAYSECS;
+
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id, 'duedate' => $duedate]);
+        $DB->set_field('course_modules', 'completionexpected', $reminder, ['id' => $assign->cmid]);
+        $this->enable_rule($assign->cmid);
+        rebuild_course_cache($course->id);
+
+        $this->setAdminUser();
+        $this->getDataGenerator()->get_plugin_generator('mod_assign')->create_extension([
+            'cmid' => $assign->cmid,
+            'userid' => $extended->id,
+            'extensionduedate' => $extension,
+        ]);
+
+        $expected = [
+            [$extended, $extension],
+            [$other, $duedate],
+            [$teacher, $duedate],
+        ];
+        foreach ($expected as [$user, $date]) {
+            $property = new ReflectionProperty($PAGE->requires, 'amdjscode');
+            $property->setValue($PAGE->requires, []);
+            $this->setUser($user);
+
+            hook_listener::inject_course_notices($this->make_hook());
+
+            $code = $this->amd_code();
+            self::assertStringContainsString(trim(json_encode(penalty_helper::format_deadline($date)), '"'), $code);
+            foreach ([$duedate, $reminder, $extension] as $wrong) {
+                if ($wrong !== $date) {
+                    self::assertStringNotContainsString(trim(json_encode(penalty_helper::format_deadline($wrong)), '"'), $code);
+                }
+            }
+        }
+    }
+
+    /**
+     * No course notice for scale-graded activities nor for assignments under the core penalty (F18, F9).
+     */
+    public function test_no_notice_where_plugin_does_not_act(): void {
+        global $DB, $PAGE;
+
+        $course = $this->getDataGenerator()->create_course();
+        $PAGE->set_course($course);
+        $PAGE->set_pagetype('course-view-topics');
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $scale = $this->getDataGenerator()->create_scale(['courseid' => $course->id]);
+
+        $points = $this->getDataGenerator()->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $scaled = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'duedate' => time() + DAYSECS,
+            'grade' => -$scale->id,
+        ]);
+        $native = $this->getDataGenerator()->create_module('assign', [
+            'course' => $course->id,
+            'duedate' => time() + DAYSECS,
+            'gradepenalty' => 1,
+        ]);
+        foreach ([$points, $scaled, $native] as $assign) {
+            $this->enable_rule($assign->cmid);
+        }
+        if (class_exists(\core_grades\penalty_manager::class) && class_exists(\mod_assign\penalty\helper::class)) {
+            \core_grades\penalty_manager::enable_module('assign');
+            $nativeon = true;
+        } else {
+            $nativeon = false;
+        }
+        rebuild_course_cache($course->id);
+
+        $this->setUser($student);
+        hook_listener::inject_course_notices($this->make_hook());
+        $code = $this->amd_code();
+
+        self::assertStringContainsString('"cmid":' . $points->cmid, $code);
+        self::assertStringNotContainsString('"cmid":' . $scaled->cmid, $code);
+        if ($nativeon) {
+            self::assertStringNotContainsString('"cmid":' . $native->cmid, $code);
+        } else {
+            self::assertStringContainsString('"cmid":' . $native->cmid, $code);
+        }
+    }
+
+    /**
      * Invokes the private static hook_listener::count_pending_students() via reflection.
      *
      * @param \cm_info $cm Course module info for the activity.

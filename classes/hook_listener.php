@@ -24,22 +24,12 @@
 
 namespace local_latepenalty;
 
+use local_latepenalty\local\deadline_resolver;
+
 /**
  * Hook listener class.
  */
 class hook_listener {
-    /**
-     * Map of module name to the field that holds its deadline timestamp.
-     *
-     * Mirrors penalty_helper::$deadlinefields — only soft-deadline modules.
-     *
-     * @var array<string, string>
-     */
-    private static array $deadlinefields = [
-        'assign' => 'duedate',
-        'forum'  => 'duedate',
-    ];
-
     /**
      * Inject late-penalty notices into the course page.
      *
@@ -95,7 +85,34 @@ class hook_listener {
 
         $now = time();
         $notices = [];
-        $activitydeadlines = self::load_activity_deadlines($records);
+        $cms = [];
+        foreach ($records as $record) {
+            $cms[(int) $record->cmid] = (object) [
+                'id' => (int) $record->cmid,
+                'modname' => $record->modname,
+                'instance' => (int) $record->instance,
+                'completionexpected' => (int) $record->completionexpected,
+            ];
+        }
+
+        // No notice where the plugin never acts: no numeric grade item, or the core
+        // assignment penalty in charge.
+        $penalisable = penalty_helper::cms_with_penalisable_items($cms, $courseid);
+        $assignids = [];
+        foreach ($cms as $cm) {
+            if ($cm->modname === 'assign') {
+                $assignids[] = $cm->instance;
+            }
+        }
+        $native = penalty_helper::native_penalty_assignments($assignids);
+        foreach ($cms as $cmid => $cm) {
+            if (empty($penalisable[$cmid]) || ($cm->modname === 'assign' && !empty($native[$cm->instance]))) {
+                unset($cms[$cmid], $records[$cmid]);
+            }
+        }
+        if (empty($records)) {
+            return;
+        }
 
         $isteacher = has_capability(
             'local/latepenalty:viewreport',
@@ -105,10 +122,11 @@ class hook_listener {
         if ($isteacher) {
             $cmids = array_map(fn($r) => (int) $r->cmid, $records);
             $pendingcounts = self::load_pending_counts($cmids, $courseid);
+            $activitydeadlines = deadline_resolver::activity_deadlines($cms);
 
             foreach ($records as $record) {
                 $cmid = (int) $record->cmid;
-                $deadline = $activitydeadlines[$cmid] ?? null;
+                $deadline = $activitydeadlines[$cmid]->time;
                 if (!$deadline) {
                     continue;
                 }
@@ -160,73 +178,22 @@ class hook_listener {
                 return;
             }
 
-            $userdeadlines = self::load_user_module_deadlines($records, (int) $USER->id);
-
-            // Load all per-user overrides for this user in this course (single query).
-            $overridessql = "SELECT o.cmid, o.deadline, o.daily_penalty, o.max_penalty
-                               FROM {local_latepenalty_overrides} o
-                               JOIN {course_modules} cm ON cm.id = o.cmid
-                              WHERE cm.course = :courseid
-                                AND o.userid = :userid";
-            $useroverriderows = $DB->get_records_sql($overridessql, [
-                'courseid' => $courseid,
-                'userid'   => (int) $USER->id,
-            ]);
-            $useroverrides = [];
-            foreach ($useroverriderows as $o) {
-                $useroverrides[(int) $o->cmid] = $o;
-            }
-
-            // Load merged group overrides for this user across all penalized activities.
-            $groupoverridessql = "SELECT go.cmid,
-                                         MAX(go.deadline) AS deadline,
-                                         MIN(go.daily_penalty) AS daily_penalty,
-                                         MIN(go.max_penalty) AS max_penalty
-                                    FROM {local_latepenalty_group_overrides} go
-                                    JOIN {groups_members} gm ON gm.groupid = go.groupid
-                                    JOIN {course_modules} cm ON cm.id = go.cmid
-                                   WHERE cm.course = :courseid
-                                     AND gm.userid = :userid
-                                GROUP BY go.cmid";
-            $groupoverriderows = $DB->get_records_sql($groupoverridessql, [
-                'courseid' => $courseid,
-                'userid'   => (int) $USER->id,
-            ]);
-            $groupoverrides = [];
-            foreach ($groupoverriderows as $o) {
-                $groupoverrides[(int) $o->cmid] = $o;
-            }
+            // Records are keyed by cmid, so this keeps only the visible activities.
+            $userdeadlines = deadline_resolver::for_user_in_cms(array_intersect_key($cms, $records), (int) $USER->id);
 
             foreach ($records as $record) {
-                if (isset($completedcmids[(int) $record->cmid])) {
+                $cmid = (int) $record->cmid;
+                if (isset($completedcmids[$cmid])) {
                     continue;
                 }
 
-                $override = $useroverrides[(int) $record->cmid] ?? null;
-                $groupoverride = $groupoverrides[(int) $record->cmid] ?? null;
-
-                if ($override && $override->deadline !== null) {
-                    $deadline = (int) $override->deadline;
-                } else if ($groupoverride && $groupoverride->deadline !== null) {
-                    $deadline = (int) $groupoverride->deadline;
-                } else {
-                    $cmid = (int) $record->cmid;
-                    $deadline = $userdeadlines[$cmid] ?? $activitydeadlines[$cmid] ?? null;
-                }
-                if (!$deadline) {
+                $resolved = $userdeadlines[$cmid];
+                if (!$resolved->exists()) {
                     continue;
                 }
-
-                $daily = ($override && $override->daily_penalty !== null)
-                    ? (float) $override->daily_penalty
-                    : (($groupoverride && $groupoverride->daily_penalty !== null)
-                        ? (float) $groupoverride->daily_penalty
-                        : (float) $record->daily_penalty);
-                $max = ($override && $override->max_penalty !== null)
-                    ? (float) $override->max_penalty
-                    : (($groupoverride && $groupoverride->max_penalty !== null)
-                        ? (float) $groupoverride->max_penalty
-                        : (float) $record->max_penalty);
+                $deadline = $resolved->time;
+                $daily = $resolved->daily_for($record);
+                $max = $resolved->max_for($record);
 
                 [$badgelabel, $badgestate, $notice] = self::compute_badge(
                     $deadline,
@@ -286,13 +253,21 @@ class hook_listener {
             \context_course::instance((int) $cm->course)
         );
 
+        $cmrecord = (object) [
+            'id' => (int) $cm->id,
+            'modname' => $cm->modname,
+            'instance' => (int) $cm->instance,
+            'completionexpected' => (int) ($cm->completionexpected ?? 0),
+        ];
+        if (
+            empty(penalty_helper::cms_with_penalisable_items([$cmrecord], (int) $cm->course))
+            || penalty_helper::native_penalty_active($cmrecord)
+        ) {
+            return;
+        }
+
         if ($isteacher) {
-            $record = (object) [
-                'completionexpected' => $cm->completionexpected ?? 0,
-                'instance'           => $cm->instance,
-                'modname'            => $cm->modname,
-            ];
-            $deadline = self::resolve_deadline($record);
+            $deadline = deadline_resolver::activity_deadline($cmrecord)->time;
             if (!$deadline) {
                 return;
             }
@@ -330,43 +305,13 @@ class hook_listener {
             return;
         }
 
-        $record = (object) [
-            'completionexpected' => $cm->completionexpected ?? 0,
-            'instance'           => $cm->instance,
-            'modname'            => $cm->modname,
-        ];
-
-        $override = $DB->get_record(
-            'local_latepenalty_overrides',
-            ['cmid' => $cm->id, 'userid' => (int) $USER->id]
-        );
-        $groupoverride = penalty_helper::get_group_override((int) $cm->id, (int) $USER->id);
-
-        if ($override && $override->deadline !== null) {
-            $deadline = (int) $override->deadline;
-        } else if ($groupoverride && $groupoverride->deadline !== null) {
-            $deadline = (int) $groupoverride->deadline;
-        } else {
-            $deadline = penalty_helper::get_module_user_deadline(
-                $cm->modname,
-                (int) $cm->instance,
-                (int) $USER->id
-            ) ?? self::resolve_deadline($record);
-        }
-        if (!$deadline) {
+        $resolved = deadline_resolver::for_user($cmrecord, (int) $USER->id);
+        if (!$resolved->exists()) {
             return;
         }
-
-        $daily = ($override && $override->daily_penalty !== null)
-            ? (float) $override->daily_penalty
-            : (($groupoverride && $groupoverride->daily_penalty !== null)
-                ? (float) $groupoverride->daily_penalty
-                : (float) $rule->daily_penalty);
-        $max = ($override && $override->max_penalty !== null)
-            ? (float) $override->max_penalty
-            : (($groupoverride && $groupoverride->max_penalty !== null)
-                ? (float) $groupoverride->max_penalty
-                : (float) $rule->max_penalty);
+        $deadline = $resolved->time;
+        $daily = $resolved->daily_for($rule);
+        $max = $resolved->max_for($rule);
         [, , $notice] = self::compute_badge($deadline, $daily, $max, time());
 
         $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
@@ -632,270 +577,5 @@ class hook_listener {
             'max'      => (string) $max,
         ]);
         return [$label, 'warning', $notice];
-    }
-
-    /**
-     * Load activity deadlines in bulk, keyed by course module ID.
-     *
-     * @param array $records Rule records containing cmid, completionexpected, instance and modname.
-     * @return array<int, int> Deadline timestamps keyed by cmid.
-     */
-    private static function load_activity_deadlines(array $records): array {
-        global $DB;
-
-        $deadlines = [];
-        $instancesbymodule = [];
-        $cmidbyinstance = [];
-
-        foreach ($records as $record) {
-            $cmid = (int) $record->cmid;
-            if (!empty($record->completionexpected)) {
-                $deadlines[$cmid] = (int) $record->completionexpected;
-                continue;
-            }
-            if (empty(self::$deadlinefields[$record->modname])) {
-                continue;
-            }
-            $instanceid = (int) $record->instance;
-            $instancesbymodule[$record->modname][$instanceid] = $instanceid;
-            $cmidbyinstance[$record->modname][$instanceid] = $cmid;
-        }
-
-        self::load_activity_deadline_module('assign', $instancesbymodule, $cmidbyinstance, $deadlines);
-        self::load_activity_deadline_module('forum', $instancesbymodule, $cmidbyinstance, $deadlines);
-
-        return $deadlines;
-    }
-
-    /**
-     * Load base deadlines for one whitelisted activity module.
-     *
-     * @param string $modname Module name.
-     * @param array $instancesbymodule Instance IDs grouped by module name.
-     * @param array $cmidbyinstance Course module IDs grouped by module name and instance ID.
-     * @param array $deadlines Deadline accumulator keyed by cmid.
-     * @return void
-     */
-    private static function load_activity_deadline_module(
-        string $modname,
-        array $instancesbymodule,
-        array $cmidbyinstance,
-        array &$deadlines
-    ): void {
-        global $DB;
-
-        if (empty($instancesbymodule[$modname])) {
-            return;
-        }
-
-        [$insql, $inparams] = $DB->get_in_or_equal($instancesbymodule[$modname], SQL_PARAMS_NAMED, 'inst');
-        $field = self::$deadlinefields[$modname];
-        $rows = $DB->get_records_sql(
-            "SELECT id, $field AS deadline
-               FROM {{$modname}}
-              WHERE id $insql",
-            $inparams
-        );
-        foreach ($rows as $row) {
-            if (empty($row->deadline)) {
-                continue;
-            }
-            $cmid = $cmidbyinstance[$modname][(int) $row->id];
-            $deadlines[$cmid] = (int) $row->deadline;
-        }
-    }
-
-    /**
-     * Load Moodle-native user/group deadline overrides in bulk for one user.
-     *
-     * @param array $records Rule records containing cmid, instance and modname.
-     * @param int $userid User ID.
-     * @return array<int, int> Effective native override deadlines keyed by cmid.
-     */
-    private static function load_user_module_deadlines(array $records, int $userid): array {
-        $instancesbymodule = [];
-        $cmidbyinstance = [];
-        foreach ($records as $record) {
-            if (!in_array($record->modname, ['assign', 'lesson', 'quiz'], true)) {
-                continue;
-            }
-            $instanceid = (int) $record->instance;
-            $instancesbymodule[$record->modname][$instanceid] = $instanceid;
-            $cmidbyinstance[$record->modname][$instanceid] = (int) $record->cmid;
-        }
-
-        $deadlines = [];
-        self::load_assign_user_deadlines($instancesbymodule, $cmidbyinstance, $userid, $deadlines);
-        self::load_quiz_user_deadlines($instancesbymodule, $cmidbyinstance, $userid, $deadlines);
-        self::load_lesson_user_deadlines($instancesbymodule, $cmidbyinstance, $userid, $deadlines);
-
-        return $deadlines;
-    }
-
-    /**
-     * Load assignment user and group override deadlines.
-     *
-     * @param array $instancesbymodule Module instances grouped by module name.
-     * @param array $cmidbyinstance Course module IDs grouped by module name and instance ID.
-     * @param int $userid User ID.
-     * @param array $deadlines Deadline accumulator keyed by cmid.
-     * @return void
-     */
-    private static function load_assign_user_deadlines(
-        array $instancesbymodule,
-        array $cmidbyinstance,
-        int $userid,
-        array &$deadlines
-    ): void {
-        self::load_native_user_deadlines(
-            'assign',
-            'assign_overrides',
-            'assignid',
-            'duedate',
-            $instancesbymodule,
-            $cmidbyinstance,
-            $userid,
-            $deadlines
-        );
-    }
-
-    /**
-     * Load quiz user and group override deadlines.
-     *
-     * @param array $instancesbymodule Module instances grouped by module name.
-     * @param array $cmidbyinstance Course module IDs grouped by module name and instance ID.
-     * @param int $userid User ID.
-     * @param array $deadlines Deadline accumulator keyed by cmid.
-     * @return void
-     */
-    private static function load_quiz_user_deadlines(
-        array $instancesbymodule,
-        array $cmidbyinstance,
-        int $userid,
-        array &$deadlines
-    ): void {
-        self::load_native_user_deadlines(
-            'quiz',
-            'quiz_overrides',
-            'quiz',
-            'timeclose',
-            $instancesbymodule,
-            $cmidbyinstance,
-            $userid,
-            $deadlines
-        );
-    }
-
-    /**
-     * Load lesson user and group override deadlines.
-     *
-     * @param array $instancesbymodule Module instances grouped by module name.
-     * @param array $cmidbyinstance Course module IDs grouped by module name and instance ID.
-     * @param int $userid User ID.
-     * @param array $deadlines Deadline accumulator keyed by cmid.
-     * @return void
-     */
-    private static function load_lesson_user_deadlines(
-        array $instancesbymodule,
-        array $cmidbyinstance,
-        int $userid,
-        array &$deadlines
-    ): void {
-        self::load_native_user_deadlines(
-            'lesson',
-            'lesson_overrides',
-            'lessonid',
-            'deadline',
-            $instancesbymodule,
-            $cmidbyinstance,
-            $userid,
-            $deadlines
-        );
-    }
-
-    /**
-     * Load user-specific and best group native overrides for one module type.
-     *
-     * @param string $modname Module name.
-     * @param string $table Native override table.
-     * @param string $instancefield Native override instance field.
-     * @param string $deadlinefield Native override deadline field.
-     * @param array $instancesbymodule Module instances grouped by module name.
-     * @param array $cmidbyinstance Course module IDs grouped by module name and instance ID.
-     * @param int $userid User ID.
-     * @param array $deadlines Deadline accumulator keyed by cmid.
-     * @return void
-     */
-    private static function load_native_user_deadlines(
-        string $modname,
-        string $table,
-        string $instancefield,
-        string $deadlinefield,
-        array $instancesbymodule,
-        array $cmidbyinstance,
-        int $userid,
-        array &$deadlines
-    ): void {
-        global $DB;
-
-        if (empty($instancesbymodule[$modname])) {
-            return;
-        }
-
-        [$insql, $inparams] = $DB->get_in_or_equal($instancesbymodule[$modname], SQL_PARAMS_NAMED, 'native');
-        $params = array_merge(['userid' => $userid], $inparams);
-        $userrows = $DB->get_records_sql(
-            "SELECT $instancefield AS instanceid, $deadlinefield AS deadline
-               FROM {{$table}}
-              WHERE $instancefield $insql
-                AND userid = :userid
-                AND $deadlinefield > 0",
-            $params
-        );
-        foreach ($userrows as $row) {
-            $cmid = $cmidbyinstance[$modname][(int) $row->instanceid];
-            $deadlines[$cmid] = (int) $row->deadline;
-        }
-
-        $grouprows = $DB->get_records_sql(
-            "SELECT o.$instancefield AS instanceid, MAX(o.$deadlinefield) AS deadline
-               FROM {{$table}} o
-               JOIN {groups_members} gm ON gm.groupid = o.groupid
-              WHERE o.$instancefield $insql
-                AND gm.userid = :userid
-                AND o.$deadlinefield > 0
-           GROUP BY o.$instancefield",
-            $params
-        );
-        foreach ($grouprows as $row) {
-            $cmid = $cmidbyinstance[$modname][(int) $row->instanceid];
-            if (!isset($deadlines[$cmid])) {
-                $deadlines[$cmid] = (int) $row->deadline;
-            }
-        }
-    }
-
-    /**
-     * Resolve the deadline timestamp for a rule record.
-     *
-     * Priority: completionexpected → module-specific deadline field.
-     *
-     * @param \stdClass $record Row from the SQL join (cmid, completionexpected, instance, modname).
-     * @return int|null Deadline as a Unix timestamp, or null if unavailable.
-     */
-    private static function resolve_deadline(\stdClass $record): ?int {
-        global $DB;
-
-        if (!empty($record->completionexpected)) {
-            return (int) $record->completionexpected;
-        }
-
-        $field = self::$deadlinefields[$record->modname] ?? null;
-        if (!$field) {
-            return null;
-        }
-
-        $value = $DB->get_field($record->modname, $field, ['id' => $record->instance]);
-        return ($value) ? (int) $value : null;
     }
 }

@@ -331,35 +331,21 @@ final class recalculator_test extends advanced_testcase {
     /**
      * Recalculation skips students whose grade has been manually overridden by a teacher.
      *
-     * Student was 2 days late (20% off → 80). Teacher later overrides the grade
-     * to 90 in the gradebook. When the rate is changed, the recalculator must
+     * Student was 2 days late (20% off → 80). The teacher later overrides the grade
+     * to 95 in the grader report. When the rate is changed, the recalculator must
      * leave the overridden grade untouched.
      */
     public function test_overridden_grade_not_affected(): void {
-        global $DB;
-
         $s = $this->make_scenario(2 * DAYSECS);
         $this->grade_via_module($s, 100.0);
-        // Observer applies 2×10% = 20% off → finalgrade = 80; latepenalty history written.
+        self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
 
-        // Simulate a teacher manually overriding the grade after our penalty.
-        // Advancing the non-latepenalty history timestamp past the latepenalty
-        // record makes the recalculator treat it as a teacher edit and skip it.
-        $DB->set_field_select(
-            'grade_grades_history',
-            'timemodified',
-            time() + 60,
-            "itemid = :itemid AND userid = :userid AND source != 'local_latepenalty'",
-            ['itemid' => $s['gradeitem']->id, 'userid' => $s['student']->id]
-        );
-        $DB->set_field('grade_grades', 'finalgrade', 90.0, [
-            'itemid' => $s['gradeitem']->id,
-            'userid' => $s['student']->id,
-        ]);
+        // What the grader report does when the teacher types a grade.
+        $s['gradeitem']->update_final_grade($s['student']->id, 95.0, 'gradebook');
 
         recalculator::recalculate($s['assign']->cmid, $s['deadline'], 5.0, 50.0);
 
-        self::assertEqualsWithDelta(90.0, $this->read_final_grade($s), 0.01);
+        self::assertEqualsWithDelta(95.0, $this->read_final_grade($s), 0.01);
     }
 
     // Group override scenarios.
@@ -566,14 +552,14 @@ final class recalculator_test extends advanced_testcase {
         $grade->load_optional_fields();
         self::assertEqualsWithDelta(50.0, (float) $grade->finalgrade, 0.01, 'Initial penalty must be 50%.');
 
-        // Pin the non-latepenalty history timestamp so the recalculator always resolves
-        // exactly 5 days late regardless of wall-clock drift between test steps in CI.
+        // Pin the grading date the module reported (grade_grades.timemodified, read as the
+        // submission time when no submission date is reported) so the recalculator always
+        // resolves exactly 5 days late regardless of wall-clock drift between test steps in CI.
         // (deadline + 5·86400 − 1 → ceil(4.999…) = 5 days.)
-        $DB->set_field_select(
-            'grade_grades_history',
+        $DB->set_field(
+            'grade_grades',
             'timemodified',
             $deadline + 5 * DAYSECS - 1,
-            "itemid = :itemid AND userid = :userid AND source != 'local_latepenalty'",
             ['itemid' => $gradeitem->id, 'userid' => $student->id]
         );
 
@@ -587,7 +573,7 @@ final class recalculator_test extends advanced_testcase {
             75.0,
             (float) $grade->finalgrade,
             0.01,
-            'H5P: recalculator must recompute penalty at new rate using grade_grades_history timestamp.'
+            'H5P: recalculator must recompute penalty at new rate using the reported grading date.'
         );
     }
 }

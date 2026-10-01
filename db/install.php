@@ -15,18 +15,21 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Post-installation steps for the Late Penalty plugin.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Start the reprocess_grades task at the current end of the grade history.
+ *
+ * @return bool
+ */
+function xmldb_local_latepenalty_install(): bool {
+    global $DB;
 
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026100100;
-$plugin->requires = 2024042200;
-$plugin->supported = [405, 503];
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = 'v1.1.2';
+    set_config('reprocesscursor', (int) $DB->get_field_sql('SELECT MAX(id) FROM {grade_grades_history}'), 'local_latepenalty');
+    return true;
+}

@@ -22,16 +22,16 @@
  *  - apply_penalty(): discount formula and edge cases
  *  - format_deadline(): combines the locale's date and time strings via the
  *    plugin's own separator string, rather than a hardcoded format
- *  - get_submission_time(): forum with no posts returns null
+ *  - submission time lookup: forum with no posts, h5pactivity without a grade,
+ *    assign individual and team submissions
  *  - Full observer chain via assign: no rule, rule disabled, no deadline,
  *    on-time, 1 day late, 2 days late, penalty capped at max
  *  - Full observer chain via quiz: 1 day late
  *  - Full observer chain via h5pactivity: late (event-timestamp fallback) and on-time
  *  - Per-user override: custom deadline, custom daily rate, custom max cap,
  *    penalty waived (daily = 0), all-null override inherits rule
- *  - get_module_user_deadline(): assign extension, assign/quiz/lesson overrides
- *    (user and group), unknown module, no override, and a full-chain integration
- *    test confirming the extension shifts the effective deadline in the observer
+ *
+ * The deadline chain itself is covered by local/deadline_resolver_test.php.
  *
  * @package    local_latepenalty
  * @category   test
@@ -44,6 +44,7 @@ namespace local_latepenalty;
 use advanced_testcase;
 use grade_grade;
 use grade_item;
+use local_latepenalty\local\submission_resolver;
 
 /**
  * Tests for local_latepenalty\observer and \local_latepenalty\penalty_helper.
@@ -85,14 +86,23 @@ final class observer_test extends advanced_testcase {
     }
 
     /**
-     * Delegate to penalty_helper::get_submission_time().
+     * Submission time of a student as the plugin resolves it for one grade item.
      *
-     * @param int $userid
-     * @param \stdClass $cm
+     * @param int $userid Student ID.
+     * @param \stdClass $cm Object with modname and instance.
+     * @param int $itemnumber Grade item number.
      * @return int|null
      */
-    private function submission_time(int $userid, \stdClass $cm): ?int {
-        return penalty_helper::get_submission_time($userid, $cm);
+    private function submission_time(int $userid, \stdClass $cm, int $itemnumber = 0): ?int {
+        $cm = get_coursemodule_from_instance($cm->modname, $cm->instance, 0, false, MUST_EXIST);
+        $gradeitem = grade_item::fetch([
+            'itemtype' => 'mod',
+            'itemmodule' => $cm->modname,
+            'iteminstance' => $cm->instance,
+            'itemnumber' => $itemnumber,
+            'courseid' => $cm->course,
+        ]);
+        return submission_resolver::for_user($cm, $gradeitem, $userid);
     }
 
     // Helpers: integration test infrastructure.
@@ -249,18 +259,6 @@ final class observer_test extends advanced_testcase {
         }
     }
 
-    /**
-     * Delegate to penalty_helper::get_module_user_deadline().
-     *
-     * @param string $modname    Module name.
-     * @param int    $instanceid Module instance ID.
-     * @param int    $userid     User ID.
-     * @return int|null Effective deadline or null.
-     */
-    private function module_user_deadline(string $modname, int $instanceid, int $userid): ?int {
-        return penalty_helper::get_module_user_deadline($modname, $instanceid, $userid);
-    }
-
     // Tests for calculate_days_late: pure unit tests (no DB required).
 
     /**
@@ -388,29 +386,26 @@ final class observer_test extends advanced_testcase {
         self::assertMatchesRegularExpression('/\d{2}:\d{2}/', $result);
     }
 
-    // Tests for get_submission_time: targeted reflection tests.
+    // Tests for the submission time lookup.
 
     /**
      * Forum with no posts returns null (no submission to penalise).
      */
     public function test_forum_no_posts_returns_null(): void {
-        global $DB;
-
         $course  = $this->getDataGenerator()->create_course();
         $student = $this->getDataGenerator()->create_user();
-        $forum   = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
+        $forum   = $this->getDataGenerator()->create_module('forum', ['course' => $course->id, 'grade_forum' => 100]);
 
         $cm = (object) ['modname' => 'forum', 'instance' => $forum->id];
 
-        self::assertNull($this->submission_time($student->id, $cm));
+        self::assertNull($this->submission_time($student->id, $cm, 1));
     }
 
     /**
-     * h5pactivity has no entry in get_submission_time(); it returns null.
+     * h5pactivity without a grade has nothing reported to the gradebook; it returns null.
      *
-     * The observer falls back to the event timestamp for modules not in
-     * penalty_helper::$submissionmodules. This test documents that null
-     * is the expected return — not a bug.
+     * For modules without their own lookup the submission time is what the
+     * module reports with the grade, so no grade means no submission time.
      */
     public function test_h5pactivity_submission_time_returns_null(): void {
         $this->setAdminUser();
@@ -691,9 +686,9 @@ final class observer_test extends advanced_testcase {
     }
 
     /**
-     * When completionexpected is 0, penalty_helper falls back to assign.duedate.
+     * When completionexpected is 0, the deadline comes from assign.duedate.
      *
-     * This exercises the module-specific deadline field path in penalty_helper::get_deadline().
+     * This exercises the activity due date step of the deadline chain.
      */
     public function test_deadline_resolved_from_module_duedate(): void {
         global $DB;
@@ -1047,191 +1042,6 @@ final class observer_test extends advanced_testcase {
         $s = $this->make_scenario(DAYSECS);
         $this->upsert_override($s['assign']->cmid, $s['student']->id, null, null, null);
         self::assertEqualsWithDelta(90.0, $this->grade_and_read($s, 100.0), 0.01);
-    }
-
-    // Tests for get_module_user_deadline().
-
-    /**
-     * assign_overrides.duedate keyed by userid is returned when no extension exists.
-     */
-    public function test_module_user_deadline_assign_user_override_returned(): void {
-        global $DB;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
-
-        $expected = time() + 3 * DAYSECS;
-        $DB->insert_record('assign_overrides', (object) [
-            'assignid' => $assign->id,
-            'userid'   => $student->id,
-            'groupid'  => null,
-            'duedate'  => $expected,
-        ]);
-
-        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
-    }
-
-    /**
-     * assign_overrides group deadline is returned when student belongs to the overridden group.
-     */
-    public function test_module_user_deadline_assign_group_override_returned(): void {
-        global $DB;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($student->id, $course->id);
-        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
-
-        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
-        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $student->id]);
-
-        $expected = time() + 4 * DAYSECS;
-        $DB->insert_record('assign_overrides', (object) [
-            'assignid' => $assign->id,
-            'groupid'  => $group->id,
-            'userid'   => null,
-            'duedate'  => $expected,
-        ]);
-
-        self::assertSame($expected, $this->module_user_deadline('assign', $assign->id, $student->id));
-    }
-
-    /**
-     * quiz_overrides.timeclose keyed by userid is returned as the effective quiz deadline.
-     */
-    public function test_module_user_deadline_quiz_user_override_returned(): void {
-        global $DB;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $quiz    = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
-
-        $expected = time() + 5 * DAYSECS;
-        $DB->insert_record('quiz_overrides', (object) [
-            'quiz'      => $quiz->id,
-            'userid'    => $student->id,
-            'groupid'   => null,
-            'timeclose' => $expected,
-        ]);
-
-        self::assertSame($expected, $this->module_user_deadline('quiz', $quiz->id, $student->id));
-    }
-
-    /**
-     * lesson_overrides.deadline keyed by userid is returned as the effective lesson deadline.
-     */
-    public function test_module_user_deadline_lesson_user_override_returned(): void {
-        global $DB;
-
-        $this->setAdminUser();
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $lesson  = $this->getDataGenerator()->create_module('lesson', ['course' => $course->id]);
-
-        $expected = time() + 6 * DAYSECS;
-        $DB->insert_record('lesson_overrides', (object) [
-            'lessonid' => $lesson->id,
-            'userid'   => $student->id,
-            'groupid'  => null,
-            'deadline' => $expected,
-        ]);
-
-        self::assertSame($expected, $this->module_user_deadline('lesson', $lesson->id, $student->id));
-    }
-
-    /**
-     * Modules without a native override system (e.g. forum) always return null.
-     */
-    public function test_module_user_deadline_unknown_module_returns_null(): void {
-        $course = $this->getDataGenerator()->create_course();
-        $forum  = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
-        $user   = $this->getDataGenerator()->create_user();
-
-        self::assertNull($this->module_user_deadline('forum', $forum->id, $user->id));
-    }
-
-    /**
-     * Assign with no extension or override records returns null.
-     */
-    public function test_module_user_deadline_no_override_returns_null(): void {
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $assign  = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
-
-        self::assertNull($this->module_user_deadline('assign', $assign->id, $student->id));
-    }
-
-    /**
-     * Full observer chain: assign extension shifts the effective deadline.
-     *
-     * In Moodle 5.2+, teacher-granted extensions are stored as user-specific records
-     * in assign_overrides (assign_user_flags.extensiondue was removed).
-     *
-     * Global deadline = 5 days ago. Extension = +1 day (via assign_overrides). Student
-     * submits 3 days after the global deadline (= 2 days after the extended deadline).
-     * Expected: 2 days × 10%/day = 20% → grade 80 (not 30% → 70 without extension).
-     */
-    public function test_assign_extension_shifts_effective_deadline(): void {
-        global $DB;
-
-        $deadline = time() - 5 * DAYSECS;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($student->id, $course->id);
-
-        $assign = $this->getDataGenerator()->create_module('assign', [
-            'course'  => $course->id,
-            'grade'   => 100,
-            'duedate' => $deadline,
-        ]);
-
-        // Completionexpected = 0 forces the fallback chain through get_module_user_deadline().
-        $DB->set_field('course_modules', 'completionexpected', 0, ['id' => $assign->cmid]);
-        rebuild_course_cache($course->id);
-
-        $this->upsert_rule($assign->cmid, true, 10.0, 50.0);
-
-        $submissiontime = $deadline + 3 * DAYSECS;
-        $DB->insert_record('assign_submission', (object) [
-            'assignment'    => $assign->id,
-            'userid'        => $student->id,
-            'timecreated'   => $submissiontime,
-            'timemodified'  => $submissiontime,
-            'status'        => 'submitted',
-            'groupid'       => 0,
-            'attemptnumber' => 0,
-            'latest'        => 1,
-        ]);
-
-        // Teacher grants a 1-day extension via assign_overrides (Moodle 5.2+).
-        $DB->insert_record('assign_overrides', (object) [
-            'assignid' => $assign->id,
-            'userid'   => $student->id,
-            'groupid'  => null,
-            'duedate'  => $deadline + DAYSECS,
-        ]);
-
-        $gradeitem = grade_item::fetch([
-            'itemtype'     => 'mod',
-            'itemmodule'   => 'assign',
-            'iteminstance' => $assign->id,
-            'courseid'     => $course->id,
-        ]);
-        $gradeitem->update_raw_grade($student->id, 100.0, 'mod/assign');
-
-        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
-        $grade->load_optional_fields();
-
-        // With extension: 2 days late × 10% = 20% → 80. Without: 30% → 70.
-        self::assertEqualsWithDelta(
-            80.0,
-            (float) $grade->finalgrade,
-            0.01,
-            'Observer must respect the assign_overrides user record as the effective deadline.'
-        );
     }
 
     /**

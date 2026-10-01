@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Plugin version and other metadata.
+ * Scheduled tasks of the Late Penalty plugin.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -24,9 +24,14 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_latepenalty';
-$plugin->version = 2026100100;
-$plugin->requires = 2024042200;
-$plugin->supported = [405, 503];
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = 'v1.1.2';
+$tasks = [
+    [
+        'classname' => '\local_latepenalty\task\reprocess_grades',
+        'blocking' => 0,
+        'minute' => 'R',
+        'hour' => '*',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
+];

@@ -25,6 +25,8 @@
 namespace local_latepenalty\report;
 
 use context_course;
+use local_latepenalty\local\deadline_resolver;
+use local_latepenalty\penalty_helper;
 
 /**
  * Builds the template context for the late penalty report page.
@@ -68,21 +70,6 @@ class controller {
      * @var int[]
      */
     private array $restrictedcmids;
-
-    /**
-     * Deadline field per module type, mirroring the observer's map.
-     *
-     * @var array<string,string>
-     */
-    private static array $deadlinefields = [
-        'assign'      => 'duedate',
-        'forum'       => 'duedate',
-        'lesson'      => 'deadline',
-        'playergroup' => 'timeclose',
-        'quiz'        => 'timeclose',
-        'scorm'       => 'timeclose',
-        'workshop'    => 'submissionend',
-    ];
 
     /**
      * Constructor.
@@ -243,7 +230,7 @@ class controller {
         $rows = $DB->get_records_sql($sql, $params);
 
         $modinfo = get_fast_modinfo($this->courseid);
-        $moduledeadlines = self::load_module_deadlines($rows);
+        $deadlines = self::load_deadlines($rows);
         $overrides = self::load_overrides($rows);
 
         // Keep only the most recent penalty per student + grade item (ORDER BY DESC above).
@@ -280,7 +267,7 @@ class controller {
                 ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
                 : '';
 
-            $deadline = self::resolve_deadline($row, $moduledeadlines);
+            $deadline = $deadlines[$row->userid . '_' . $row->cmid];
 
             $penalties[] = [
                 'fullname'           => format_string(
@@ -289,10 +276,9 @@ class controller {
                     ['context' => $this->context]
                 ),
                 'activity'           => $cmname,
-                'hasdeadline'        => $deadline !== null,
-                'completionexpected' => $deadline !== null
-                    ? userdate($deadline)
-                    : '',
+                'hasdeadline'        => $deadline->exists(),
+                'deadline'           => $deadline->exists() ? userdate($deadline->time) : '',
+                'deadlineorigin'     => penalty_helper::deadline_origin_label($deadline),
                 'rawgrade'           => format_float($rawgrade, 2),
                 'hasdiscount'        => $discount > 0,
                 'discount'           => format_float($discount, 1),
@@ -378,7 +364,7 @@ class controller {
         $rows = $DB->get_records_sql($sql, $params);
 
         $modinfo        = get_fast_modinfo($this->courseid);
-        $moduledeadlines = self::load_module_deadlines($rows);
+        $deadlines = self::load_deadlines($rows);
         $overrides      = self::load_overrides($rows);
 
         $seen = [];
@@ -413,7 +399,7 @@ class controller {
             $cmname  = isset($modinfo->cms[$row->cmid])
                 ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
                 : '';
-            $deadline = self::resolve_deadline($row, $moduledeadlines);
+            $deadline = $deadlines[$row->userid . '_' . $row->cmid];
 
             if ($hasuseroverride) {
                 $overridelabel = get_string('report_override_user', 'local_latepenalty');
@@ -426,7 +412,8 @@ class controller {
             $data[] = [
                 format_string(fullname($fakeuser), true, ['context' => $this->context]),
                 $cmname,
-                $deadline !== null ? userdate($deadline) : '',
+                $deadline->exists() ? userdate($deadline->time) : '',
+                penalty_helper::deadline_origin_label($deadline),
                 $rawgrade,
                 (float) $row->grademax,
                 $discount,
@@ -440,6 +427,7 @@ class controller {
             get_string('report_col_student', 'local_latepenalty'),
             get_string('report_col_activity', 'local_latepenalty'),
             get_string('report_col_deadline', 'local_latepenalty'),
+            get_string('report_col_deadline_origin', 'local_latepenalty'),
             get_string('report_col_rawgrade', 'local_latepenalty'),
             get_string('report_export_grademax', 'local_latepenalty'),
             get_string('report_col_discount', 'local_latepenalty'),
@@ -518,7 +506,8 @@ class controller {
 
         [$groupwhere, $groupparams] = $this->group_scope_where();
 
-        $sql = "SELECT DISTINCT cm.id, gi.itemname
+        // Grouped by course module: an activity may have several penalised grade items.
+        $sql = "SELECT cm.id, MIN(gi.itemname) AS itemname
                   FROM {grade_grades_history} ggh
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
@@ -530,7 +519,8 @@ class controller {
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
                        {$groupwhere}
-                 ORDER BY gi.itemname";
+              GROUP BY cm.id
+              ORDER BY MIN(gi.itemname)";
 
         $rows = $DB->get_records_sql($sql, array_merge([
             'courseid'  => $this->courseid,
@@ -558,23 +548,33 @@ class controller {
     }
 
     /**
-     * Resolve the effective deadline for a grade history row.
+     * Effective deadlines of the report rows, from the plugin's single deadline chain.
      *
-     * Mirrors the observer logic: completionexpected takes priority; falls back
-     * to the module-specific deadline field (assign.duedate, forum.duedate).
+     * One resolver call covers every activity and student of the report.
      *
-     * @param \stdClass $row            Row from the report query containing completionexpected,
-     *                                  itemmodule and iteminstance.
-     * @param array     $moduledeadlines Pre-loaded map of modname → instanceid → deadline timestamp.
-     * @return int|null Deadline timestamp or null if not determinable.
+     * @param array $rows Report rows (userid, cmid, itemmodule, iteminstance, completionexpected).
+     * @return \local_latepenalty\local\deadline[] Keyed by "userid_cmid".
      */
-    private static function resolve_deadline(\stdClass $row, array $moduledeadlines): ?int {
-        if (!empty($row->completionexpected)) {
-            return (int) $row->completionexpected;
+    private static function load_deadlines(array $rows): array {
+        $cms = [];
+        $userids = [];
+        foreach ($rows as $row) {
+            $cms[(int) $row->cmid] = (object) [
+                'id' => (int) $row->cmid,
+                'modname' => $row->itemmodule,
+                'instance' => (int) $row->iteminstance,
+                'completionexpected' => (int) $row->completionexpected,
+            ];
+            $userids[(int) $row->userid] = (int) $row->userid;
         }
 
-        $value = $moduledeadlines[$row->itemmodule][(int) $row->iteminstance] ?? null;
-        return ($value) ? (int) $value : null;
+        $result = [];
+        foreach (deadline_resolver::resolve($cms, array_values($userids)) as $cmid => $byuser) {
+            foreach ($byuser as $userid => $deadline) {
+                $result[$userid . '_' . $cmid] = $deadline;
+            }
+        }
+        return $result;
     }
 
     /**
@@ -632,68 +632,5 @@ class controller {
         }
 
         return ['user' => $useroverrides, 'group' => $groupoverrides];
-    }
-
-    /**
-     * Load module deadline fields in bulk, grouped by module type.
-     *
-     * @param array $rows Report rows containing itemmodule and iteminstance.
-     * @return array<string, array<int, int>> Deadline timestamps keyed by module name and instance ID.
-     */
-    private static function load_module_deadlines(array $rows): array {
-        global $DB;
-
-        $instancesbymodule = [];
-        foreach ($rows as $row) {
-            if (!empty($row->completionexpected) || empty(self::$deadlinefields[$row->itemmodule])) {
-                continue;
-            }
-            $instancesbymodule[$row->itemmodule][(int) $row->iteminstance] = (int) $row->iteminstance;
-        }
-
-        $deadlines = [];
-        self::load_deadlines_for_module('assign', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('forum', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('lesson', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('playergroup', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('quiz', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('scorm', $instancesbymodule, $deadlines);
-        self::load_deadlines_for_module('workshop', $instancesbymodule, $deadlines);
-
-        return $deadlines;
-    }
-
-    /**
-     * Load deadline values for one whitelisted module table.
-     *
-     * @param string $modname Module name.
-     * @param array $instancesbymodule Instance IDs grouped by module name.
-     * @param array $deadlines Deadline accumulator keyed by module name and instance ID.
-     * @return void
-     */
-    private static function load_deadlines_for_module(
-        string $modname,
-        array $instancesbymodule,
-        array &$deadlines
-    ): void {
-        global $DB;
-
-        if (empty($instancesbymodule[$modname])) {
-            return;
-        }
-
-        [$insql, $inparams] = $DB->get_in_or_equal($instancesbymodule[$modname], SQL_PARAMS_NAMED, 'inst');
-        $field = self::$deadlinefields[$modname];
-        $records = $DB->get_records_sql(
-            "SELECT id, $field AS deadline
-               FROM {{$modname}}
-              WHERE id $insql",
-            $inparams
-        );
-        foreach ($records as $record) {
-            if (!empty($record->deadline)) {
-                $deadlines[$modname][(int) $record->id] = (int) $record->deadline;
-            }
-        }
     }
 }

@@ -29,5 +29,23 @@
  * @return bool Always returns true.
  */
 function xmldb_local_latepenalty_upgrade(int $oldversion): bool {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026100100) {
+        // Option to keep the best penalised grade among attempts (modules with no readable grading method).
+        $table = new xmldb_table('local_latepenalty_rules');
+        $field = new xmldb_field('keepbest', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'last_deadline');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // The reprocess_grades task only looks at grade history written from now on.
+        set_config('reprocesscursor', (int) $DB->get_field_sql('SELECT MAX(id) FROM {grade_grades_history}'), 'local_latepenalty');
+
+        upgrade_plugin_savepoint(true, 2026100100, 'local', 'latepenalty');
+    }
+
     return true;
 }

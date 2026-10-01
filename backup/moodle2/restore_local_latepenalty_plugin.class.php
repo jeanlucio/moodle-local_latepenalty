@@ -158,8 +158,11 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         // restore, so fall back to 0 when the module cannot be resolved.
         $restoredcm = get_coursemodule_from_id('', $data->cmid, 0, false, IGNORE_MISSING);
         $data->last_deadline = $restoredcm
-            ? (\local_latepenalty\penalty_helper::get_deadline($restoredcm) ?? 0)
+            ? \local_latepenalty\local\deadline_resolver::activity_deadline($restoredcm)->time
             : 0;
+
+        // Backups made before 1.2.0 have no keepbest.
+        $data->keepbest = $data->keepbest ?? 0;
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {
@@ -168,6 +171,7 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
             $existing->max_penalty = $data->max_penalty;
             $existing->recalc_on_deadline = $data->recalc_on_deadline ?? 1;
             $existing->recalc_on_rate = $data->recalc_on_rate ?? 1;
+            $existing->keepbest = $data->keepbest ?? 0;
             $existing->last_deadline = $data->last_deadline;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {

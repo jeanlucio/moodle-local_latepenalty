@@ -30,7 +30,7 @@
  * @return void
  */
 function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform): void {
-    global $DB;
+    global $DB, $OUTPUT;
 
     // Skip resources — they have no submission or grade.
     $modname = $formwrapper->get_current()->modulename ?? '';
@@ -54,6 +54,7 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         get_string('latepenalty_enabled', 'local_latepenalty')
     );
     $mform->setType('latepenalty_enabled', PARAM_INT);
+    $mform->addHelpButton('latepenalty_enabled', 'latepenalty_enabled', 'local_latepenalty');
 
     $dailyel = $mform->addElement(
         'text',
@@ -75,12 +76,26 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setDefault('latepenalty_max', 0.00);
     $mform->hideIf('latepenalty_max', 'latepenalty_enabled', 'notchecked');
 
+    $keepbestel = null;
+    if (local_latepenalty_offers_keepbest($modname)) {
+        $keepbestel = $mform->addElement(
+            'advcheckbox',
+            'latepenalty_keepbest',
+            get_string('latepenalty_keepbest', 'local_latepenalty')
+        );
+        $mform->addHelpButton('latepenalty_keepbest', 'latepenalty_keepbest', 'local_latepenalty');
+        $mform->setType('latepenalty_keepbest', PARAM_INT);
+        $mform->setDefault('latepenalty_keepbest', 0);
+        $mform->hideIf('latepenalty_keepbest', 'latepenalty_enabled', 'notchecked');
+    }
+
     $recalcdeadlineel = $mform->addElement(
         'advcheckbox',
         'latepenalty_recalc_deadline',
         get_string('latepenalty_recalc_deadline', 'local_latepenalty')
     );
     $mform->setType('latepenalty_recalc_deadline', PARAM_INT);
+    $mform->addHelpButton('latepenalty_recalc_deadline', 'latepenalty_recalc_deadline', 'local_latepenalty');
     $mform->setDefault('latepenalty_recalc_deadline', 1);
     $mform->hideIf('latepenalty_recalc_deadline', 'latepenalty_enabled', 'notchecked');
 
@@ -90,8 +105,78 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         get_string('latepenalty_recalc_rate', 'local_latepenalty')
     );
     $mform->setType('latepenalty_recalc_rate', PARAM_INT);
+    $mform->addHelpButton('latepenalty_recalc_rate', 'latepenalty_recalc_rate', 'local_latepenalty');
     $mform->setDefault('latepenalty_recalc_rate', 1);
     $mform->hideIf('latepenalty_recalc_rate', 'latepenalty_enabled', 'notchecked');
+
+    $elements = [
+        'latepenaltyheader' => $headerel,
+        'latepenalty_enabled' => $enabledel,
+        'latepenalty_daily' => $dailyel,
+        'latepenalty_max' => $maxel,
+    ];
+    if ($keepbestel) {
+        $elements['latepenalty_keepbest'] = $keepbestel;
+    }
+    $elements += [
+        'latepenalty_recalc_deadline' => $recalcdeadlineel,
+        'latepenalty_recalc_rate' => $recalcrateel,
+    ];
+    $settings = array_slice(array_keys($elements), 1);
+
+    // The core assignment penalty ("Grade penalties") and Late Penalty never act together.
+    if ($mform->elementExists('gradepenalty')) {
+        $elements['latepenalty_nativewarning'] = $mform->addElement(
+            'static',
+            'latepenalty_nativewarning',
+            '',
+            $OUTPUT->notification(get_string('warning_native_penalty', 'local_latepenalty'), 'warning', false)
+        );
+        $mform->hideIf('latepenalty_nativewarning', 'gradepenalty', 'neq', 1);
+        foreach ($settings as $setting) {
+            $mform->disabledIf($setting, 'gradepenalty', 'eq', 1);
+        }
+    }
+
+    $cmid = (int) ($formwrapper->get_current()->coursemodule ?? 0);
+    $existing = $cmid ? $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]) : false;
+
+    // Disabling an active rule gives the original grades back on save.
+    if ($existing && $existing->enabled) {
+        $elements['latepenalty_disablewarning'] = $mform->addElement(
+            'static',
+            'latepenalty_disablewarning',
+            '',
+            $OUTPUT->notification(get_string('warning_disable_restores', 'local_latepenalty'), 'warning', false)
+        );
+        $mform->hideIf('latepenalty_disablewarning', 'latepenalty_enabled', 'checked');
+    }
+
+    // Scale or "none" grades are never discounted.
+    $graded = $cmid && local_latepenalty_graded_without_numbers($cmid);
+    if ($graded) {
+        $elements['latepenalty_scalewarning'] = $mform->addElement(
+            'static',
+            'latepenalty_scalewarning',
+            '',
+            $OUTPUT->notification(get_string('warning_scale_notsupported', 'local_latepenalty'), 'info', false)
+        );
+    }
+
+    // The saved deadline the rule uses, unless a warning above already says the plugin does not act.
+    $cm = $cmid ? get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING) : false;
+    if ($cm && !$graded && !\local_latepenalty\penalty_helper::native_penalty_active($cm)) {
+        $deadline = \local_latepenalty\local\deadline_resolver::activity_deadline($cm);
+        $text = $deadline->exists()
+            ? get_string('deadline_used', 'local_latepenalty', (object) [
+                'date' => \local_latepenalty\penalty_helper::format_deadline($deadline->time),
+                'origin' => \local_latepenalty\penalty_helper::deadline_origin_label($deadline),
+            ])
+            : get_string('deadline_none', 'local_latepenalty');
+        $elements['latepenalty_deadlineused'] = $mform->addElement('static', 'latepenalty_deadlineused', '', $text);
+        $mform->addHelpButton('latepenalty_deadlineused', 'deadline_used', 'local_latepenalty');
+        $mform->hideIf('latepenalty_deadlineused', 'latepenalty_enabled', 'notchecked');
+    }
 
     // Move the section to appear right after the completion section.
     // Elements are added to the end by the callback; reorder them before
@@ -99,35 +184,65 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $anchors = ['tagshdr', 'competencieshdr'];
     foreach ($anchors as $anchor) {
         if ($mform->elementExists($anchor)) {
-            $mform->removeElement('latepenaltyheader');
-            $mform->removeElement('latepenalty_enabled');
-            $mform->removeElement('latepenalty_daily');
-            $mform->removeElement('latepenalty_max');
-            $mform->removeElement('latepenalty_recalc_deadline');
-            $mform->removeElement('latepenalty_recalc_rate');
-            $mform->insertElementBefore($headerel, $anchor);
-            $mform->insertElementBefore($enabledel, $anchor);
-            $mform->insertElementBefore($dailyel, $anchor);
-            $mform->insertElementBefore($maxel, $anchor);
-            $mform->insertElementBefore($recalcdeadlineel, $anchor);
-            $mform->insertElementBefore($recalcrateel, $anchor);
+            foreach ($elements as $name => $element) {
+                $mform->removeElement($name);
+                $mform->insertElementBefore($element, $anchor);
+            }
             break;
         }
     }
 
     // Load existing values if editing.
-    if (!empty($formwrapper->get_current()->coursemodule)) {
-        $cmid = $formwrapper->get_current()->coursemodule;
-        $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
-
-        if ($existing) {
-            $mform->setDefault('latepenalty_enabled', $existing->enabled);
-            $mform->setDefault('latepenalty_daily', $existing->daily_penalty);
-            $mform->setDefault('latepenalty_max', $existing->max_penalty);
-            $mform->setDefault('latepenalty_recalc_deadline', $existing->recalc_on_deadline ?? 1);
-            $mform->setDefault('latepenalty_recalc_rate', $existing->recalc_on_rate ?? 1);
+    if ($existing) {
+        $mform->setDefault('latepenalty_enabled', $existing->enabled);
+        $mform->setDefault('latepenalty_daily', $existing->daily_penalty);
+        $mform->setDefault('latepenalty_max', $existing->max_penalty);
+        $mform->setDefault('latepenalty_recalc_deadline', $existing->recalc_on_deadline ?? 1);
+        $mform->setDefault('latepenalty_recalc_rate', $existing->recalc_on_rate ?? 1);
+        if ($keepbestel) {
+            $mform->setDefault('latepenalty_keepbest', $existing->keepbest ?? 0);
         }
     }
+}
+
+/**
+ * Whether the form offers "Do not let a new late attempt lower the grade" for a module.
+ *
+ * Only modules whose grading method cannot be read get the choice: the
+ * external tool and plugins outside the core. Core modules already keep the
+ * best penalised grade by their own method (quiz, lesson, SCORM, H5P, rated
+ * forum/glossary/database) or have a single grade (assignment, workshop,
+ * BigBlueButton).
+ *
+ * @param string $modname Module name.
+ * @return bool
+ */
+function local_latepenalty_offers_keepbest(string $modname): bool {
+    return $modname === 'lti' || !in_array($modname, core_plugin_manager::standard_plugins_list('mod'), true);
+}
+
+/**
+ * Whether an activity is graded, but never with a number (scale or "none" grade items only).
+ *
+ * @param int $cmid Course module ID.
+ * @return bool
+ */
+function local_latepenalty_graded_without_numbers(int $cmid): bool {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    $cm = get_coursemodule_from_id('', $cmid, 0, false, IGNORE_MISSING);
+    if (!$cm) {
+        return false;
+    }
+    $items = grade_item::fetch_all([
+        'itemtype' => 'mod',
+        'itemmodule' => $cm->modname,
+        'iteminstance' => $cm->instance,
+        'courseid' => $cm->course,
+    ]) ?: [];
+    $items = array_filter($items, fn(grade_item $item): bool => empty($item->outcomeid));
+    return !empty($items) && empty(\local_latepenalty\penalty_helper::get_penalisable_items($cm));
 }
 
 /**
@@ -275,18 +390,47 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
     $record->max_penalty = isset($data->latepenalty_max) ? (float) $data->latepenalty_max : 0.00;
     $record->recalc_on_deadline = !empty($data->latepenalty_recalc_deadline) ? 1 : 0;
     $record->recalc_on_rate = !empty($data->latepenalty_recalc_rate) ? 1 : 0;
+    $record->keepbest = !empty($data->latepenalty_keepbest) ? 1 : 0;
 
     $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
 
     // Resolve the current (post-save) deadline from the module.
     $cm          = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
-    $newdeadline = \local_latepenalty\penalty_helper::get_deadline($cm) ?? 0;
+    $newdeadline = \local_latepenalty\local\deadline_resolver::activity_deadline($cm)->time;
 
-    if ($existing && $record->enabled && $existing->enabled) {
-        $deadlinechanged = $newdeadline && (int) $existing->last_deadline !== $newdeadline;
+    // With the core assignment penalty on, the section is disabled and its fields are not
+    // submitted: keep the rule as it was and leave the grades it already discounted alone.
+    if ($existing && \local_latepenalty\penalty_helper::native_penalty_active($cm)) {
+        return $data;
+    }
+
+    // Store the new rule first: the recalculations below read it (keep-best option).
+    $record->last_deadline = $newdeadline;
+    if ($existing) {
+        $record->id = $existing->id;
+        $DB->update_record('local_latepenalty_rules', $record);
+    } else {
+        $DB->insert_record('local_latepenalty_rules', $record);
+    }
+
+    if ($existing && $existing->enabled && !$record->enabled) {
+        // Disabling the rule gives back the original grades.
+        \local_latepenalty\recalculator::restore($cmid);
+    } else if ($existing && !$existing->enabled && $record->enabled) {
+        // Enabling again re-applies the rule to every graded student, including grades given while it
+        // was off. Enabling for the first time (the plugin never discounted anything here) leaves the
+        // grades that already exist as they are; only grades arriving afterwards are penalised.
+        if (\local_latepenalty\recalculator::has_penalised($cmid)) {
+            \local_latepenalty\recalculator::recalculate_all($cmid, $record->daily_penalty, $record->max_penalty);
+        }
+    } else if ($existing && $record->enabled) {
+        // A removed deadline (0) counts as a change: it gives back the grades of students left without one.
+        $deadlinechanged = (int) $existing->last_deadline !== $newdeadline;
+        // Changing the keep-best option recalculates like a rate change.
         $ratechanged = (
             abs((float) $existing->daily_penalty - $record->daily_penalty) > 0.001 ||
-            abs((float) $existing->max_penalty - $record->max_penalty) > 0.001
+            abs((float) $existing->max_penalty - $record->max_penalty) > 0.001 ||
+            (int) ($existing->keepbest ?? 0) !== $record->keepbest
         );
 
         $shouldrecalc = (
@@ -295,22 +439,10 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
         );
 
         if ($shouldrecalc) {
-            \local_latepenalty\recalculator::recalculate(
-                $cmid,
-                $newdeadline ?: (int) $existing->last_deadline,
-                $record->daily_penalty,
-                $record->max_penalty
-            );
+            // Without the deadline box ticked, a rate change keeps the deadline already applied.
+            $deadline = ($deadlinechanged && !$record->recalc_on_deadline) ? (int) $existing->last_deadline : $newdeadline;
+            \local_latepenalty\recalculator::recalculate($cmid, $deadline, $record->daily_penalty, $record->max_penalty);
         }
-    }
-
-    $record->last_deadline = $newdeadline;
-
-    if ($existing) {
-        $record->id = $existing->id;
-        $DB->update_record('local_latepenalty_rules', $record);
-    } else {
-        $DB->insert_record('local_latepenalty_rules', $record);
     }
 
     return $data;

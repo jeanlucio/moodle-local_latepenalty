@@ -57,6 +57,7 @@ class backup_local_latepenalty_plugin extends backup_local_plugin {
             'max_penalty',
             'recalc_on_deadline',
             'recalc_on_rate',
+            'keepbest',
         ]);
         $wrapper->add_child($rule);
 

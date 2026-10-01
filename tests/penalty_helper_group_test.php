@@ -15,17 +15,16 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * PHPUnit tests for penalty_helper group override methods.
+ * PHPUnit tests for Late Penalty group overrides in the deadline chain.
  *
- * Covers:
- *  - get_group_override(): null when user has no applicable group override
- *  - get_group_override(): returns values for a single group override
- *  - get_group_override(): returns most-lenient merged values across multiple groups
+ * Covers, through deadline_resolver (single and bulk):
+ *  - no value when the user has no applicable group override
+ *  - the values of a single group override
+ *  - the most-lenient merged values across several groups
  *    (MAX deadline, MIN daily_penalty, MIN max_penalty — per-field, independently)
- *  - get_group_override(): null when user is in a group but that group has no override for the CM
- *  - get_group_overrides_bulk(): empty input returns empty array
- *  - get_group_overrides_bulk(): returns merged overrides keyed by userid
- *  - get_group_overrides_bulk(): users without applicable group overrides are absent
+ *  - no value when the user is in a group that has no override for the CM
+ *  - empty input returns an empty array
+ *  - merged overrides keyed by userid; users without group overrides are absent
  *
  * @package    local_latepenalty
  * @category   test
@@ -36,11 +35,12 @@
 namespace local_latepenalty;
 
 use advanced_testcase;
+use local_latepenalty\local\deadline_resolver;
 
 /**
- * Tests for penalty_helper::get_group_override() and get_group_overrides_bulk().
+ * Tests for Late Penalty group overrides as resolved by the deadline chain.
  *
- * @covers \local_latepenalty\penalty_helper
+ * @covers \local_latepenalty\local\deadline_resolver
  */
 final class penalty_helper_group_test extends advanced_testcase {
     #[\Override]
@@ -93,7 +93,47 @@ final class penalty_helper_group_test extends advanced_testcase {
         ]);
     }
 
-    // Tests: get_group_override().
+    /**
+     * Merged Late Penalty group override of one user, as the deadline chain resolves it.
+     *
+     * @param int $cmid Course module ID.
+     * @param int $userid User ID.
+     * @return \stdClass|null {deadline, daily_penalty, max_penalty}, or null when no group override applies.
+     */
+    private function group_override(int $cmid, int $userid): ?\stdClass {
+        return $this->group_overrides_bulk($cmid, [$userid])[$userid] ?? null;
+    }
+
+    /**
+     * Merged Late Penalty group overrides of several users, keyed by user ID.
+     *
+     * The users have no Late Penalty student override, so the rates come from
+     * the group override alone and the deadline is the group's whenever the
+     * chain reports the group as its origin.
+     *
+     * @param int $cmid Course module ID.
+     * @param int[] $userids User IDs.
+     * @return array Merged values keyed by user ID; users without a group override are absent.
+     */
+    private function group_overrides_bulk(int $cmid, array $userids): array {
+        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
+
+        $result = [];
+        foreach (deadline_resolver::for_users($cm, $userids) as $userid => $resolved) {
+            $deadline = $resolved->origin === deadline_resolver::ORIGIN_PLUGIN_GROUP ? $resolved->time : null;
+            if ($deadline === null && $resolved->daily === null && $resolved->max === null) {
+                continue;
+            }
+            $result[$userid] = (object) [
+                'deadline' => $deadline,
+                'daily_penalty' => $resolved->daily,
+                'max_penalty' => $resolved->max,
+            ];
+        }
+        return $result;
+    }
+
+    // Tests: single user.
 
     /**
      * Returns null when the user belongs to no group with an override for the CM.
@@ -108,7 +148,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
 
         // No override recorded for this group.
-        $result = penalty_helper::get_group_override($s['cmid'], (int) $user->id);
+        $result = $this->group_override($s['cmid'], (int) $user->id);
 
         self::assertNull($result);
     }
@@ -121,7 +161,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $s    = $this->make_course_with_assign();
         $user = $this->getDataGenerator()->create_user();
 
-        self::assertNull(penalty_helper::get_group_override($s['cmid'], (int) $user->id));
+        self::assertNull($this->group_override($s['cmid'], (int) $user->id));
     }
 
     /**
@@ -139,7 +179,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $deadline = time() + DAYSECS;
         $this->insert_group_override($s['cmid'], (int) $group->id, $deadline, 5.0, 40.0);
 
-        $result = penalty_helper::get_group_override($s['cmid'], (int) $user->id);
+        $result = $this->group_override($s['cmid'], (int) $user->id);
 
         self::assertNotNull($result);
         self::assertEquals($deadline, (int) $result->deadline);
@@ -170,7 +210,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         // Group B: earlier deadline, lower daily, higher max.
         $this->insert_group_override($s['cmid'], (int) $groupb->id, $earlierdeadline, 3.0, 60.0);
 
-        $result = penalty_helper::get_group_override($s['cmid'], (int) $user->id);
+        $result = $this->group_override($s['cmid'], (int) $user->id);
 
         self::assertNotNull($result);
         // Most lenient deadline = MAX = later deadline.
@@ -203,7 +243,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         // Group B: deadline null, daily set, max null.
         $this->insert_group_override($s['cmid'], (int) $groupb->id, null, 4.0, null);
 
-        $result = penalty_helper::get_group_override($s['cmid'], (int) $user->id);
+        $result = $this->group_override($s['cmid'], (int) $user->id);
 
         self::assertNotNull($result);
         self::assertEquals($deadline, (int) $result->deadline);
@@ -211,7 +251,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         self::assertEquals(50.0, (float) $result->max_penalty);
     }
 
-    // Tests: get_group_overrides_bulk().
+    // Tests: bulk.
 
     /**
      * Returns an empty array when the input user ID list is empty.
@@ -220,7 +260,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $this->setAdminUser();
         $s = $this->make_course_with_assign();
 
-        self::assertSame([], penalty_helper::get_group_overrides_bulk($s['cmid'], []));
+        self::assertSame([], $this->group_overrides_bulk($s['cmid'], []));
     }
 
     /**
@@ -244,7 +284,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $deadline = time() + DAYSECS;
         $this->insert_group_override($s['cmid'], (int) $group->id, $deadline, 6.0, 45.0);
 
-        $result = penalty_helper::get_group_overrides_bulk(
+        $result = $this->group_overrides_bulk(
             $s['cmid'],
             [(int) $user1->id, (int) $user2->id, (int) $user3->id]
         );
@@ -278,7 +318,7 @@ final class penalty_helper_group_test extends advanced_testcase {
         $this->insert_group_override($s['cmid'], (int) $groupa->id, $laterdeadline, 10.0, 20.0);
         $this->insert_group_override($s['cmid'], (int) $groupb->id, $earlierdeadline, 2.0, 80.0);
 
-        $result = penalty_helper::get_group_overrides_bulk($s['cmid'], [(int) $user->id]);
+        $result = $this->group_overrides_bulk($s['cmid'], [(int) $user->id]);
 
         self::assertArrayHasKey((int) $user->id, $result);
         $merged = $result[(int) $user->id];

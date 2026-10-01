@@ -81,6 +81,7 @@ final class restore_test extends advanced_testcase {
         $this->assertEqualsWithDelta(50.00, (float) $rule->max_penalty, 0.001);
         $this->assertSame(1, (int) $rule->recalc_on_deadline);
         $this->assertSame(1, (int) $rule->recalc_on_rate);
+        $this->assertSame(1, (int) $rule->keepbest);
 
         // The last_deadline seed degrades to 0 because the activity instance is not
         // yet linked to the course module while the rule node is processed; the
@@ -227,6 +228,7 @@ final class restore_test extends advanced_testcase {
         $rule->max_penalty        = 50.00;
         $rule->recalc_on_deadline = 1;
         $rule->recalc_on_rate     = 1;
+        $rule->keepbest           = 1;
         $rule->last_deadline      = (int) $assign->duedate;
         $DB->update_record('local_latepenalty_rules', $rule);
 
