@@ -27,6 +27,12 @@ use local_latepenalty\tests\latepenalty_testcase;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \local_latepenalty\report\controller
  * @covers \local_latepenalty\penalty_helper
+ * @covers \local_latepenalty\observer
+ * @covers \local_latepenalty\recalculator
+ * @covers \local_latepenalty\local\deadline_resolver
+ * @covers \local_latepenalty\local\submission_resolver
+ * @covers \local_latepenalty\local\penalty_writer
+ * @covers \local_latepenalty\local\deadline
  */
 final class deadline_column_test extends latepenalty_testcase {
     /**
@@ -164,6 +170,39 @@ final class deadline_column_test extends latepenalty_testcase {
         $this->assertFalse($row['hasdeadline']);
         $override = get_string('deadline_origin_activity_override', 'local_latepenalty');
         $this->assertSame(get_string('deadline_origin_exempt', 'local_latepenalty', $override), $row['deadlineorigin']);
+    }
+
+    /**
+     * The student and activity filters apply to the screen and to the export alike.
+     *
+     * @return void
+     */
+    public function test_filters(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course, $student, $teacher] = $this->create_course_with_users();
+        $other = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $assigns = [];
+        foreach (['First', 'Second'] as $name) {
+            $assign = $this->create_assign_activity($course, ['name' => $name, 'duedate' => time() - 2 * DAYSECS]);
+            $this->enable_rule($assign->cmid);
+            foreach ([$student, $other] as $user) {
+                $this->submit_assign($assign, $user);
+                $this->grade_assign($assign, $user, $teacher, 100);
+            }
+            $assigns[] = $assign;
+        }
+        $context = \context_course::instance($course->id);
+        $count = function (controller $report): array {
+            return [count($report->get_template_context()['penalties']), count($report->get_export_data()[1])];
+        };
+
+        $this->assertSame([4, 4], $count(new controller((int) $course->id, $context)));
+        $this->assertSame([2, 2], $count(new controller((int) $course->id, $context, (int) $other->id)));
+        $this->assertSame([2, 2], $count(new controller((int) $course->id, $context, 0, (int) $assigns[1]->cmid)));
+        $report = new controller((int) $course->id, $context, (int) $other->id, (int) $assigns[1]->cmid);
+        $this->assertSame([1, 1], $count($report));
+        $this->assertSame(['Second'], array_column($report->get_template_context()['penalties'], 'activity'));
     }
 
     /**

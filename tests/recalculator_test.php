@@ -41,6 +41,12 @@ use grade_item;
  * Tests for local_latepenalty\recalculator.
  *
  * @covers \local_latepenalty\recalculator
+ * @covers \local_latepenalty\observer
+ * @covers \local_latepenalty\penalty_helper
+ * @covers \local_latepenalty\local\deadline_resolver
+ * @covers \local_latepenalty\local\submission_resolver
+ * @covers \local_latepenalty\local\penalty_writer
+ * @covers \local_latepenalty\local\deadline
  */
 final class recalculator_test extends advanced_testcase {
     #[\Override]

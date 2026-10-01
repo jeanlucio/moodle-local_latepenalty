@@ -31,6 +31,11 @@ use local_latepenalty\tests\latepenalty_testcase;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers \local_latepenalty\local\deadline_resolver
  * @covers \local_latepenalty\local\deadline
+ * @covers \local_latepenalty\observer
+ * @covers \local_latepenalty\recalculator
+ * @covers \local_latepenalty\penalty_helper
+ * @covers \local_latepenalty\local\submission_resolver
+ * @covers \local_latepenalty\local\penalty_writer
  */
 final class deadline_resolver_test extends latepenalty_testcase {
     /** @var int Reference time shared by the scenarios. */

@@ -41,6 +41,7 @@ use stdClass;
  *
  * @covers \backup_local_latepenalty_plugin
  * @covers \restore_local_latepenalty_plugin
+ * @covers \local_latepenalty\local\deadline_resolver
  */
 final class restore_test extends advanced_testcase {
     /**

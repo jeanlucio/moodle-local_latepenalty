@@ -1,91 +1,82 @@
 # 🧪 Automated Tests
 
-Late Penalty ships with **130 PHPUnit tests** plus a Behat suite, run on every CI push across
-the full matrix (Moodle 4.5 → 5.2, PostgreSQL & MariaDB).
+Late Penalty ships with **323 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
+across the full matrix: Moodle 4.5, 5.0, 5.1, 5.2 and 5.3 (`main`), each on PostgreSQL and
+MariaDB. A few tests only apply where the core offers the feature they check (the quiz due date
+from 5.3, deducted marks from the core late-penalty fix) and are skipped elsewhere.
+
+Every test drives the other module through its own API — real submissions, quiz attempts,
+ratings, extensions and overrides — never by writing rows into its tables, so a test cannot pass
+on a wrong assumption about where a module keeps its data.
 
 ### PHPUnit (`tests/`)
 
-| Test group | Scenarios covered |
-|------------|------------------|
-| `calculate_days_late()` | Timestamp arithmetic — on-time, exactly 1 day, fractional days rounded up |
-| `apply_penalty()` | Discount formula, edge cases (0% rate, 100% cap, grade already 0) |
-| `format_deadline()` | Combines the locale's own short-date and 24-hour time strings via the plugin's `deadline_datetime` string, rather than a hardcoded field order; structural guard that the output always contains a dash-separated, 24-hour time component |
-| `get_submission_time()` | Forum no posts; assign individual; assign no submission; assign team (userid = 0); h5pactivity returns null (event-timestamp fallback documented) |
-| Observer chain — assign | No rule, disabled rule, no deadline, on-time, 1 day late, 2 days late, capped at max, deadline from module field, team submission penalty |
-| Observer chain — quiz | 1 day late via `completionexpected` + `quiz_attempts.timefinish` |
-| Observer chain — h5pactivity | Late (event-timestamp fallback): penalty applied; on-time: grade unchanged |
-| Observer — per-user overrides | Custom deadline (shifts or removes lateness), custom daily rate, custom max cap, waived penalty (daily = 0), all-null override inherits rule |
-| `get_module_user_deadline()` | Assign extension, assign user override, assign group override, quiz user override, lesson user override, unknown module → null, no override → null, full-chain integration with extension |
-| Group override helper | `get_group_override()` — null when no applicable override, null when user in no group, single group, most-lenient resolution (MAX deadline, MIN rates) across multiple groups, partial null fields; `get_group_overrides_bulk()` — empty input, per-user merged values, most-lenient per user |
-| Recalculation | Extended deadline reduces penalty, deadline restored on-time grade, rate change recalculates, on-time student untouched |
-| Recalculation — per-user overrides | Override deadline, override daily rate, override max cap each take precedence over new rule parameters |
-| Recalculation — group overrides | Group override deadline applied, user override beats group override, `recalculate_for_group()` updates all group members |
-| Recalculation — h5pactivity | Rate change recalculates penalty from `grade_grades_history` timestamp |
-| Recalculation — teacher override | Manually overridden grade is not touched by recalculation |
-| Override controller | Render list (empty state, student name and penalties, a non-null deadline formatted with date and time, always includes add button); render add (no students when all covered, excludes a student outside a restricted group); save add rejects unenrolled user; save edit preserves original user; delete removes record on confirm, leaves record without confirm, does not affect foreign override; render list/edit/delete-by-ID all exclude an override outside the caller's restricted group |
-| Group override controller | Render list (empty state, group name and penalties, a non-null deadline formatted with date and time, always includes add button); render add (no groups notice when all covered, excludes a group outside the restriction); delete removes record on confirm, leaves record without confirm, does not affect foreign-CM override; render list excludes an override outside the caller's restriction |
-| Report controller — group restriction | `resolve_group_restriction()`: non-editing teacher without accessallgroups restricted to their own group, editing teacher sees all, non-separate-groups course is unrestricted, teacher in no group restricted to an empty set, activity-level groupmode overrides an unforced course setting; the report table, its student filter, and the CSV/Excel export data all honour the same restriction |
-| Group scope resolution | `resolve_activity_restriction()` — null when not in separate groups, null for VISIBLEGROUPS, null for a caller with `moodle/site:accessallgroups`, restricted to the caller's own groups, restricted to an empty set for a caller in no group, course-level `groupmodeforce` overrides the activity's own setting, activity-level groupmode applies when the course does not force its own |
-| Course notices | A hidden activity's cmid, deadline and penalty rate are excluded from the AMD payload sent to a student, even though the underlying query does not itself filter by visibility; a teacher with `local/latepenalty:viewreport` still sees notices for hidden activities; the notice payload carries the deadline formatted with date and time |
-| Privacy provider | Metadata declaration; `get_contexts_for_userid()` for a student with and without an override; `get_users_in_context()` including a non-module context; `export_user_data()`; deletion per context, per user, and per user list |
-| Backup / restore | Rule travels with the activity and is remapped to the new course module (regression guard for resolving the module before its instance is linked); per-user and per-group overrides remapped with user data; source course rule unaffected by restore into a new course |
+| Test file | What it covers |
+|-----------|----------------|
+| `module_assign_test` | Assignments: latest submission, team submissions, regrading later, extensions, rescaling |
+| `module_quiz_test` | Quizzes: attempt chosen by grading method, manual grading, abandoned attempts, the quiz due date (5.3) and the close date |
+| `module_lesson_test` | Lessons: retakes and the "use maximum" setting |
+| `module_forum_test`, `module_glossary_test`, `module_data_test` | Rated activities: each aggregation type, several raters, whole-forum grading |
+| `module_workshop_test` | Workshops: only the submission grade is penalised, never the assessment grade |
+| `module_generic_test` | External tools (LTI 1.1 and 1.3) and H5P: the submission date the module reports, or the time the grade arrived |
+| `grade_items_test` | Which grade items are penalised (numeric only; no scales, outcomes or workshop assessments) |
+| `local/deadline_resolver_test` | The deadline chain: plugin overrides, extensions, activity overrides, due date, completion date, exemptions |
+| `local/penalty_writer_test` | How penalties are stored, changed and removed — deducted marks or overrides — and the invariants of every write |
+| `keepbest_test` | "Highest grade" activities: a late attempt never lowers a better earlier result |
+| `recalculator_test`, `activity_overrides_test` | Recalculation when a rule, an override or an extension changes |
+| `observer_test`, `penalty_helper_group_test` | The grade event chain, per-student and per-group overrides |
+| `lib_test`, `lib_callbacks_test` | The activity form section, what saving it does, validation and navigation links |
+| `hook_listener_test`, `activity_notice_test` | Notices on the course page and on the activity page, for students and teachers |
+| `report/controller_test`, `report/deadline_column_test` | The report: group restrictions, filters, export, each deadline origin, query count |
+| `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Override pages and separate-groups restrictions |
+| `engine_edges_test` | Edge cases of the engine, the observers and the scheduled task |
+| `privacy/provider_test` | Privacy API export and deletion |
+| `backup/restore_test` | Rules and overrides through backup and restore |
+| `upgrade_test` | The upgrade from 1.1.x and the installation step |
 
-Run them locally with:
+Run the whole suite inside a Moodle with PHPUnit initialised:
 
 ```bash
 php admin/tool/phpunit/cli/init.php
-vendor/bin/phpunit local/latepenalty/tests/observer_test.php
-vendor/bin/phpunit local/latepenalty/tests/recalculator_test.php
-vendor/bin/phpunit local/latepenalty/tests/penalty_helper_group_test.php
-vendor/bin/phpunit local/latepenalty/tests/override/controller_test.php
-vendor/bin/phpunit local/latepenalty/tests/group_override/controller_test.php
-vendor/bin/phpunit local/latepenalty/tests/report/controller_test.php
-vendor/bin/phpunit local/latepenalty/tests/group_scope_test.php
-vendor/bin/phpunit local/latepenalty/tests/hook_listener_test.php
-vendor/bin/phpunit local/latepenalty/tests/privacy/provider_test.php
-vendor/bin/phpunit local/latepenalty/tests/backup/restore_test.php
+vendor/bin/phpunit --testsuite local_latepenalty_testsuite
 ```
 
-### Behat (`tests/behat/local_latepenalty_access.feature`)
+### Behat (`tests/behat/`)
 
-Three scenarios prove the plugin's capability-based access end to end, in a real browser
-session:
-
-* an editing teacher sees the **Late penalty** section, including the **Enable progressive
-  penalty?** field, in an assignment's editing settings;
-* a teacher sees the **Late penalty report** link in the course's secondary navigation;
-* a student does **not** see that link — the report is teacher/manager-only.
+* **`local_latepenalty_access.feature`** — the form section, the report link for teachers and
+  its absence for students.
+* **`local_latepenalty_penalties.feature`** — a late submission discounted in the gradebook,
+  the core penalty indicator, the report's deadline origins, the form's "deadline used" line and
+  help, scale-graded activities left alone, the keep-best option, disabling the rule and removing
+  the due date giving the original grades back, stepping aside when the core assignment penalty
+  is on, the quiz due date, and activity pages that never load the gradebook (quiz review,
+  glossary) opening normally with a rule enabled.
 
 ```bash
 php admin/tool/behat/cli/init.php
-vendor/bin/behat --config /var/www/behatdata/behatrun/behat/behat.yml \
-  --tags @local_latepenalty
+vendor/bin/behat --config /var/www/behatdata/behatrun/behat/behat.yml --tags @local_latepenalty
 ```
 
-### Line coverage by class (PHPUnit + Xdebug, via the `moodle-coverage` tool)
+### Line coverage by class (PHPUnit + Xdebug, Moodle 5.1)
 
 | Class | Line coverage |
 |-------|:-------------:|
-| `group_scope` | 100% |
+| `group_scope`, `local\deadline`, `observer`, `penalty_helper`, `task\reprocess_grades` | 100% |
+| `local\submission_resolver` | 99% |
+| `recalculator` | 99% |
+| `local\penalty_writer` | 97% |
+| `local\deadline_resolver` | 97% |
+| `hook_listener` | 95% |
+| `report\controller` | 95% |
 | `privacy\provider` | 94% |
-| `report\controller` | 89% |
-| `observer` | 86% |
 | `override\controller` | 83% |
-| `recalculator` | 82% |
 | `group_override\controller` | 72% |
-| `hook_listener` | 59% |
-| `penalty_helper` | 44% |
-| **Overall** | **63%** |
+| **Overall** | **87%** |
 
-> `classes/form/override_form.php` and `classes/form/group_override_form.php` are exercised by
-> the controller tests above (every `render_add()`/save scenario instantiates them) but are not
-> reflected in this table at all: Xdebug's coverage driver reliably fails to record any line
-> hits for a `moodleform` subclass once it is instantiated across a large number of sibling test
-> methods within one test class (16 in `override\controller_test`, 13 in
-> `group_override\controller_test`) — a tool artifact confirmed by isolating the same form in a
-> smaller test class, not a real gap in what the tests exercise. `penalty_helper`'s lower figure
-> is a genuine, reviewed gap: its two bulk-loading helpers (`get_submission_times_bulk()`,
-> `get_module_user_deadlines_bulk()`), used by `recalculator.php`'s group-recalculation path,
-> only have their `assign` branch exercised by the `recalculate_for_group()` tests above — the
-> `quiz`/`workshop`/`forum` branches and the missing-id fallback paths inside those two large
-> `switch` statements are not yet covered.
+> The two override controllers look lower than they are: their forms
+> (`classes/form/override_form.php`, `classes/form/group_override_form.php`) are instantiated in
+> every add/save scenario, but Xdebug fails to record line hits for a `moodleform` subclass
+> instantiated across many test methods of one test class — a tool artifact confirmed by
+> isolating the same form in a smaller test class. The remaining lines elsewhere are defensive
+> returns for states the core does not produce (a grade item whose activity is gone, for example)
+> and branches for core versions other than the one measured.
