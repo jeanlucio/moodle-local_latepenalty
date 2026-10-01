@@ -52,7 +52,7 @@ Feature: Late Penalty discounts late work and explains its deadline
   Scenario: The report shows each student's deadline and where it comes from
     Given the following "mod_assign > extensions" exist:
       | assign | user     | extensionduedate |
-      | Essay  | student2 | ##yesterday##    |
+      | Essay  | student2 | ##20 hours ago## |
     And the following "mod_assign > submissions" exist:
       | assign | user     | onlinetext  |
       | Essay  | student1 | My answer   |

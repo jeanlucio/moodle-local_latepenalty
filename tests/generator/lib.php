@@ -31,10 +31,12 @@ class local_latepenalty_generator extends component_generator_base {
      *
      * Creating an activity already inserts a disabled rule through
      * local_latepenalty_coursemodule_edit_post_actions(), so this updates that
-     * row when it exists instead of inserting a duplicate.
+     * row when it exists instead of inserting a duplicate. Like the form, it keeps
+     * the deadline snapshot (last_deadline) the form stored, or takes the
+     * activity deadline for a new row, unless the record gives one.
      *
      * @param array $record Must contain cmid; optional enabled, daily_penalty, max_penalty,
-     *                      recalc_on_deadline, recalc_on_rate, last_deadline.
+     *                      recalc_on_deadline, recalc_on_rate, keepbest, last_deadline.
      * @return stdClass The stored rule.
      */
     public function create_rule(array $record): stdClass {
@@ -44,16 +46,23 @@ class local_latepenalty_generator extends component_generator_base {
             throw new coding_exception('create_rule() requires a cmid.');
         }
 
+        $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $record['cmid']]);
+        if ($existing) {
+            $lastdeadline = (int) $existing->last_deadline;
+        } else {
+            $cm = get_coursemodule_from_id('', $record['cmid'], 0, false, MUST_EXIST);
+            $lastdeadline = \local_latepenalty\local\deadline_resolver::activity_deadline($cm)->time;
+        }
+
         $rule = (object) array_merge([
             'enabled' => 1,
             'daily_penalty' => 10.0,
             'max_penalty' => 50.0,
             'recalc_on_deadline' => 1,
             'recalc_on_rate' => 1,
-            'last_deadline' => 0,
+            'last_deadline' => $lastdeadline,
         ], $record);
 
-        $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $rule->cmid]);
         if ($existing) {
             $rule->id = $existing->id;
             $DB->update_record('local_latepenalty_rules', $rule);
