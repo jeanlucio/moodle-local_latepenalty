@@ -184,9 +184,11 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $anchors = ['tagshdr', 'competencieshdr'];
     foreach ($anchors as $anchor) {
         if ($mform->elementExists($anchor)) {
-            foreach ($elements as $name => $element) {
+            // The element goes to insertElementBefore() by reference: pass each array slot, never a
+            // reused loop variable, or every inserted element would end up being the last one.
+            foreach (array_keys($elements) as $name) {
                 $mform->removeElement($name);
-                $mform->insertElementBefore($element, $anchor);
+                $mform->insertElementBefore($elements[$name], $anchor);
             }
             break;
         }

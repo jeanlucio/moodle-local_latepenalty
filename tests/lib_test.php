@@ -121,13 +121,18 @@ final class lib_test extends latepenalty_testcase {
      *
      * @param int $cmid Course module ID.
      * @param string $modname Module name.
+     * @param bool $withanchor Whether the form has the Tags header the section is moved before.
      * @return \MoodleQuickForm
      */
-    private function plugin_section(int $cmid, string $modname): \MoodleQuickForm {
+    private function plugin_section(int $cmid, string $modname, bool $withanchor = false): \MoodleQuickForm {
         global $CFG;
         require_once($CFG->libdir . '/formslib.php');
 
         $mform = new \MoodleQuickForm('latepenaltytest', 'post', '');
+        if ($withanchor) {
+            // Activity forms always have the Tags section, which the plugin moves its section before.
+            $mform->addElement('header', 'tagshdr', 'Tags');
+        }
         $wrapper = new class ($cmid, $modname) {
             /**
              * Constructor.
@@ -420,5 +425,34 @@ final class lib_test extends latepenalty_testcase {
             $native = $this->create_assign_activity($course, ['duedate' => time(), 'gradepenalty' => 1]);
             $this->assertFalse($this->plugin_section($native->cmid, 'assign')->elementExists('latepenalty_deadlineused'));
         }
+    }
+
+    /**
+     * The section is moved before the Tags header intact, in its own order.
+     *
+     * @return void
+     */
+    public function test_section_moved_before_tags(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course, ['duedate' => time()]);
+        $this->enable_rule($assign->cmid);
+
+        $form = $this->plugin_section($assign->cmid, 'assign', true);
+
+        $names = array_map(fn($element) => $element->getName(), $form->_elements);
+        $this->assertSame([
+            'latepenaltyheader',
+            'latepenalty_enabled',
+            'latepenalty_daily',
+            'latepenalty_max',
+            'latepenalty_recalc_deadline',
+            'latepenalty_recalc_rate',
+            'latepenalty_disablewarning',
+            'latepenalty_deadlineused',
+            'tagshdr',
+        ], $names);
+        $this->assertStringContainsString(get_string('latepenalty', 'local_latepenalty'), $form->toHtml());
     }
 }
