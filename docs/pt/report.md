@@ -8,7 +8,7 @@ O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
 |--------|-----------|
 | **Estudante** | Nome completo do estudante |
 | **Atividade** | Nome da atividade avaliada |
-| **Prazo** | Prazo resolvido (completionexpected ou campo do módulo) |
+| **Prazo** | O prazo do estudante, com a origem logo abaixo: Sobreposição do Late Penalty, Sobreposição de grupo do Late Penalty, Extensão, Sobreposição da atividade, Fechamento da sobreposição da atividade, Data de entrega ou Definir lembrete na linha do tempo. Um estudante isento por sobreposição aparece com "sem data de entrega". |
 | **Nota bruta** | Nota antes da penalidade |
 | **Desconto** | Percentual aplicado. Quando uma sobreposição de usuário ou de grupo zera a penalidade, um badge (*Sobreposição de usuário* ou *Sobreposição de grupo*) aparece ao lado do valor 0,0% para explicar a isenção. |
 | **Nota final** | Nota após a penalidade |
@@ -25,4 +25,4 @@ Dois botões de download aparecem no cabeçalho do relatório sempre que há ao 
 | **Baixar CSV** | Valores separados por vírgula | `latepenalty_<sigla>_<data>.csv` |
 | **Baixar Excel** | Pasta de trabalho Excel (.xlsx) | `latepenalty_<sigla>_<data>.xlsx` |
 
-A exportação contém uma coluna adicional — **Sobreposição** — que exibe *Sobreposição de usuário* ou *Sobreposição de grupo* (ou fica vazia) para cada linha, facilitando a filtragem de penalidades isentas em uma planilha.
+A exportação traz a origem do prazo numa coluna própria, **Origem do prazo**, e mais uma coluna — **Sobreposição** — que exibe *Sobreposição de usuário* ou *Sobreposição de grupo* (ou fica vazia) para cada linha, facilitando a filtragem de penalidades isentas em uma planilha.

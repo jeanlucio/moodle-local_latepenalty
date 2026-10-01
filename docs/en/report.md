@@ -8,7 +8,7 @@ The report shows every grade adjustment applied by the plugin in that course:
 |--------|-------------|
 | **Student** | Full name of the student |
 | **Activity** | Name of the graded activity |
-| **Deadline** | Resolved deadline (completionexpected or module field) |
+| **Deadline** | The student's deadline, with where it comes from underneath: Late Penalty override, Late Penalty group override, Extension, Activity override, Close date of the activity override, Due date or Set reminder in Timeline. A student exempted by an override shows "no due date". |
 | **Raw grade** | Grade before the penalty |
 | **Discount** | Percentage applied. When a user or group override zeroes the penalty, a badge (*User override* or *Group override*) appears next to the 0.0% value to explain the waiver. |
 | **Final grade** | Grade after the penalty |
@@ -25,4 +25,4 @@ Two download buttons appear in the report header whenever there is at least one 
 | **Download CSV** | Comma-separated values | `latepenalty_<shortname>_<date>.csv` |
 | **Download Excel** | Excel workbook (.xlsx) | `latepenalty_<shortname>_<date>.xlsx` |
 
-The export contains one additional column — **Override** — that shows *User override* or *Group override* (or is empty) for each row, making it easy to filter waived penalties in a spreadsheet.
+The export has the deadline origin in its own column, **Deadline origin**, and one more column — **Override** — that shows *User override* or *Group override* (or is empty) for each row, making it easy to filter waived penalties in a spreadsheet.

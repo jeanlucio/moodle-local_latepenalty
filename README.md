@@ -71,7 +71,7 @@ Maintained by [Jean Lúcio](https://github.com/jeanlucio).
 ## Português
 
 O plugin **Late Penalty** aplica automaticamente descontos progressivos na nota de qualquer
-atividade do Moodle quando o aluno entrega após o prazo.
+atividade do Moodle quando o estudante entrega após o prazo.
 
 Ao contrário da penalidade de entrega tardia nativa do Moodle — restrita apenas a Tarefas —
 este plugin escuta o evento `user_graded` do Livro de Notas e funciona com **qualquer tipo de

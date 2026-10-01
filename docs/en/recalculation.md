@@ -1,33 +1,48 @@
 # 🔁 Penalty Recalculation
 
-## On Rule Change
+## When the rule or the deadline changes
 
-When a teacher edits an activity and changes the **deadline** or the **daily rate / maximum cap**, the plugin can automatically recalculate and reapply late penalties for every student who was already penalised (i.e. has a record in `grade_grades_history` with `source = 'local_latepenalty'`).
+Two checkboxes in the Late penalty section (both on by default) control what happens when the teacher saves the activity:
 
-Two independent checkboxes appear in the Late Penalty section of the activity form (both **enabled by default**):
+| Checkbox | When saving changes… | Effect |
+|---|---|---|
+| **Recalculate penalties when deadline changes** | the activity deadline | Grades already discounted are recalculated with the new deadline |
+| **Recalculate penalties when daily rate or maximum changes** | the daily rate, the maximum, or "Do not let a new late attempt lower the grade" | Grades already discounted are recalculated with the new values |
 
-| Checkbox | Behaviour |
-|---|---|
-| **Recalculate penalties when deadline changes** | Reapplies penalties with the new deadline whenever the resolved deadline changes |
-| **Recalculate penalties when daily rate or maximum changes** | Reapplies penalties with the new rate/cap whenever either value changes |
+* **A later deadline** reduces or removes the discount.
+* **An earlier deadline is not retroactive for students who were on time:** only students who were already late get a bigger discount. Students who handed in within the old deadline keep their grade.
+* **Removing the deadline** (no due date and no "Set reminder in Timeline") gives back the original grade to every student left without a deadline. Students with an override or extension of their own are recalculated with it.
 
-### Note
+## Disabling and enabling the rule
 
-* **Deadline shortening is not retroactive for on-time students.** If the deadline is moved earlier, students who submitted within the *original* deadline had no penalty recorded and will not be penalised retroactively. The teacher must handle those cases manually.
+* **Disabling** the rule and saving gives back the original grades (the form warns about it before saving).
+* **Enabling it again** applies the current rule to every student with a grade, including grades given while it was off, and with the deadline as it is now.
+* **Enabling it for the first time** changes no existing grade: only grades given from then on are discounted.
+* **To forgive one student**, give a later deadline with a Late Penalty override, or with the activity's own extension or override. Disabling the rule affects everybody.
 
-## On Override Save / Delete
+## When an override or extension changes
 
-When a teacher **creates, edits, or deletes** a per-user override, the affected student's final grade is recalculated immediately using the new effective deadline and rates.
+Saving or deleting any of these recalculates the affected students at once, whether or not they were penalised before:
 
-This recalculation uses a dedicated path (`recalculate_for_student()`) that works directly from `grade_grades.rawgrade`, independently of whether the student was previously penalised by this plugin. This makes the recalculation work correctly in two additional scenarios:
+* a **Late Penalty override** (student) or **group override** (its members);
+* an **activity override**: Assignment, Quiz or Lesson, for a student or a group;
+* an **Assignment extension** (*Grant extension*).
 
-| Scenario | How it is handled |
-|---|---|
-| **Grade set via course restore** | Restore writes `source = 'restore'` to `grade_grades_history`. `recalculate_for_student()` uses `rawgrade` from `grade_grades` directly (not from penalty history), so restored grades are updated correctly. |
-| **No prior penalty history** | If the student's grade was never touched by this plugin (e.g. the activity was added to the rule after the student was graded), the method still applies or removes the penalty based on the current `rawgrade` and the new effective deadline. |
+## When the activity sends a new grade
 
-### Teacher-edit protection
+A new attempt, a regrade or a corrected essay reaches the plugin as a new grade and is measured again with the rules above. How fast the gradebook shows it depends on the Moodle version, because of how the discount is stored:
 
-If a teacher manually edits a student's grade **after** this plugin last wrote it, the subsequent override change will **not** overwrite the teacher's value. The guard compares the most recent `local_latepenalty` history timestamp against the most recent non-plugin history timestamp — the student is skipped when the teacher's edit is newer.
+| Moodle | How the discount is stored | A better grade after a penalty |
+|---|---|---|
+| **5.1 and 5.2 (updated), 5.3+** | Moodle's own late-penalty field: the raw grade stays as the activity sent it, the discount is stored beside it and the gradebook shows *Late penalty applied -N points* | Shown immediately |
+| **4.5, 5.0 and older 5.1/5.2 builds** | The final grade is written as an override | The override hides the new grade until the scheduled task **Reprocess late-penalised grades changed by the activity** runs (hourly) |
 
-This protection is active only when a prior plugin write exists. When no plugin history entry is found, the grade is treated as the unmodified original and is always eligible for recalculation.
+A course whose gradebook calculations are **frozen** at an old version also uses the override storage, because its regrades ignore the stored discount.
+
+Grades discounted by Late Penalty before version 1.2.0 were stored as overrides and stay as they are. To have one recalculated in the new way, untick *Overridden* for that grade in the grader report.
+
+## What a recalculation never touches
+
+* A grade **edited by a teacher** in the gradebook, before or after the penalty.
+* A **locked** grade or grade item.
+* **Scale** grades and assignments using **Moodle's own grade penalties**.

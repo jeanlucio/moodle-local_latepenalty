@@ -1,33 +1,48 @@
 # 🔁 Recálculo de Penalidades
 
-## Ao Alterar Regra
+## Quando a regra ou o prazo muda
 
-Quando o professor edita uma atividade e altera o **prazo** ou a **taxa diária / limite máximo**, o plugin pode recalcular e reaplicar automaticamente as penalidades de todos os alunos já penalizados (ou seja, com registro em `grade_grades_history` com `source = 'local_latepenalty'`).
+Duas caixas na seção Penalidade por atraso (as duas marcadas por padrão) controlam o que acontece quando o professor salva a atividade:
 
-Dois checkboxes independentes aparecem na seção Late Penalty do formulário da atividade (ambos **habilitados por padrão**):
+| Caixa | Ao salvar uma mudança… | Efeito |
+|---|---|---|
+| **Recalcular penalidades ao alterar o prazo de entrega** | no prazo da atividade | As notas já descontadas são recalculadas com o prazo novo |
+| **Recalcular penalidades ao alterar a taxa diária ou o limite máximo** | na taxa diária, no máximo ou em "Não deixar uma nova tentativa atrasada baixar a nota" | As notas já descontadas são recalculadas com os valores novos |
 
-| Checkbox | Comportamento |
-|---|---|
-| **Recalcular penalidades ao alterar o prazo** | Reaplicar penalidades com o novo prazo sempre que o prazo resolvido mudar |
-| **Recalcular penalidades ao alterar a taxa ou limite** | Reaplicar penalidades com os novos valores sempre que a taxa diária ou o limite máximo mudarem |
+* **Um prazo mais tarde** reduz ou remove o desconto.
+* **Um prazo mais cedo não é retroativo para quem entregou no prazo:** só quem já estava atrasado recebe desconto maior. Quem entregou dentro do prazo antigo mantém a nota.
+* **Remover o prazo** (sem data de entrega e sem "Definir lembrete na linha do tempo") devolve a nota original a todo estudante que ficou sem prazo. Quem tem sobreposição ou extensão própria é recalculado por ela.
 
-### Nota
+## Desativar e ativar a regra
 
-* **Redução de prazo não penaliza alunos que entregaram no prazo original.** Se o prazo for antecipado, alunos que entregaram dentro do prazo *anterior* não tinham penalidade registrada e não serão penalizados retroativamente. O professor deve gerenciar esses casos manualmente.
+* **Desativar** a regra e salvar devolve as notas originais (o formulário avisa antes de salvar).
+* **Ativar de novo** aplica a regra atual a todos os estudantes com nota, inclusive notas dadas enquanto ela estava desligada, e com o prazo como está agora.
+* **Ativar pela primeira vez** não muda nenhuma nota existente: só as notas dadas a partir daí são descontadas.
+* **Para perdoar um estudante**, dê um prazo mais tarde com uma sobreposição do Late Penalty, ou com a extensão ou sobreposição da própria atividade. Desativar a regra afeta todos.
 
-## Ao Salvar ou Excluir Sobreposição
+## Quando muda uma sobreposição ou extensão
 
-Quando o professor **cria, edita ou exclui** uma sobreposição por aluno, a nota final do aluno afetado é recalculada imediatamente com o novo prazo efetivo e as novas taxas.
+Salvar ou apagar qualquer uma destas recalcula na hora os estudantes afetados, tenham sido penalizados antes ou não:
 
-Esse recálculo utiliza um caminho dedicado (`recalculate_for_student()`) que trabalha diretamente com `grade_grades.rawgrade`, independentemente de o aluno já ter sido penalizado pelo plugin. Isso garante o funcionamento correto em dois cenários adicionais:
+* uma **sobreposição do Late Penalty** (o estudante) ou **sobreposição de grupo** (os membros);
+* uma **sobreposição da atividade**: Tarefa, Questionário ou Lição, para um estudante ou grupo;
+* uma **extensão da Tarefa** (*Atribuir extensão*).
 
-| Cenário | Como é tratado |
-|---|---|
-| **Nota definida via restauração de curso** | A restauração grava `source = 'restore'` em `grade_grades_history`. O `recalculate_for_student()` usa o `rawgrade` diretamente de `grade_grades` (não do histórico de penalidades), por isso notas restauradas são atualizadas corretamente. |
-| **Sem histórico de penalidade anterior** | Se a nota do aluno nunca foi tocada pelo plugin (por exemplo, a atividade foi adicionada à regra depois que o aluno já havia sido avaliado), o método ainda aplica ou remove a penalidade com base no `rawgrade` atual e no novo prazo efetivo. |
+## Quando a atividade envia uma nota nova
 
-### Proteção contra edição manual do professor
+Uma tentativa nova, uma reavaliação ou uma dissertação corrigida chegam ao plugin como nota nova e são medidas de novo pelas regras acima. Quão rápido o livro de notas mostra isso depende da versão do Moodle, por causa da forma como o desconto é guardado:
 
-Se o professor editar manualmente a nota de um aluno **após** o plugin ter gravado a penalidade, uma alteração posterior na sobreposição **não** sobrescreverá o valor definido pelo professor. A verificação compara o timestamp mais recente de `local_latepenalty` no histórico com o timestamp mais recente de outras origens — o aluno é ignorado quando a edição do professor for mais recente.
+| Moodle | Como o desconto é guardado | Uma nota melhor depois de uma penalidade |
+|---|---|---|
+| **5.1 e 5.2 (atualizados), 5.3+** | No campo de penalidade do próprio Moodle: a nota bruta fica como a atividade enviou, o desconto fica ao lado e o livro de notas mostra *Penalidade por atraso aplicada -N pontos* | Aparece na hora |
+| **4.5, 5.0 e versões antigas do 5.1/5.2** | A nota final é gravada como sobrescrita | A sobrescrita esconde a nota nova até a tarefa agendada **Reprocessar notas com penalidade por atraso alteradas pela atividade** rodar (de hora em hora) |
 
-Essa proteção só é ativada quando existe uma gravação anterior do plugin. Quando não há nenhum registro do plugin no histórico, a nota é tratada como o original inalterado e sempre poderá ser recalculada.
+Um curso cujo livro de notas está **congelado** numa versão antiga de cálculo também usa a sobrescrita, porque os recálculos dele ignoram o desconto guardado.
+
+Notas descontadas pelo Late Penalty antes da versão 1.2.0 foram gravadas como sobrescritas e ficam como estão. Para uma delas ser recalculada da forma nova, desmarque *Sobrescrito* nessa nota no relatório do avaliador.
+
+## O que um recálculo nunca altera
+
+* Uma nota **editada pelo professor** no livro de notas, antes ou depois da penalidade.
+* Uma nota ou item de nota **bloqueado**.
+* Notas **por escala** e tarefas que usam as **penalidades de nota do próprio Moodle**.

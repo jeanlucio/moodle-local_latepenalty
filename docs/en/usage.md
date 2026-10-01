@@ -1,80 +1,84 @@
 # 📖 How It Works
 
-1. The teacher opens any Moodle activity that has a grade and completion conditions.
+1. The teacher opens any Moodle activity that records a grade.
 
-2. The teacher sets a **submission deadline** for the activity, which serves as the reference point for penalty calculation:
-   - **Assignment** and **Forum**: have a native due date field (do not confuse with the Assignment cut-off date, which blocks submissions and prevents penalty calculation).
-   - **Quiz, Lesson, SCORM, and all other activities**: do not have a deadline that allows late submission. For these, the **"Set reminder on timeline"** field (*Completion conditions* tab) is **required** — it does not block submissions and serves solely as the penalty reference date. Without it configured, there is no deadline and no penalty is applied.
+2. The activity needs a **deadline** to measure lateness against:
+   - **Assignment**, **Forum** and, from Moodle 5.3, **Quiz** have a due date that still accepts late work. Late Penalty uses it. (Do not confuse it with the Assignment cut-off date or the Quiz close date, which block submissions.)
+   - **Every other activity** (Lesson, SCORM, H5P, Glossary, Database, external tools…): set **"Set reminder in Timeline"** (*Completion conditions*). It does not block anything and serves as the penalty deadline. Without it there is no deadline and no penalty.
 
-3. The teacher then opens the **Late Penalty** section and enables **Enable progressive penalty**.
+3. The teacher opens the **Late penalty** section, ticks **Enable progressive penalty?** and enters the **Daily penalty (%)** and the **Maximum penalty (%)**. Example: 10% a day, 50% maximum.
 
-4. The teacher enters the **daily penalty (%)** and the **maximum penalty (%)**. Example: 10% daily penalty with a 50% cap → the system deducts 10% of the student's achieved grade per day late, up to a maximum of 50%, regardless of how many days pass after that point.
+4. When the activity already exists, the section shows the line **"Deadline used for the penalty: <date> (<origin>)"**, or warns that there is no deadline. It shows the value as saved; save the form after changing the dates.
 
-5. When the activity is saved, a **badge** appears next to the activity name showing the deadline. After the deadline, if the student has not yet completed the activity, the badge switches to show the accumulated penalty. The badge has contextual status: grey with the deadline when on time, yellow with the accumulated penalty when overdue, and red when the maximum is reached. The tooltip adapts to each state. The badge and the activity-page notice disappear automatically once the student completes the activity. **Teachers see a different badge for overdue activities:** it shows the penalty rate plus how many students have not yet submitted. When all students have submitted, the badge is hidden — there is nothing actionable left to show.
+5. A **badge** next to the activity on the course page shows the deadline, then the accumulated penalty once it has passed: grey while on time, yellow when overdue, red at the maximum. It disappears once the student completes the activity. Teachers see a variant with the number of students who have not submitted yet.
 
-6. When a student submits after the deadline and a grade is assigned (manually by the teacher or automatically), the plugin calculates and applies the penalty.
-
-7. If a **deadline override** is set for a specific student, it takes precedence over other configurations. The priority order is:
-   - **Plugin per-user override** — accessed via *Penalty overrides* inside the activity. Highest priority.
-   - **Plugin group override** — accessed via *Group penalty overrides* inside the activity. When the student belongs to multiple groups, the most lenient value per field is used.
-   - **Module-native override** — Assignment (extension/override), Quiz (override), and Lesson (override) have their own fields, checked next.
-   - **"Set reminder on timeline"** (`completionexpected`) — applies to any activity type.
-   - **Native deadline field** — Assignment and Forum only, as a final fallback.
-
-8. Days late are calculated and the discount is applied.
-
-9. The adjusted grade is written back to the Gradebook via the standard grade API.
-
-> **Note — manual grading without a submission:** The penalty is based on the student's submission timestamp, not on when the teacher grades. If a teacher assigns a grade to a student who never submitted (e.g., a Forum where the student posted nothing), no submission record exists and the plugin skips the penalty entirely. This is by design: without a submission there is no lateness to measure.
-
-> **Note — Assignment team (group) submissions:** When an Assignment is configured for team submissions with *Require all team members to submit* **disabled**, Moodle stores a single submission record for the whole group (`userid = 0`). The plugin automatically detects this case, looks up the student's groups, and uses the **group submission timestamp** as the basis for penalty calculation for every group member. When *Require all team members to submit* is **enabled**, Moodle records an individual submission per member and each student's own submission time is used.
+6. When the activity grades a student, the plugin measures how late the student handed in and discounts the grade.
 
 ## Calculation
 
-1. **Days late** — counted from the moment of submission. Any fraction of a day counts as a full day (rounded up). Example: submitted 25 hours after the deadline = 2 days late.
-2. **Discount** — days late × daily rate, capped at the maximum penalty.
-3. **Final grade** — the raw grade reduced by the discount percentage.
+1. **Days late** — counted from the deadline to the moment the student handed in. Any fraction of a day counts as a full day: 25 hours late is 2 days.
+2. **Discount** — days late × daily rate, never above the maximum.
+3. **Final grade** — the grade minus the discount percentage. A grade never goes below the item's minimum.
 
-**Example** (raw grade: 100 | daily penalty: 10% | cap: 50%):
+**Example** (grade 100, 10% a day, 50% maximum):
 
-| Submission | Discount | Final grade |
+| Handed in | Discount | Final grade |
 |---|---|---|
 | On time | 0% | 100 |
 | 1 day late | 10% | 90 |
 | 2 days late | 20% | 80 |
-| 3 days late | 30% | 70 |
-| 4 days late | 40% | 60 |
-| 5+ days late | 50% (cap) | 50 |
+| 5 days late or more | 50% (maximum) | 50 |
 
-## Deadline Priority Chain
+## Which deadline applies to each student
 
-For each student, the effective deadline is resolved in this order (first match wins):
+The first of these that is set wins:
 
-| Priority | Source | Applies to |
+| Order | Deadline | Where it is set |
 |---|---|---|
-| 1 | Plugin per-user override (`local_latepenalty_overrides`) | All modules |
-| 2 | Plugin group override (`local_latepenalty_group_overrides`) — most lenient value per field across all of the student's groups | All modules |
-| 3 | Module-native user/group override | Assignment (`assign_user_flags.extensiondue`, `assign_overrides.duedate`), Quiz (`quiz_overrides.timeclose`), Lesson (`lesson_overrides.deadline`) |
-| 4 | `completionexpected` on the course module | All modules |
-| 5 | Module deadline field | See table below |
+| 1 | **Late Penalty override** for the student | *Late penalty overrides* (activity settings menu), *User overrides* tab |
+| 2 | **Late Penalty group override** for one of the student's groups (most lenient value of each field across groups) | *Late penalty overrides*, *Group overrides* tab |
+| 3 | The **activity's own extension or override** | Assignment: *Grant extension*, then user override, then group override by priority. Quiz: override due date (Moodle 5.3+), otherwise the override close date. Lesson: override deadline. |
+| 4 | The **activity due date** | Assignment, Forum, and Quiz from Moodle 5.3 |
+| 5 | **"Set reminder in Timeline"** | Any activity |
 
-For module-native overrides at level 3, the **most favourable (latest) deadline** among all of the student's groups is used, mirroring Moodle's native behaviour.
+Notes:
 
-If a teacher sets both a plugin override and a native module override for the same student, the **plugin override takes precedence** (it was set explicitly for penalty purposes).
+* An assignment or quiz override that **removes** the due date for a student means that student has no deadline and is never penalised.
+* The Assignment extension wins over its overrides, as in the Assignment itself.
+* The workshop submission end, the quiz close date and the lesson deadline are not used: they close the activity rather than mark work as late. Use "Set reminder in Timeline" for those activities.
+* The penalty report shows the deadline of each student and where it comes from.
 
-## Module Deadline Fields (level 4 fallback)
+## When the student handed in
 
-Only activities whose deadline field is a **soft deadline** — meaning the module does not block submissions after it — are supported at this level.
+The plugin always uses the moment of the student's own action, never the moment of grading. A teacher grading late, an essay graded later or a regrade never adds lateness.
 
-| Activity   | Deadline field   | Why soft?                                              |
-|------------|------------------|--------------------------------------------------------|
-| Assignment | `assign.duedate` | Moodle allows late submissions until `cutoffdate`      |
-| Forum      | `forum.duedate`  | Calendar display only; posts are never blocked         |
+| Activity | Moment used |
+|---|---|
+| Assignment | The submission (the student's own, or the group submission for team assignments) |
+| Quiz | The attempt behind the grade: first, last, highest (the earliest attempt with that grade), or the last attempt for an average |
+| Lesson | The attempt behind the grade: the first when retakes are off, the highest, or the last one for a mean |
+| Forum, Glossary, Database with ratings | The post, entry or record behind the grade: the one with the highest rating for "Maximum", the lowest for "Minimum", the latest rated one for average, count or sum |
+| Forum whole-forum grading | The student's latest post |
+| Workshop | The latest change to the submission |
+| Other activities (H5P, SCORM, external tools, other plugins) | The submission date the activity reports to the gradebook; otherwise the date it graded or sent the grade |
 
-All other activity types (Quiz, Lesson, SCORM, Workshop, H5P, PlayerGroup, etc.) enforce a hard close that prevents any submission after the deadline, so their native deadline field is never used as the penalty deadline. Use `completionexpected` for those activities instead.
+In the **Glossary** and the **Database**, the entry's creation time counts. Later edits do not count as lateness; the date of the last change is shown on the entry itself, and the teacher can take it into account when rating.
+
+## Highest grade: a late attempt never lowers the grade
+
+When an activity keeps the highest of several grades, each attempt is discounted by its own lateness and the best result stays. Example, 10% a day: 90 on time, then 100 two days late (100 − 20% = 80) → the grade stays **90**.
+
+This is automatic for Quiz, Lesson, SCORM and H5P graded by highest attempt, and for Forum, Glossary and Database rated by "Maximum". For **external tools** and **activities from other plugins**, whose grading method Late Penalty cannot read, the form offers **"Do not let a new late attempt lower the grade"** (off by default). With it, earlier grades count from the time they reached the gradebook, because the gradebook history keeps no submission date.
+
+## What is never discounted
+
+* **Scale grades** ("Good", "Excellent"…) and activities with no grade type. A percentage of a position in a scale means nothing; the form says so.
+* **Assignments that use Moodle's own grade penalties** (Moodle 5.0+, *Grade penalties: Yes* in the assignment). Late Penalty steps aside there so a grade is never discounted twice; its section in the form is disabled. Grades it discounted earlier stay as they are.
+* **Grades edited by a teacher** in the gradebook, and **locked** grades or items.
+* The **workshop assessment grade** (how the student assessed peers). The submission grade is discounted.
+
+> **Grading without a submission:** if a teacher grades a student who never handed anything in (a forum where the student never posted, for example), there is no submission to measure and no penalty is applied.
 
 ## Course-page Notice Compatibility
 
-The **course-page notice** (the reminder displayed below each activity before a student starts) works with any course format that uses Moodle's standard activity rendering (`[data-for="cmitem"]` on the activity element), which includes the built-in **Topics**, **Weeks**, and **Single Activity** formats.
-
-Third-party formats that replace the standard module HTML with a custom layout (such as visual trail or board formats) may not display the per-activity notice on the course page. **The penalty calculation, grade history, and the Penalty Report are not affected — only the course-page notice display.**
+The **course-page notice** works with any course format that uses Moodle's standard activity rendering (`[data-for="cmitem"]`), which includes the built-in **Topics**, **Weeks** and **Single Activity** formats. Formats that replace the standard activity HTML may not show it. **The penalty calculation, grade history and the Penalty Report are not affected — only the course-page notice.**
