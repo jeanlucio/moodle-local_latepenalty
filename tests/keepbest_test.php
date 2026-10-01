@@ -414,6 +414,66 @@ final class keepbest_test extends latepenalty_testcase {
     }
 
     /**
+     * Tools that keep the last attempt or the average: [second grade sent, without the option, with it].
+     *
+     * The first grade is 90 on time; the second one arrives two days late.
+     *
+     * @return array
+     */
+    public static function last_or_average_tools(): array {
+        return [
+            'last attempt: 60 replaces 90' => [60, 48.0, 60.0],
+            'average: 75 of 90 and 60' => [75, 60.0, 75.0],
+        ];
+    }
+
+    /**
+     * Tools that keep the last attempt or the average: with the option, a worse late attempt escapes the penalty.
+     *
+     * The option never raises the grade above the one the tool sent; it only stops the
+     * discount below the best grade the student already had, after its own penalty.
+     *
+     * @dataProvider last_or_average_tools
+     * @param int $second Second grade the tool sends.
+     * @param float $without Expected grade without the option.
+     * @param float $with Expected grade with the option.
+     * @return void
+     */
+    public function test_external_tool_graded_by_last_attempt_or_average(int $second, float $without, float $with): void {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/gradelib.php');
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $deadline = time() - 5 * DAYSECS;
+        [$course, $student] = $this->create_course_with_users();
+        $lti = $this->getDataGenerator()->create_module('lti', ['course' => $course->id, 'grade' => 100]);
+        $this->set_reminder($lti->cmid, $deadline);
+        $this->enable_rule($lti->cmid);
+
+        $itemid = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'lti', 'iteminstance' => $lti->id,
+            'itemnumber' => 0, 'courseid' => $course->id])->id;
+
+        $times = [$deadline - DAYSECS, $deadline + 2 * DAYSECS - 60];
+        foreach ([90, $second] as $i => $grade) {
+            grade_update('mod/lti', $course->id, 'mod', 'lti', $lti->id, 0, ['userid' => $student->id,
+                'rawgrade' => $grade, 'datesubmitted' => $times[$i], 'dategraded' => $times[$i]]);
+        }
+        // The history keeps the time each grade reached the gradebook; in a real course those were $times.
+        $mine = ['itemid' => $itemid, 'userid' => $student->id, 'source' => 'mod/lti'];
+        foreach (array_keys($DB->get_records('grade_grades_history', $mine, 'id', 'id')) as $i => $id) {
+            $DB->set_field('grade_grades_history', 'timemodified', $times[$i], ['id' => $id]);
+        }
+        // Two days late: 20% off the second grade.
+        $this->assertSame($without, $this->final_grade('lti', $lti->id, $student->id));
+
+        $this->save_activity_settings($lti->cmid, ['latepenalty_keepbest' => 1]);
+
+        // The best penalised grade is the on-time 90, above the grade sent: no discount, and no more than it.
+        $this->assertSame($with, $this->final_grade('lti', $lti->id, $student->id));
+    }
+
+    /**
      * External tool with a rule (option as given) and two grades of a student: 90 on time, 100 two days late.
      *
      * A second student is enrolled for scenarios that need one.

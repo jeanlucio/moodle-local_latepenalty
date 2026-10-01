@@ -68,7 +68,7 @@ In the **Glossary** and the **Database**, the entry's creation time counts. Late
 
 When an activity keeps the highest of several grades, each attempt is discounted by its own lateness and the best result stays. Example, 10% a day: 90 on time, then 100 two days late (100 − 20% = 80) → the grade stays **90**.
 
-This is automatic for Quiz, Lesson, SCORM and H5P graded by highest attempt, and for Forum, Glossary and Database rated by "Maximum". For **external tools** and **activities from other plugins**, whose grading method Late Penalty cannot read, the form offers **"Do not let a new late attempt lower the grade"** (off by default). With it, earlier grades count from the time they reached the gradebook, because the gradebook history keeps no submission date.
+This is automatic for Quiz, Lesson, SCORM and H5P graded by highest attempt, and for Forum, Glossary and Database rated by "Maximum". For **external tools** and **activities from other plugins**, whose grading method Late Penalty cannot read, the form offers **"Do not let a new late attempt lower the grade"** (off by default). With it, earlier grades count from the time they reached the gradebook, because the gradebook history keeps no submission date, and the grade never goes above the one the activity sent. Tick it when the activity keeps the highest grade. If it uses the last attempt or the average, leave it unticked: ticked, a late attempt worse than an earlier one would escape the discount (90 on time, then 60 two days late would stay 60 instead of 48).
 
 ## What is never discounted
 

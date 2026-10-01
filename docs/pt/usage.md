@@ -68,7 +68,7 @@ No **Glossário** e na **Base de dados**, vale a hora em que o item foi criado. 
 
 Quando a atividade fica com a maior de várias notas, cada tentativa é descontada pelo seu próprio atraso e fica o melhor resultado. Exemplo, 10% ao dia: 90 no prazo e depois 100 com dois dias de atraso (100 − 20% = 80) → a nota continua **90**.
 
-Isso é automático no Questionário, Lição, SCORM e H5P avaliados pela tentativa mais alta, e no Fórum, Glossário e Base de dados avaliados por "Máximo". Nas **ferramentas externas** e nas **atividades de outros plugins**, cujo método de avaliação o Late Penalty não consegue ler, o formulário oferece **"Não deixar uma nova tentativa atrasada baixar a nota"** (desmarcado por padrão). Com ela, as notas anteriores contam a partir da hora em que chegaram ao livro de notas, porque o histórico do livro de notas não guarda a data de entrega.
+Isso é automático no Questionário, Lição, SCORM e H5P avaliados pela tentativa mais alta, e no Fórum, Glossário e Base de dados avaliados por "Máximo". Nas **ferramentas externas** e nas **atividades de outros plugins**, cujo método de avaliação o Late Penalty não consegue ler, o formulário oferece **"Não deixar uma nova tentativa atrasada baixar a nota"** (desmarcado por padrão). Com ela, as notas anteriores contam a partir da hora em que chegaram ao livro de notas, porque o histórico do livro de notas não guarda a data de entrega, e a nota nunca passa da que a atividade enviou. Marque quando a atividade fica com a nota mais alta. Se ela usa a última tentativa ou a média, deixe desmarcada: marcada, uma tentativa atrasada pior que uma anterior escaparia do desconto (90 no prazo e depois 60 com dois dias de atraso ficaria 60, e não 48).
 
 ## O que nunca é descontado
 
