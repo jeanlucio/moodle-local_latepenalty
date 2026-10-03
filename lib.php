@@ -385,16 +385,27 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
 
     $cmid = (int) $data->coursemodule;
 
+    $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
+
     $record = new stdClass();
     $record->cmid = $cmid;
-    $record->enabled = !empty($data->latepenalty_enabled) ? 1 : 0;
-    $record->daily_penalty = isset($data->latepenalty_daily) ? (float) $data->latepenalty_daily : 0.00;
-    $record->max_penalty = isset($data->latepenalty_max) ? (float) $data->latepenalty_max : 0.00;
-    $record->recalc_on_deadline = !empty($data->latepenalty_recalc_deadline) ? 1 : 0;
-    $record->recalc_on_rate = !empty($data->latepenalty_recalc_rate) ? 1 : 0;
-    $record->keepbest = !empty($data->latepenalty_keepbest) ? 1 : 0;
-
-    $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]);
+    if ($existing && !property_exists($data, 'latepenalty_enabled')) {
+        // Saved through update_module() without the form (a script, another plugin): the section
+        // was not sent, so the rule stays as saved and only the deadline handling below applies.
+        $record->enabled = (int) $existing->enabled;
+        $record->daily_penalty = (float) $existing->daily_penalty;
+        $record->max_penalty = (float) $existing->max_penalty;
+        $record->recalc_on_deadline = (int) $existing->recalc_on_deadline;
+        $record->recalc_on_rate = (int) $existing->recalc_on_rate;
+        $record->keepbest = (int) $existing->keepbest;
+    } else {
+        $record->enabled = !empty($data->latepenalty_enabled) ? 1 : 0;
+        $record->daily_penalty = isset($data->latepenalty_daily) ? (float) $data->latepenalty_daily : 0.00;
+        $record->max_penalty = isset($data->latepenalty_max) ? (float) $data->latepenalty_max : 0.00;
+        $record->recalc_on_deadline = !empty($data->latepenalty_recalc_deadline) ? 1 : 0;
+        $record->recalc_on_rate = !empty($data->latepenalty_recalc_rate) ? 1 : 0;
+        $record->keepbest = !empty($data->latepenalty_keepbest) ? 1 : 0;
+    }
 
     // Resolve the current (post-save) deadline from the module.
     $cm          = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);

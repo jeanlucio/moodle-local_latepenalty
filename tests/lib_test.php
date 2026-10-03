@@ -171,6 +171,77 @@ final class lib_test extends latepenalty_testcase {
     }
 
     /**
+     * Save assignment settings through update_module() without the Late Penalty section.
+     *
+     * This is what scripts and other plugins do when they change an activity
+     * through the course API: the plugin's fields are simply not in the data.
+     *
+     * @param int $cmid Course module ID.
+     * @param array $changes Fields to change.
+     * @return void
+     */
+    private function update_without_section(int $cmid, array $changes): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/course/modlib.php');
+
+        $cm = get_coursemodule_from_id('', $cmid, 0, false, MUST_EXIST);
+        [, , , $data] = get_moduleinfo_data($cm, get_course($cm->course));
+        $data->assignsubmission_onlinetext_enabled = 1;
+        foreach ($changes as $field => $value) {
+            $data->$field = $value;
+        }
+        update_module($data);
+    }
+
+    /**
+     * Saving the activity through the course API without the plugin's section keeps the rule.
+     *
+     * Regression guard: missing fields read as an unticked box, so the rule was
+     * switched off, its rates set to 0 and every penalised grade given back.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_update_without_section_keeps_rule(bool $deductedmark): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path($deductedmark);
+        [$assign, $student] = $this->late_assign();
+
+        $this->update_without_section($assign->cmid, ['name' => 'Renamed by a script']);
+
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $assign->cmid], '*', MUST_EXIST);
+        $this->assertSame(1, (int) $rule->enabled);
+        $this->assertEqualsWithDelta(10.0, (float) $rule->daily_penalty, 0.001);
+        $this->assertEqualsWithDelta(50.0, (float) $rule->max_penalty, 0.001);
+        $this->assertSame(1, (int) $rule->recalc_on_deadline);
+        $this->assertSame(80.0, $this->final_grade('assign', $assign->id, $student->id));
+    }
+
+    /**
+     * A due date changed through the course API is followed as the saved rule says.
+     *
+     * One day earlier makes the submission three days late: 70, as the form would give.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_update_without_section_follows_deadline(bool $deductedmark): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path($deductedmark);
+        [$assign, $student, , , $duedate] = $this->late_assign();
+
+        $this->update_without_section($assign->cmid, ['duedate' => $duedate - DAYSECS]);
+
+        $this->assertSame(70.0, $this->final_grade('assign', $assign->id, $student->id));
+    }
+
+    /**
      * Removing the activity deadline gives the grades back, with the deadline box ticked (F16).
      *
      * @dataProvider storage_paths
