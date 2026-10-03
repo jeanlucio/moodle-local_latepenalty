@@ -30,6 +30,9 @@ use local_latepenalty\local\penalty_writer;
  * Observer class for handling grade events.
  */
 class observer {
+    /** @var int|null Course whose reset is running: its group changes recalculate nothing. */
+    private static ?int $resetcourseid = null;
+
     /**
      * Apply the late penalty when a module grades a student.
      *
@@ -154,6 +157,86 @@ class observer {
         global $DB;
 
         $DB->delete_records('local_latepenalty_group_overrides', ['groupid' => (int) $event->objectid]);
+
+        // The former members lose the group's deadlines, but they are already gone from
+        // groups_members: recalculate the whole course in the background (once per course).
+        $courseid = (int) $event->courseid;
+        if (self::$resetcourseid === $courseid || !self::course_has_rules($courseid)) {
+            return;
+        }
+        $task = new task\recalculate_course();
+        $task->set_custom_data(['courseid' => $courseid]);
+        \core\task\manager::queue_adhoc_task($task, true);
+    }
+
+    /**
+     * Recalculate a student who joined or left a group that changes deadlines.
+     *
+     * Joining or leaving the group gives or takes away its group overrides, from
+     * Late Penalty or from the activity itself, as editing the override would.
+     * Nothing happens during a course reset, nor for a user no longer enrolled:
+     * unenrolling removes the groups right before core deletes the grade, which
+     * "Recover grades" would bring back from the history as it was last written.
+     *
+     * @param \core\event\base $event group_member_added or group_member_removed.
+     * @return void
+     */
+    public static function group_member_changed(\core\event\base $event): void {
+        $courseid = (int) $event->courseid;
+        $userid = (int) $event->relateduserid;
+        if (self::$resetcourseid === $courseid || !is_enrolled(\context_course::instance($courseid), $userid)) {
+            return;
+        }
+
+        foreach (recalculator::rules_with_group_deadline($courseid, (int) $event->objectid) as $rule) {
+            recalculator::recalculate_for_student(
+                (int) $rule->cmid,
+                $userid,
+                (float) $rule->daily_penalty,
+                (float) $rule->max_penalty
+            );
+        }
+    }
+
+    /**
+     * Note that a course reset started, so its group changes recalculate nothing.
+     *
+     * A reset closes a term: recalculating then would punish the students who had
+     * a group extension in it, which is not what removing the groups means.
+     *
+     * @param \core\event\course_reset_started $event The event.
+     * @return void
+     */
+    public static function course_reset_started(\core\event\course_reset_started $event): void {
+        self::$resetcourseid = (int) $event->courseid;
+    }
+
+    /**
+     * Note that the course reset is over.
+     *
+     * @param \core\event\course_reset_ended $event The event.
+     * @return void
+     */
+    public static function course_reset_ended(\core\event\course_reset_ended $event): void {
+        self::$resetcourseid = null;
+    }
+
+    /**
+     * Whether a course has an activity with an enabled rule.
+     *
+     * @param int $courseid Course ID.
+     * @return bool
+     */
+    private static function course_has_rules(int $courseid): bool {
+        global $DB;
+
+        return $DB->record_exists_sql(
+            "SELECT 1
+               FROM {local_latepenalty_rules} r
+               JOIN {course_modules} cm ON cm.id = r.cmid
+              WHERE cm.course = :courseid AND r.enabled = 1",
+            ['courseid' => $courseid]
+        );
     }
 
     /**

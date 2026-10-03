@@ -28,6 +28,8 @@ Salvar ou apagar qualquer uma destas recalcula na hora os estudantes afetados, t
 * uma **sobreposição da atividade**: Tarefa, Questionário ou Lição, para um estudante ou grupo;
 * uma **extensão da Tarefa** (*Atribuir extensão*).
 
+Um **estudante que entra ou sai de um grupo** ganha ou perde as sobreposições desse grupo, do Late Penalty ou da atividade, e é recalculado na hora nas atividades em que elas mudam o prazo. **Apagar um grupo** recalcula as atividades do curso em segundo plano, logo depois, porque a essa altura os membros já não são conhecidos. Uma **reconfiguração do curso** (*Reconfigurar curso*) que remove grupos ou membros não recalcula nada: as notas do período encerrado ficam como estavam.
+
 ## Quando a atividade envia uma nota nova
 
 Uma tentativa nova, uma reavaliação ou uma dissertação corrigida chegam ao plugin como nota nova e são medidas de novo pelas regras acima. Quão rápido o livro de notas mostra isso depende da versão do Moodle, por causa da forma como o desconto é guardado:

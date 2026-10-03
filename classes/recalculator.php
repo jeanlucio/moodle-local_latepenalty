@@ -109,6 +109,59 @@ class recalculator {
     }
 
     /**
+     * Apply the rules again to every activity of a course with an enabled rule.
+     *
+     * @param int $courseid Course ID.
+     * @return void
+     */
+    public static function recalculate_course(int $courseid): void {
+        global $DB;
+
+        $rules = $DB->get_records_sql(
+            "SELECT r.cmid, r.daily_penalty, r.max_penalty
+               FROM {local_latepenalty_rules} r
+               JOIN {course_modules} cm ON cm.id = r.cmid
+              WHERE cm.course = :courseid AND r.enabled = 1",
+            ['courseid' => $courseid]
+        );
+        foreach ($rules as $rule) {
+            self::recalculate_all((int) $rule->cmid, (float) $rule->daily_penalty, (float) $rule->max_penalty);
+        }
+    }
+
+    /**
+     * Enabled rules of a course whose activity deadline a group changes.
+     *
+     * A group changes a deadline through a Late Penalty group override or a group
+     * override of the activity itself (assignment, quiz, lesson), the sources the
+     * deadline resolver reads.
+     *
+     * @param int $courseid Course ID.
+     * @param int $groupid Group ID.
+     * @return array Rules (cmid, daily_penalty, max_penalty) keyed by course module ID.
+     */
+    public static function rules_with_group_deadline(int $courseid, int $groupid): array {
+        global $DB;
+
+        return $DB->get_records_sql(
+            "SELECT r.cmid, r.daily_penalty, r.max_penalty
+               FROM {local_latepenalty_rules} r
+               JOIN {course_modules} cm ON cm.id = r.cmid
+               JOIN {modules} m ON m.id = cm.module
+              WHERE cm.course = :courseid AND r.enabled = 1
+                AND (EXISTS (SELECT 1 FROM {local_latepenalty_group_overrides} go
+                              WHERE go.cmid = r.cmid AND go.groupid = :g1)
+                     OR (m.name = 'assign' AND EXISTS (SELECT 1 FROM {assign_overrides} o
+                                                        WHERE o.assignid = cm.instance AND o.groupid = :g2))
+                     OR (m.name = 'quiz' AND EXISTS (SELECT 1 FROM {quiz_overrides} o
+                                                      WHERE o.quiz = cm.instance AND o.groupid = :g3))
+                     OR (m.name = 'lesson' AND EXISTS (SELECT 1 FROM {lesson_overrides} o
+                                                        WHERE o.lessonid = cm.instance AND o.groupid = :g4)))",
+            ['courseid' => $courseid, 'g1' => $groupid, 'g2' => $groupid, 'g3' => $groupid, 'g4' => $groupid]
+        );
+    }
+
+    /**
      * Whether the plugin has ever written a penalty in an activity.
      *
      * @param int $cmid Course module ID.

@@ -37,6 +37,22 @@ $observers = [
         'eventname' => '\core\event\group_deleted',
         'callback' => '\local_latepenalty\observer::group_deleted',
     ],
+    [
+        'eventname' => '\core\event\group_member_added',
+        'callback' => '\local_latepenalty\observer::group_member_changed',
+    ],
+    [
+        'eventname' => '\core\event\group_member_removed',
+        'callback' => '\local_latepenalty\observer::group_member_changed',
+    ],
+    [
+        'eventname' => '\core\event\course_reset_started',
+        'callback' => '\local_latepenalty\observer::course_reset_started',
+    ],
+    [
+        'eventname' => '\core\event\course_reset_ended',
+        'callback' => '\local_latepenalty\observer::course_reset_ended',
+    ],
     // Overrides and extensions of the activities themselves change a student's deadline.
     // Optional integration: these modules are not dependencies; without them the observers
     // never fire (see SCOPE_FEATURE.md, DA9).

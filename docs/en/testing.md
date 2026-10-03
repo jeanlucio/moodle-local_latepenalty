@@ -1,6 +1,6 @@
 # 🧪 Automated Tests
 
-Late Penalty ships with **351 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
+Late Penalty ships with **361 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
 across the full matrix: Moodle 4.5, 5.0, 5.1, 5.2 and 5.3 (`main`), each on PostgreSQL and
 MariaDB. A few tests only apply where the core offers the feature they check (the quiz due date
 from 5.3, deducted marks from the core late-penalty fix) and are skipped elsewhere.
@@ -26,6 +26,7 @@ on a wrong assumption about where a module keeps its data.
 | `local/penalty_writer_test` | How penalties are stored, changed and removed — deducted marks or overrides — and the invariants of every write |
 | `keepbest_test` | "Highest grade" activities: a late attempt never lowers a better earlier result |
 | `recalculator_test`, `activity_overrides_test` | Recalculation when a rule, an override or an extension changes |
+| `group_changes_test` | Students joining or leaving a group, deleted groups and course resets |
 | `observer_test`, `penalty_helper_group_test` | The grade event chain, per-student and per-group overrides |
 | `lib_test`, `lib_callbacks_test` | The activity form section, what saving it does, validation and navigation links |
 | `hook_listener_test`, `activity_notice_test` | Notices on the course page and on the activity page, for students and teachers |
