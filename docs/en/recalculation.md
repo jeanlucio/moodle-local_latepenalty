@@ -28,7 +28,7 @@ Saving or deleting any of these recalculates the affected students at once, whet
 * an **activity override**: Assignment, Quiz or Lesson, for a student or a group;
 * an **Assignment extension** (*Grant extension*).
 
-A **student joining or leaving a group** gains or loses that group's overrides, from Late Penalty or from the activity, and is recalculated at once in the activities they change. **Deleting a group** recalculates the course's activities in the background, shortly after, because its members are no longer known by then. A **course reset** (*Reset course*) that removes groups or their members recalculates nothing: the grades of the term that ended stay as they were.
+A **student joining or leaving a group** gains or loses that group's overrides, from Late Penalty or from the activity, and is recalculated at once in the activities they change. **Deleting a group** recalculates the course's activities in the background, shortly after, because its members are no longer known by then. A **course reset** (*Reset course*) that removes groups or their members recalculates nothing: the grades of the term that ended stay as they were. A reset with a new start date moves the Late Penalty override deadlines by the same amount as the activity dates, as Moodle does with the activities' own overrides.
 
 ## When the activity sends a new grade
 

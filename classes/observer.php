@@ -212,13 +212,45 @@ class observer {
     }
 
     /**
-     * Note that the course reset is over.
+     * Move the plugin's deadlines with a reset that changes the course start date.
+     *
+     * Core moves the activities' dates and their own overrides by the difference
+     * between the new and the old start date; the Late Penalty overrides and the
+     * deadline each rule last saw move by the same amount. Otherwise an override
+     * would stay in the term that ended, and the first save of the activity would
+     * read the shifted due date as a teacher's change and recalculate.
+     *
+     * The event carries the reset form data but not the computed shift, so it is
+     * worked out here as reset_course_userdata() does.
      *
      * @param \core\event\course_reset_ended $event The event.
      * @return void
      */
     public static function course_reset_ended(\core\event\course_reset_ended $event): void {
+        global $DB;
+
         self::$resetcourseid = null;
+
+        $options = $event->other['reset_options'] ?? [];
+        if (empty($options['reset_start_date'])) {
+            return;
+        }
+        $timeshift = (int) $options['reset_start_date'] - (int) ($options['reset_start_date_old'] ?? 0);
+        if ($timeshift === 0) {
+            return;
+        }
+
+        // Bulk updates, as core shifts dates on reset (shift_course_mod_dates(), assign and quiz
+        // overrides); these tables have no cache to purge. Empty deadlines mean "inherit" and stay empty.
+        $params = ['shift' => $timeshift, 'courseid' => (int) $event->courseid];
+        $incourse = "cmid IN (SELECT id FROM {course_modules} WHERE course = :courseid)";
+        foreach (['local_latepenalty_overrides', 'local_latepenalty_group_overrides'] as $table) {
+            $DB->execute("UPDATE {{$table}} SET deadline = deadline + :shift WHERE deadline IS NOT NULL AND $incourse", $params);
+        }
+        $DB->execute(
+            "UPDATE {local_latepenalty_rules} SET last_deadline = last_deadline + :shift WHERE last_deadline <> 0 AND $incourse",
+            $params
+        );
     }
 
     /**

@@ -28,7 +28,7 @@ Salvar ou apagar qualquer uma destas recalcula na hora os estudantes afetados, t
 * uma **sobreposição da atividade**: Tarefa, Questionário ou Lição, para um estudante ou grupo;
 * uma **extensão da Tarefa** (*Atribuir extensão*).
 
-Um **estudante que entra ou sai de um grupo** ganha ou perde as sobreposições desse grupo, do Late Penalty ou da atividade, e é recalculado na hora nas atividades em que elas mudam o prazo. **Apagar um grupo** recalcula as atividades do curso em segundo plano, logo depois, porque a essa altura os membros já não são conhecidos. Uma **reconfiguração do curso** (*Reconfigurar curso*) que remove grupos ou membros não recalcula nada: as notas do período encerrado ficam como estavam.
+Um **estudante que entra ou sai de um grupo** ganha ou perde as sobreposições desse grupo, do Late Penalty ou da atividade, e é recalculado na hora nas atividades em que elas mudam o prazo. **Apagar um grupo** recalcula as atividades do curso em segundo plano, logo depois, porque a essa altura os membros já não são conhecidos. Uma **reconfiguração do curso** (*Reconfigurar curso*) que remove grupos ou membros não recalcula nada: as notas do período encerrado ficam como estavam. Uma reconfiguração com nova data de início desloca os prazos das sobreposições do Late Penalty pela mesma diferença das datas das atividades, como o Moodle faz com as sobreposições das próprias atividades.
 
 ## Quando a atividade envia uma nota nova
 
