@@ -132,6 +132,40 @@ final class module_forum_test extends latepenalty_testcase {
     }
 
     /**
+     * Whole-forum grade for a student with no post: nothing to measure, so no penalty.
+     *
+     * The grade goes through the forum grading API, so it reaches the plugin as a
+     * raw grade from the module; test_whole_forum_grade_alone_is_penalised() is the
+     * control, with a late post on the same setup.
+     *
+     * @return void
+     */
+    public function test_whole_forum_grade_without_posts_is_not_penalised(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $deadline = time() - 5 * DAYSECS;
+        [$course, $student, $teacher] = $this->create_course_with_users();
+        $forum = $this->getDataGenerator()->create_module('forum', [
+            'course' => $course->id,
+            'grade_forum' => 100,
+            'duedate' => $deadline,
+        ]);
+        $this->enable_rule($forum->cmid);
+
+        $this->grade_whole_forum($forum, $student, $teacher, 80);
+
+        $this->assertSame(80.0, $this->final_grade('forum', $forum->id, $student->id, 1));
+        $this->assertSame(80.0, (float) $this->grade_row('forum', $forum->id, $student->id, 1)->rawgrade, 'Grade from the module');
+        $this->assertFalse($DB->record_exists('grade_grades_history', [
+            'userid' => $student->id,
+            'source' => 'local_latepenalty',
+        ]));
+    }
+
+    /**
      * Maximum aggregation: the on-time post rated 90 decides the grade, not the later post (F4-11).
      *
      * @return void

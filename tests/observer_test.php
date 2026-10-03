@@ -1049,44 +1049,6 @@ final class observer_test extends advanced_testcase {
         self::assertEqualsWithDelta(90.0, $this->grade_and_read($s, 100.0), 0.01);
     }
 
-    /**
-     * Forum with no posts: professor grades anyway → no penalty (nothing to measure).
-     */
-    public function test_forum_no_posts_observer_skips_penalty(): void {
-        global $DB;
-
-        $course  = $this->getDataGenerator()->create_course();
-        $student = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($student->id, $course->id);
-
-        $forum    = $this->getDataGenerator()->create_module('forum', [
-            'course'       => $course->id,
-            'grade_forum'  => 100,
-        ]);
-        $deadline = time() - 5 * DAYSECS;
-        $DB->set_field('course_modules', 'completionexpected', $deadline, ['id' => $forum->cmid]);
-        rebuild_course_cache($course->id);
-
-        $this->upsert_rule($forum->cmid, true, 10.0, 50.0);
-
-        // No forum posts — professor grades the student directly.
-        $gradeitem = grade_item::fetch([
-            'itemtype' => 'mod', 'itemmodule' => 'forum',
-            'iteminstance' => $forum->id, 'courseid' => $course->id,
-        ]);
-        $gradeitem->update_final_grade($student->id, 80.0, 'test');
-
-        $grade = new grade_grade(['itemid' => $gradeitem->id, 'userid' => $student->id]);
-        $grade->load_optional_fields();
-
-        self::assertEqualsWithDelta(
-            80.0,
-            (float) $grade->finalgrade,
-            0.01,
-            'Grade should not be penalised when student has no forum posts.'
-        );
-    }
-
     // Cleanup on course module deletion.
 
     /**
