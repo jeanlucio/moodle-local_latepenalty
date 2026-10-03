@@ -33,6 +33,10 @@ $observers = [
         'eventname' => '\core\event\course_module_deleted',
         'callback' => '\local_latepenalty\observer::course_module_deleted',
     ],
+    [
+        'eventname' => '\core\event\group_deleted',
+        'callback' => '\local_latepenalty\observer::group_deleted',
+    ],
     // Overrides and extensions of the activities themselves change a student's deadline.
     // Optional integration: these modules are not dependencies; without them the observers
     // never fire (see SCOPE_FEATURE.md, DA9).

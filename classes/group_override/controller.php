@@ -259,8 +259,6 @@ class controller {
      * @return void
      */
     private function prepare_form(): void {
-        global $DB;
-
         $groupoptions = [];
         $groupname    = '';
         $existinggroupid = 0;
@@ -270,8 +268,7 @@ class controller {
             if (!$this->editingoverride) {
                 throw new \moodle_exception('invalidrecord');
             }
-            $group           = $DB->get_record('groups', ['id' => $this->editingoverride->groupid], '*', MUST_EXIST);
-            $groupname       = format_string($group->name, true, ['context' => $this->modcontext]);
+            $groupname       = $this->group_name((int) $this->editingoverride->groupid);
             $existinggroupid = (int) $this->editingoverride->groupid;
         } else {
             $groupoptions = $this->build_group_options();
@@ -400,14 +397,30 @@ class controller {
     }
 
     /**
+     * Name of an override's group, or "unknown" when the group no longer exists.
+     *
+     * Overrides of groups deleted before they were cleaned up with the group stay
+     * reachable this way, so they can still be edited or deleted.
+     *
+     * @param int $groupid Group ID.
+     * @return string
+     */
+    private function group_name(int $groupid): string {
+        global $DB;
+
+        $name = $DB->get_field('groups', 'name', ['id' => $groupid]);
+        return $name === false
+            ? get_string('unknown', 'local_latepenalty')
+            : format_string($name, true, ['context' => $this->modcontext]);
+    }
+
+    /**
      * Render the delete confirmation page.
      *
      * @param renderer_base $output Page renderer.
      * @return string HTML confirmation widget.
      */
     private function render_delete_confirm(renderer_base $output): string {
-        global $DB;
-
         if (!$this->overrideid) {
             return '';
         }
@@ -416,14 +429,9 @@ class controller {
         if (!$override) {
             throw new \moodle_exception('invalidrecord');
         }
-        $group = $DB->get_record('groups', ['id' => $override->groupid], '*', MUST_EXIST);
 
         return $output->confirm(
-            get_string(
-                'group_override_confirm_delete',
-                'local_latepenalty',
-                format_string($group->name, true, ['context' => $this->modcontext])
-            ),
+            get_string('group_override_confirm_delete', 'local_latepenalty', $this->group_name((int) $override->groupid)),
             new moodle_url('/local/latepenalty/overrides.php', [
                 'cmid'       => $this->cmid,
                 'mode'       => 'group',

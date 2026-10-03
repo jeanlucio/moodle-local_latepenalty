@@ -1103,6 +1103,39 @@ final class observer_test extends advanced_testcase {
     }
 
     /**
+     * Deleting a group removes its group overrides in every activity, and only its own.
+     *
+     * Goes through the real groups_delete_group(), which course resets and
+     * "Delete all groups" also call once per group.
+     */
+    public function test_group_deleted_removes_its_group_overrides(): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/group/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $assign = $this->getDataGenerator()->create_module('assign', ['course' => $course->id]);
+        $quiz = $this->getDataGenerator()->create_module('quiz', ['course' => $course->id]);
+        $deleted = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $kept = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        foreach ([[$assign->cmid, $deleted], [$quiz->cmid, $deleted], [$assign->cmid, $kept]] as [$cmid, $group]) {
+            $DB->insert_record('local_latepenalty_group_overrides', (object) [
+                'cmid' => $cmid,
+                'groupid' => $group->id,
+                'deadline' => null,
+                'daily_penalty' => 5.0,
+                'max_penalty' => null,
+                'timecreated' => time(),
+                'timemodified' => time(),
+            ]);
+        }
+
+        groups_delete_group($deleted->id);
+
+        self::assertSame(0, $DB->count_records('local_latepenalty_group_overrides', ['groupid' => $deleted->id]));
+        self::assertSame(1, $DB->count_records('local_latepenalty_group_overrides', ['groupid' => $kept->id]));
+    }
+
+    /**
      * Deleting the whole course removes the plugin's rows for every course module
      * in it, even though remove_course_contents() never fires course_module_deleted.
      *

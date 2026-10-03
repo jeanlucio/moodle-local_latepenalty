@@ -141,6 +141,22 @@ class observer {
     }
 
     /**
+     * Delete the group overrides of a group that was removed.
+     *
+     * Its members are gone by the time the event fires, so the override applies to
+     * nobody; left behind, it would show as an unknown group in the override list.
+     * Course resets and "Delete all groups" also fire this event once per group.
+     *
+     * @param \core\event\group_deleted $event The event.
+     * @return void
+     */
+    public static function group_deleted(\core\event\group_deleted $event): void {
+        global $DB;
+
+        $DB->delete_records('local_latepenalty_group_overrides', ['groupid' => (int) $event->objectid]);
+    }
+
+    /**
      * Delete the plugin's own rows for every course module in a course that is
      * about to be removed.
      *

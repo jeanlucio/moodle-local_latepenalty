@@ -507,6 +507,39 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * An override whose group no longer exists can still be opened, confirmed and deleted.
+     *
+     * The group row is removed directly, without groups_delete_group(), to rebuild
+     * the orphans left behind before group deletions removed their overrides.
+     */
+    public function test_orphan_override_can_be_edited_and_deleted(): void {
+        global $DB, $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $override = $this->insert_group_override((int) $s['cm']->id, (int) $s['group']->id, null, 5.0, null);
+        $DB->delete_records('groups', ['id' => $s['group']->id]);
+        $unknown = get_string('unknown', 'local_latepenalty');
+
+        $edit = $this->make_controller($s, 'edit', (int) $override->id);
+        $edit->process();
+        self::assertStringContainsString($unknown, $edit->render($PAGE->get_renderer('core')));
+
+        $confirm = $this->make_controller($s, 'delete', (int) $override->id);
+        self::assertStringContainsString($unknown, $confirm->render($PAGE->get_renderer('core')));
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['sesskey' => sesskey()];
+        try {
+            $this->make_controller($s, 'delete', (int) $override->id, true)->process();
+            self::fail('Expected moodle_exception from redirect().');
+        } catch (\moodle_exception $e) {
+            self::assertSame('redirecterrordetected', $e->errorcode);
+        }
+        self::assertFalse($DB->record_exists('local_latepenalty_group_overrides', ['id' => $override->id]));
+    }
+
+    /**
      * process() leaves the group override intact when confirm = false.
      */
     public function test_process_delete_leaves_record_without_confirm(): void {
