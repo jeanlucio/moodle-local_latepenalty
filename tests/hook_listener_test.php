@@ -109,7 +109,6 @@ final class hook_listener_test extends advanced_testcase {
         global $PAGE;
 
         $property = new ReflectionProperty($PAGE->requires, 'amdjscode');
-        $property->setAccessible(true);
 
         return implode("\n", $property->getValue($PAGE->requires));
     }
@@ -360,7 +359,6 @@ final class hook_listener_test extends advanced_testcase {
      */
     private function count_pending_students(\cm_info $cm): int {
         $method = new ReflectionMethod(hook_listener::class, 'count_pending_students');
-        $method->setAccessible(true);
 
         return $method->invoke(null, $cm);
     }

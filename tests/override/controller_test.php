@@ -235,7 +235,6 @@ final class controller_test extends advanced_testcase {
      */
     private function invoke_save_override(controller $ctrl, stdClass $formdata): void {
         $method = new \ReflectionMethod($ctrl, 'save_override');
-        $method->setAccessible(true);
         $method->invoke($ctrl, $formdata);
     }
 

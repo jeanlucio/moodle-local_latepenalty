@@ -352,7 +352,6 @@ final class controller_test extends advanced_testcase {
 
         $ctrl = $this->make_controller($s, 'add', 0, false, [(int) $s['group1']->id]);
         $method = new \ReflectionMethod($ctrl, 'save_override');
-        $method->setAccessible(true);
 
         $caught = null;
         try {
