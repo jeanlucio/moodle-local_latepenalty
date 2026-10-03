@@ -462,6 +462,95 @@ final class hook_listener_test extends advanced_testcase {
     }
 
     /**
+     * Invokes the private static hook_listener::load_pending_counts() via reflection.
+     *
+     * @param \stdClass[] $cms Course modules (id, modname, instance), keyed by ID.
+     * @param int $courseid Course ID.
+     * @return array Pending counts keyed by course module ID.
+     */
+    private function load_pending_counts(array $cms, int $courseid): array {
+        return (new ReflectionMethod(hook_listener::class, 'load_pending_counts'))->invoke(null, $cms, $courseid);
+    }
+
+    /**
+     * Course with an assignment, an editing teacher, one active student and the given extra students.
+     *
+     * Each student owes the assignment. Kinds: 'suspended' (suspended enrolment),
+     * 'ended' (enrolment ended yesterday), 'customrole' (a graded role without the
+     * student archetype) and 'category' (student role given on the course category
+     * to a user enrolled without a role).
+     *
+     * @param string[] $kinds Extra students to enrol.
+     * @return array [course, cm_info of the assignment]
+     */
+    private function enrolment_variants(array $kinds): array {
+        global $DB, $CFG;
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $teacher = $generator->create_and_enrol($course, 'editingteacher');
+        $studentrole = (int) $DB->get_field('role', 'id', ['shortname' => 'student'], MUST_EXIST);
+        $generator->create_and_enrol($course, 'student');
+
+        foreach ($kinds as $kind) {
+            $user = $generator->create_user();
+            switch ($kind) {
+                case 'suspended':
+                    $generator->enrol_user($user->id, $course->id, 'student', 'manual', 0, 0, ENROL_USER_SUSPENDED);
+                    break;
+                case 'ended':
+                    $generator->enrol_user($user->id, $course->id, 'student', 'manual', time() - 10 * DAYSECS, time() - DAYSECS);
+                    break;
+                case 'customrole':
+                    $auditorrole = $generator->create_role(['shortname' => 'auditor', 'archetype' => '']);
+                    $CFG->gradebookroles = $studentrole . ',' . $auditorrole;
+                    $generator->enrol_user($user->id, $course->id, $auditorrole);
+                    break;
+                case 'category':
+                    $generator->enrol_user($user->id, $course->id, 0);
+                    role_assign($studentrole, $user->id, \context_coursecat::instance((int) $course->category)->id);
+                    break;
+            }
+        }
+
+        $assign = $generator->create_module('assign', ['course' => $course->id]);
+        $this->enable_rule($assign->cmid);
+        rebuild_course_cache($course->id);
+
+        $this->setUser($teacher);
+        return [$course, get_fast_modinfo($course->id)->get_cm($assign->cmid)];
+    }
+
+    /**
+     * Students whose enrolment is suspended or has ended are not pending.
+     */
+    public function test_count_pending_students_skips_inactive_enrolments(): void {
+        [, $cm] = $this->enrolment_variants(['suspended', 'ended']);
+
+        self::assertSame(1, $this->count_pending_students($cm));
+    }
+
+    /**
+     * Pending students are the gradebook's graded roles: a custom graded role and
+     * the student role given on the category count too.
+     */
+    public function test_count_pending_students_follows_graded_roles(): void {
+        [, $cm] = $this->enrolment_variants(['customrole', 'category']);
+
+        self::assertSame(3, $this->count_pending_students($cm));
+    }
+
+    /**
+     * The bulk course-page count uses the same students as the activity page.
+     */
+    public function test_load_pending_counts_follows_gradebook_students(): void {
+        [$course, $cm] = $this->enrolment_variants(['suspended', 'ended', 'customrole']);
+        $cms = [$cm->id => (object) ['id' => $cm->id, 'modname' => 'assign', 'instance' => $cm->instance]];
+
+        self::assertSame([$cm->id => 2], $this->load_pending_counts($cms, (int) $course->id));
+    }
+
+    /**
      * Regression guard for the course-page badge (inject_course_notices()): the
      * bulk load_pending_counts() path must apply the same group scoping as the
      * single-activity path, not just report a course-wide count for every caller.
