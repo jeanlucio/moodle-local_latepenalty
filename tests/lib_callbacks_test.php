@@ -139,6 +139,38 @@ final class lib_callbacks_test extends latepenalty_testcase {
     }
 
     /**
+     * The overrides link uses a core icon that exists as an image and as a Font Awesome icon.
+     *
+     * Regression guard: 'i/override' exists in neither, so themes that show icons
+     * in the activity administration (Classic) showed a broken image.
+     *
+     * @return void
+     */
+    public function test_settings_navigation_icon_exists(): void {
+        global $CFG, $PAGE;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course, , $teacher] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course);
+        $this->enable_rule($assign->cmid);
+        [, $cm] = get_course_and_cm_from_cmid($assign->cmid, 'assign');
+        $this->setUser($teacher);
+        $PAGE = new \moodle_page();
+        $PAGE->set_course($course);
+        $PAGE->set_cm($cm);
+        $PAGE->set_url('/mod/assign/view.php', ['id' => $cm->id]);
+        $PAGE->settingsnav->initialise();
+
+        $icon = $PAGE->settingsnav->find('local_latepenalty_overrides', \navigation_node::TYPE_SETTING)->icon;
+
+        $this->assertSame('moodle', $icon->component);
+        $this->assertNotEmpty(glob($CFG->dirroot . '/pix/' . $icon->pix . '.{svg,png}', GLOB_BRACE), 'Image');
+        $map = \core\output\icon_system::instance(\core\output\icon_system::FONTAWESOME)->get_core_icon_map();
+        $this->assertArrayHasKey('core:' . $icon->pix, $map, 'Font Awesome');
+    }
+
+    /**
      * Course navigation: the report link for teachers only.
      *
      * @return void

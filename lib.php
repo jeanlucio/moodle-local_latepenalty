@@ -333,7 +333,7 @@ function local_latepenalty_extend_settings_navigation(
         navigation_node::TYPE_SETTING,
         null,
         'local_latepenalty_overrides',
-        new pix_icon('i/override', '')
+        new pix_icon('i/calendareventtime', '')
     );
 }
 
