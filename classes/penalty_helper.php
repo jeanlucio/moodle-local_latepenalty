@@ -215,6 +215,66 @@ class penalty_helper {
     }
 
     /**
+     * Students of a course, optionally confined to some groups.
+     *
+     * Students are who the gradebook grades: users with an active enrolment and a
+     * graded role ($CFG->gradebookroles) in the course or a parent context, as in
+     * core's graded_users_iterator.
+     *
+     * @param \context_course $context Course context.
+     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
+     * @return int[] Student IDs.
+     */
+    public static function graded_student_ids(\context_course $context, ?array $groupids): array {
+        global $CFG, $DB;
+
+        if ($groupids === [] || empty($CFG->gradebookroles)) {
+            // A caller in no group of a restricted activity sees nothing, and no role is graded.
+            return [];
+        }
+
+        [$enrolledsql, $enrolledparams] = get_enrolled_sql($context, '', 0, true);
+        [$rolesql, $roleparams] = $DB->get_in_or_equal(explode(',', $CFG->gradebookroles), SQL_PARAMS_NAMED, 'grbr');
+        [$ctxsql, $ctxparams] = $DB->get_in_or_equal($context->get_parent_context_ids(true), SQL_PARAMS_NAMED, 'relctx');
+        [$groupjoin, $groupparams] = self::group_scope_join('je.id', $groupids);
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT je.id
+               FROM ($enrolledsql) je
+                    $groupjoin
+              WHERE EXISTS (SELECT 1
+                              FROM {role_assignments} ra
+                             WHERE ra.userid = je.id
+                               AND ra.roleid $rolesql
+                               AND ra.contextid $ctxsql)",
+            array_merge($enrolledparams, $groupparams, $roleparams, $ctxparams)
+        ));
+    }
+
+    /**
+     * Build a group-membership JOIN restricting a pending-count query to specific
+     * groups, or no restriction when $groupids is null.
+     *
+     * Callers must handle an empty $groupids array before reaching this method —
+     * get_in_or_equal() rejects an empty list, and an empty group set means the
+     * caller belongs to no group at all (sees nothing), not "every group".
+     *
+     * @param string $useridcolumn Column holding the user ID to join against, e.g. 'je.id'.
+     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
+     * @return array{0: string, 1: array} [JOIN SQL fragment ('' when unrestricted), params].
+     */
+    private static function group_scope_join(string $useridcolumn, ?array $groupids): array {
+        if ($groupids === null) {
+            return ['', []];
+        }
+
+        global $DB;
+
+        [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'gscope');
+
+        return [" JOIN {groups_members} gms ON gms.userid = $useridcolumn AND gms.groupid $insql", $inparams];
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

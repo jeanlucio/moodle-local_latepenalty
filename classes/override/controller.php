@@ -346,7 +346,6 @@ class controller {
             static fn(string $f): string => "u.$f",
             \core_user\fields::get_name_fields()
         ));
-        // Only active enrolments: saving accepts no other (is_user_enrolled()).
         $enrolled = get_enrolled_users(
             $coursecontext,
             '',
@@ -358,10 +357,13 @@ class controller {
             true
         );
 
+        // Only the students saving accepts (is_user_enrolled()): graded, actively enrolled, in scope.
+        $graded = array_flip(penalty_helper::graded_student_ids($coursecontext, null));
         $allowed = $this->allowed_student_ids();
-        if ($allowed !== null) {
-            $enrolled = array_filter($enrolled, static fn($u): bool => isset($allowed[(int) $u->id]));
-        }
+        $enrolled = array_filter(
+            $enrolled,
+            static fn($u): bool => isset($graded[(int) $u->id]) && ($allowed === null || isset($allowed[(int) $u->id]))
+        );
 
         $existinguserids = array_map(
             'intval',
@@ -448,16 +450,16 @@ class controller {
     }
 
     /**
-     * Check whether a user is actively enrolled in this controller's course and,
-     * when the caller is confined to specific groups, that the user belongs to
-     * one of them.
+     * Check whether a user is a student the gradebook grades in this controller's
+     * course (graded role, active enrolment) and, when the caller is confined to
+     * specific groups, that the user belongs to one of them.
      *
      * @param int $userid User ID to check.
-     * @return bool True when the user is enrolled and within the caller's scope.
+     * @return bool True when the user is a graded student within the caller's scope.
      */
     private function is_user_enrolled(int $userid): bool {
         $coursecontext = context_course::instance($this->course->id);
-        if (!is_enrolled($coursecontext, $userid, '', true)) {
+        if (!in_array($userid, penalty_helper::graded_student_ids($coursecontext, null), true)) {
             return false;
         }
 

@@ -361,7 +361,7 @@ class hook_listener {
     /**
      * Count enrolled students who have not handed a given activity in yet.
      *
-     * Counts the students the gradebook grades (see student_ids()). Honours the
+     * Counts the students the gradebook grades (see penalty_helper::graded_student_ids()). Honours the
      * activity's separate-groups scoping: a caller without moodle/site:accessallgroups
      * only counts students in their own group(s), mirroring group_scope::resolve_activity_restriction()
      * as already applied on the override management pages. Returns 0 if no students
@@ -374,7 +374,7 @@ class hook_listener {
         $coursecontext = \context_course::instance((int) $cm->course);
         $restrictgroupids = group_scope::resolve_activity_restriction($cm, \context_module::instance((int) $cm->id));
 
-        $students = self::student_ids($coursecontext, $restrictgroupids);
+        $students = penalty_helper::graded_student_ids($coursecontext, $restrictgroupids);
         $cmrecord = (object) ['id' => (int) $cm->id, 'modname' => $cm->modname, 'instance' => (int) $cm->instance];
         $handedin = submission_resolver::handed_in([$cmrecord], $students);
         return count($students) - count($handedin[$cmrecord->id]);
@@ -410,11 +410,11 @@ class hook_listener {
             }
         }
 
-        $allstudents = count($restricted) < count($cms) ? self::student_ids($coursecontext, null) : [];
+        $allstudents = count($restricted) < count($cms) ? penalty_helper::graded_student_ids($coursecontext, null) : [];
         $groupstudents = [];
         if (!empty($restricted)) {
             $callergroupids = array_keys(groups_get_all_groups($courseid, (int) $USER->id));
-            $groupstudents = self::student_ids($coursecontext, $callergroupids);
+            $groupstudents = penalty_helper::graded_student_ids($coursecontext, $callergroupids);
         }
 
         $handedin = submission_resolver::handed_in($cms, array_merge($allstudents, $groupstudents));
@@ -424,66 +424,6 @@ class hook_listener {
             $result[$cmid] = count(array_diff_key(array_flip($students), $handedin[$cmid]));
         }
         return $result;
-    }
-
-    /**
-     * Students of a course, optionally confined to some groups.
-     *
-     * Students are who the gradebook grades: users with an active enrolment and a
-     * graded role ($CFG->gradebookroles) in the course or a parent context, as in
-     * core's graded_users_iterator.
-     *
-     * @param \context_course $context Course context.
-     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
-     * @return int[] Student IDs.
-     */
-    private static function student_ids(\context_course $context, ?array $groupids): array {
-        global $CFG, $DB;
-
-        if ($groupids === [] || empty($CFG->gradebookroles)) {
-            // A caller in no group of a restricted activity sees nothing, and no role is graded.
-            return [];
-        }
-
-        [$enrolledsql, $enrolledparams] = get_enrolled_sql($context, '', 0, true);
-        [$rolesql, $roleparams] = $DB->get_in_or_equal(explode(',', $CFG->gradebookroles), SQL_PARAMS_NAMED, 'grbr');
-        [$ctxsql, $ctxparams] = $DB->get_in_or_equal($context->get_parent_context_ids(true), SQL_PARAMS_NAMED, 'relctx');
-        [$groupjoin, $groupparams] = self::group_scope_join('je.id', $groupids);
-        return array_map('intval', $DB->get_fieldset_sql(
-            "SELECT je.id
-               FROM ($enrolledsql) je
-                    $groupjoin
-              WHERE EXISTS (SELECT 1
-                              FROM {role_assignments} ra
-                             WHERE ra.userid = je.id
-                               AND ra.roleid $rolesql
-                               AND ra.contextid $ctxsql)",
-            array_merge($enrolledparams, $groupparams, $roleparams, $ctxparams)
-        ));
-    }
-
-    /**
-     * Build a group-membership JOIN restricting a pending-count query to specific
-     * groups, or no restriction when $groupids is null.
-     *
-     * Callers must handle an empty $groupids array before reaching this method —
-     * get_in_or_equal() rejects an empty list, and an empty group set means the
-     * caller belongs to no group at all (sees nothing), not "every group".
-     *
-     * @param string $useridcolumn Column holding the user ID to join against, e.g. 'je.id'.
-     * @param int[]|null $groupids Group IDs to confine to, or null for no restriction.
-     * @return array{0: string, 1: array} [JOIN SQL fragment ('' when unrestricted), params].
-     */
-    private static function group_scope_join(string $useridcolumn, ?array $groupids): array {
-        if ($groupids === null) {
-            return ['', []];
-        }
-
-        global $DB;
-
-        [$insql, $inparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'gscope');
-
-        return [" JOIN {groups_members} gms ON gms.userid = $useridcolumn AND gms.groupid $insql", $inparams];
     }
 
     /**

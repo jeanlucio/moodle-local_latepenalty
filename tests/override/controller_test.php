@@ -425,6 +425,47 @@ final class controller_test extends advanced_testcase {
         self::assertStringNotContainsString('value="' . $ended->id . '"', $html);
     }
 
+    /**
+     * The student select offers graded students only, never the course's teachers.
+     */
+    public function test_render_add_offers_only_graded_students(): void {
+        global $OUTPUT;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $teacher = $this->getDataGenerator()->create_and_enrol($s['course'], 'editingteacher');
+
+        $ctrl = $this->make_controller($s, 'add');
+        $ctrl->process();
+        $html = $ctrl->render($OUTPUT);
+
+        self::assertStringContainsString('value="' . $s['student']->id . '"', $html);
+        self::assertStringNotContainsString('value="' . $teacher->id . '"', $html);
+    }
+
+    /**
+     * save_override() rejects a teacher, who is enrolled but not graded.
+     */
+    public function test_save_add_rejects_teacher(): void {
+        global $DB;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $teacher = $this->getDataGenerator()->create_and_enrol($s['course'], 'editingteacher');
+        $ctrl = $this->make_controller($s, 'add');
+
+        $caught = null;
+        try {
+            $this->invoke_save_override($ctrl, (object) ['userid' => $teacher->id]);
+        } catch (\moodle_exception $e) {
+            $caught = $e;
+        }
+
+        self::assertNotNull($caught, 'moodle_exception must be thrown for a teacher.');
+        self::assertSame('invaliduser', $caught->errorcode);
+        self::assertFalse($DB->record_exists('local_latepenalty_overrides', ['cmid' => $s['cm']->id, 'userid' => $teacher->id]));
+    }
+
     // Tests: group restriction (separate groups).
 
     /**
