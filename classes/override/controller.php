@@ -346,12 +346,16 @@ class controller {
             static fn(string $f): string => "u.$f",
             \core_user\fields::get_name_fields()
         ));
+        // Only active enrolments: saving accepts no other (is_user_enrolled()).
         $enrolled = get_enrolled_users(
             $coursecontext,
             '',
             0,
             $namefields,
-            'u.lastname ASC, u.firstname ASC'
+            'u.lastname ASC, u.firstname ASC',
+            0,
+            0,
+            true
         );
 
         $allowed = $this->allowed_student_ids();

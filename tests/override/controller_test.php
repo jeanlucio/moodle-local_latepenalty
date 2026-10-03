@@ -399,6 +399,32 @@ final class controller_test extends advanced_testcase {
         );
     }
 
+    /**
+     * The student select offers only active enrolments, the ones saving accepts.
+     *
+     * Regression guard: suspended and ended enrolments were offered, and choosing
+     * one ended in an "invalid user" error on save.
+     */
+    public function test_render_add_offers_only_active_enrolments(): void {
+        global $OUTPUT;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $generator = $this->getDataGenerator();
+        $suspended = $generator->create_user();
+        $generator->enrol_user($suspended->id, $s['course']->id, 'student', 'manual', 0, 0, ENROL_USER_SUSPENDED);
+        $ended = $generator->create_user();
+        $generator->enrol_user($ended->id, $s['course']->id, 'student', 'manual', time() - 10 * DAYSECS, time() - DAYSECS);
+
+        $ctrl = $this->make_controller($s, 'add');
+        $ctrl->process();
+        $html = $ctrl->render($OUTPUT);
+
+        self::assertStringContainsString('value="' . $s['student']->id . '"', $html);
+        self::assertStringNotContainsString('value="' . $suspended->id . '"', $html);
+        self::assertStringNotContainsString('value="' . $ended->id . '"', $html);
+    }
+
     // Tests: group restriction (separate groups).
 
     /**
