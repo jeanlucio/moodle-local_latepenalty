@@ -16,6 +16,8 @@ O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
 
 O relatório inclui **filtros** por estudante e por atividade. Somente estudantes e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
 
+O relatório lê o histórico de notas do Moodle. Com o histórico desabilitado ou guardado por tempo limitado no site, ele mostra um aviso e lista só o que o histórico ainda guarda (veja *Histórico de notas* em Recálculo de Penalidades).
+
 ## Exportar o relatório
 
 Dois botões de download aparecem no cabeçalho do relatório sempre que há ao menos uma linha. Os filtros ativos de estudante e atividade são preservados na exportação.

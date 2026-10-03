@@ -266,6 +266,29 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * The report says when the grade history it reads is disabled or kept for a limited time.
+     */
+    public function test_report_grade_history_warning(): void {
+        global $CFG;
+
+        $s = $this->make_scenario();
+        $this->setAdminUser();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        self::assertSame('', $ctx['historywarning']);
+
+        $CFG->disablegradehistory = 1;
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        self::assertSame(get_string('report_history_disabled', 'local_latepenalty'), $ctx['historywarning']);
+
+        $CFG->disablegradehistory = 0;
+        $CFG->gradehistorylifetime = 365;
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        self::assertSame(get_string('report_history_lifetime', 'local_latepenalty', 365), $ctx['historywarning']);
+    }
+
+    /**
      * A teacher with no group in a separate-groups course sees an empty report,
      * not the whole course's penalties.
      */

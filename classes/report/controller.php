@@ -304,6 +304,7 @@ class controller {
             'cmoptions'    => $this->build_cm_options(),
             'filteruserid' => $this->filteruserid,
             'filtercmid'   => $this->filtercmid,
+            'historywarning' => penalty_helper::grade_history_warning(true),
         ];
     }
 

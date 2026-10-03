@@ -16,6 +16,8 @@ The report shows every grade adjustment applied by the plugin in that course:
 
 The report includes **filters** for student and activity. Only students and activities that have at least one recorded penalty appear in the filter dropdowns — the report is always available regardless of the course format.
 
+The report reads Moodle's grade history. With grade history disabled or kept for a limited time on the site, it shows a warning and lists only what the history still holds (see *Grade history* under Penalty Recalculation).
+
 ## Exporting the report
 
 Two download buttons appear in the report header whenever there is at least one row. The current student and activity filters are preserved in the export.

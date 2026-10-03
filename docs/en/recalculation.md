@@ -46,3 +46,12 @@ Grades discounted by Late Penalty before version 1.2.0 were stored as overrides 
 * A grade **edited by a teacher** in the gradebook, before or after the penalty.
 * A **locked** grade or grade item.
 * **Scale** grades and assignments using **Moodle's own grade penalties**.
+
+## Grade history
+
+Late Penalty finds the penalties it applied in Moodle's grade history. Two site settings under *Site administration > Server > Cleanup* limit what it can find there:
+
+* **Disable grade history** on: no penalty can be undone or recalculated. Turning the rule off or changing the deadline, the daily penalty or the maximum leaves the discounted grades as they are, and the penalty report stays empty.
+* **Grade history lifetime** set to a number of days: the same happens to penalties applied before that period.
+
+The activity settings and the penalty report show a warning while either setting is in effect. Grades edited by teachers stay safe in both cases: Late Penalty never changes a grade it cannot prove is its own.

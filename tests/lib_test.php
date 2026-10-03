@@ -311,6 +311,50 @@ final class lib_test extends latepenalty_testcase {
     }
 
     /**
+     * Form: a limited grade history is announced, since the plugin finds its own penalties there.
+     *
+     * With the history disabled, the "disabling restores grades" warning is left out
+     * because disabling restores nothing; with a lifetime, recent penalties still are.
+     *
+     * @return void
+     */
+    public function test_form_grade_history_warning(): void {
+        global $CFG;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course, ['duedate' => time()]);
+        $this->enable_rule($assign->cmid);
+
+        $section = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertFalse($section->elementExists('latepenalty_historywarning'), 'Full history');
+        $this->assertTrue($section->elementExists('latepenalty_disablewarning'));
+
+        $CFG->disablegradehistory = 1;
+        $section = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertTrue($section->elementExists('latepenalty_historywarning'));
+        $this->assertStringContainsString(
+            s(get_string('warning_history_disabled', 'local_latepenalty')),
+            $section->getElement('latepenalty_historywarning')->toHtml()
+        );
+        $this->assertFalse($section->elementExists('latepenalty_disablewarning'));
+        $this->assertTrue(
+            $this->plugin_section(0, 'assign')->elementExists('latepenalty_historywarning'),
+            'Shown before the activity is saved too'
+        );
+
+        $CFG->disablegradehistory = 0;
+        $CFG->gradehistorylifetime = 180;
+        $section = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertStringContainsString(
+            s(get_string('warning_history_lifetime', 'local_latepenalty', 180)),
+            $section->getElement('latepenalty_historywarning')->toHtml()
+        );
+        $this->assertTrue($section->elementExists('latepenalty_disablewarning'));
+    }
+
+    /**
      * Form: activities without a numeric grade show the "numeric grades only" notice (F18).
      *
      * Scale grades, "none" grades and activities with no grade item at all (a forum

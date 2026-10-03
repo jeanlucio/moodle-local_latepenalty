@@ -46,3 +46,12 @@ Notas descontadas pelo Late Penalty antes da versão 1.2.0 foram gravadas como s
 * Uma nota **editada pelo professor** no livro de notas, antes ou depois da penalidade.
 * Uma nota ou item de nota **bloqueado**.
 * Notas **por escala** e tarefas que usam as **penalidades de nota do próprio Moodle**.
+
+## Histórico de notas
+
+O Late Penalty encontra as penalidades que aplicou no histórico de notas do Moodle. Duas configurações do site em *Administração do site > Servidor > Limpar* limitam o que ele consegue encontrar ali:
+
+* **Desabilitar histórico de notas** ligado: nenhuma penalidade pode ser desfeita nem recalculada. Desativar a regra ou mudar o prazo, o desconto por dia ou o limite máximo deixa as notas descontadas como estão, e o relatório de penalidades fica vazio.
+* **Tempo de vida do histórico de notas** com um número de dias: o mesmo acontece com as penalidades aplicadas antes desse período.
+
+As configurações da atividade e o relatório de penalidades mostram um aviso enquanto qualquer uma das duas estiver em vigor. Notas editadas por professores continuam protegidas nos dois casos: o Late Penalty nunca altera uma nota que não consegue provar que é dele.

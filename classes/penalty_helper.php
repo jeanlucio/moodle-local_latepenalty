@@ -188,6 +188,33 @@ class penalty_helper {
     }
 
     /**
+     * Warning about a grade history the plugin cannot fully rely on, or '' when the site keeps all of it.
+     *
+     * The plugin finds the penalties it applied in the grade history: with the
+     * history disabled it can undo or recalculate none of them, and with a history
+     * lifetime it loses those older than that.
+     *
+     * @param bool $report True for the report's wording, false for the activity form's.
+     * @return string
+     */
+    public static function grade_history_warning(bool $report): string {
+        global $CFG;
+
+        if (!empty($CFG->disablegradehistory)) {
+            return $report
+                ? get_string('report_history_disabled', 'local_latepenalty')
+                : get_string('warning_history_disabled', 'local_latepenalty');
+        }
+        if (!empty($CFG->gradehistorylifetime)) {
+            $days = (int) $CFG->gradehistorylifetime;
+            return $report
+                ? get_string('report_history_lifetime', 'local_latepenalty', $days)
+                : get_string('warning_history_lifetime', 'local_latepenalty', $days);
+        }
+        return '';
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

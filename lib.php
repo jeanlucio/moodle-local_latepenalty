@@ -30,7 +30,7 @@
  * @return void
  */
 function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform): void {
-    global $DB, $OUTPUT;
+    global $CFG, $DB, $OUTPUT;
 
     // Skip resources — they have no submission or grade.
     $modname = $formwrapper->get_current()->modulename ?? '';
@@ -141,8 +141,19 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $cmid = (int) ($formwrapper->get_current()->coursemodule ?? 0);
     $existing = $cmid ? $DB->get_record('local_latepenalty_rules', ['cmid' => $cmid]) : false;
 
-    // Disabling an active rule gives the original grades back on save.
-    if ($existing && $existing->enabled) {
+    // The plugin finds its own penalties in the grade history: say when the site limits it.
+    $historywarning = \local_latepenalty\penalty_helper::grade_history_warning(false);
+    if ($historywarning !== '') {
+        $elements['latepenalty_historywarning'] = $mform->addElement(
+            'static',
+            'latepenalty_historywarning',
+            '',
+            $OUTPUT->notification($historywarning, 'warning', false)
+        );
+    }
+
+    // Disabling an active rule gives the original grades back on save, unless there is no history to find them.
+    if ($existing && $existing->enabled && empty($CFG->disablegradehistory)) {
         $elements['latepenalty_disablewarning'] = $mform->addElement(
             'static',
             'latepenalty_disablewarning',
