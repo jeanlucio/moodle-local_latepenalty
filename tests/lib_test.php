@@ -17,6 +17,7 @@
 namespace local_latepenalty;
 
 use local_latepenalty\local\penalty_writer;
+use local_latepenalty\tests\comma_decimals;
 use local_latepenalty\tests\latepenalty_testcase;
 
 /**
@@ -40,6 +41,8 @@ use local_latepenalty\tests\latepenalty_testcase;
  * @covers \local_latepenalty\local\deadline
  */
 final class lib_test extends latepenalty_testcase {
+    use comma_decimals;
+
     /**
      * Both storage paths.
      *
@@ -308,6 +311,33 @@ final class lib_test extends latepenalty_testcase {
         $this->assertFalse($this->plugin_section($assign->cmid, 'assign')->elementExists('latepenalty_disablewarning'));
         $this->enable_rule($assign->cmid);
         $this->assertTrue($this->plugin_section($assign->cmid, 'assign')->elementExists('latepenalty_disablewarning'));
+    }
+
+    /**
+     * Form: the daily penalty and the maximum take decimals written the way the user's language writes them.
+     *
+     * Regression guard: as PARAM_FLOAT text fields, "2,5" was cut to 2 and "0,5" to 0
+     * without a word, so the rule saved a rate other than the one typed.
+     *
+     * @return void
+     */
+    public function test_form_rates_accept_localised_decimals(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course, ['duedate' => time()]);
+        $this->enable_rule($assign->cmid, 2.5, 12.5);
+        $this->use_comma_decimals();
+
+        $section = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertStringContainsString('value="2,5"', $section->getElement('latepenalty_daily')->toHtml());
+        $this->assertStringContainsString('value="12,5"', $section->getElement('latepenalty_max')->toHtml());
+
+        $section->updateSubmission(['latepenalty_enabled' => 1, 'latepenalty_daily' => '0,5', 'latepenalty_max' => '12,5'], []);
+        $values = $section->exportValues();
+        $this->assertSame(0.5, $values['latepenalty_daily']);
+        $this->assertSame(12.5, $values['latepenalty_max']);
+        $this->assertNotNull($section->getElement('latepenalty_daily')->validateSubmitValue('2,5,1'), 'Not a number');
     }
 
     /**

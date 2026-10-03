@@ -84,8 +84,8 @@ class override_form extends \moodleform {
         $mform->setType('deadline', PARAM_INT);
 
         $rule             = $data['rule'] ?? null;
-        $dailyplaceholder = $rule ? (string) $rule->daily_penalty : '';
-        $maxplaceholder   = $rule ? (string) $rule->max_penalty : '';
+        $dailyplaceholder = $rule ? \local_latepenalty\penalty_helper::format_rate((float) $rule->daily_penalty) : '';
+        $maxplaceholder   = $rule ? \local_latepenalty\penalty_helper::format_rate((float) $rule->max_penalty) : '';
         $enablelabel      = get_string('enable', 'moodle');
 
         // Daily penalty: checkbox + text, mirroring the optional date_time_selector pattern.
@@ -138,6 +138,9 @@ class override_form extends \moodleform {
         $enablemax = !empty($maxgrp['enable']);
         $daily = $enabledaily ? trim((string) ($dailygrp['value'] ?? '')) : '';
         $max = $enablemax ? trim((string) ($maxgrp['value'] ?? '')) : '';
+        // Rates are typed with the language's decimal separator ("2,5" in Portuguese).
+        $dailyvalue = unformat_float($daily, true);
+        $maxvalue = unformat_float($max, true);
 
         $deadlineenabled = !empty($data['deadline']);
         if (!$deadlineenabled && !$enabledaily && !$enablemax) {
@@ -146,22 +149,32 @@ class override_form extends \moodleform {
 
         if ($enabledaily && $daily === '') {
             $errors['daily_grp'] = get_string('required');
-        } else if ($daily !== '' && (!is_numeric($daily) || (float) $daily < 0 || (float) $daily > 100)) {
+        } else if ($daily !== '' && !self::valid_rate($dailyvalue)) {
             $errors['daily_grp'] = get_string('error_daily_range', 'local_latepenalty');
         }
 
         if ($enablemax && $max === '') {
             $errors['max_grp'] = get_string('required');
-        } else if ($max !== '' && (!is_numeric($max) || (float) $max < 0 || (float) $max > 100)) {
+        } else if ($max !== '' && !self::valid_rate($maxvalue)) {
             $errors['max_grp'] = get_string('error_max_range', 'local_latepenalty');
         }
 
-        if ($daily !== '' && $max !== '' && is_numeric($daily) && is_numeric($max)) {
-            if ((float) $daily > (float) $max) {
+        if (self::valid_rate($dailyvalue) && self::valid_rate($maxvalue)) {
+            if ($dailyvalue > $maxvalue) {
                 $errors['max_grp'] = get_string('error_max_less_than_daily', 'local_latepenalty');
             }
         }
 
         return $errors;
+    }
+
+    /**
+     * Whether a parsed rate is a number between 0 and 100.
+     *
+     * @param float|false|null $rate Result of unformat_float(): null when empty, false when not a number.
+     * @return bool
+     */
+    private static function valid_rate(float|false|null $rate): bool {
+        return is_float($rate) && $rate >= 0 && $rate <= 100;
     }
 }

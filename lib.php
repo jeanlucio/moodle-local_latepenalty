@@ -56,23 +56,22 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setType('latepenalty_enabled', PARAM_INT);
     $mform->addHelpButton('latepenalty_enabled', 'latepenalty_enabled', 'local_latepenalty');
 
+    // Float elements take the decimal separator of the user's language ("2,5" in Portuguese).
     $dailyel = $mform->addElement(
-        'text',
+        'float',
         'latepenalty_daily',
         get_string('latepenalty_daily', 'local_latepenalty'),
         ['size' => 10]
     );
-    $mform->setType('latepenalty_daily', PARAM_FLOAT);
     $mform->setDefault('latepenalty_daily', 0.00);
     $mform->hideIf('latepenalty_daily', 'latepenalty_enabled', 'notchecked');
 
     $maxel = $mform->addElement(
-        'text',
+        'float',
         'latepenalty_max',
         get_string('latepenalty_max', 'local_latepenalty'),
         ['size' => 10]
     );
-    $mform->setType('latepenalty_max', PARAM_FLOAT);
     $mform->setDefault('latepenalty_max', 0.00);
     $mform->hideIf('latepenalty_max', 'latepenalty_enabled', 'notchecked');
 
@@ -208,8 +207,8 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     // Load existing values if editing.
     if ($existing) {
         $mform->setDefault('latepenalty_enabled', $existing->enabled);
-        $mform->setDefault('latepenalty_daily', $existing->daily_penalty);
-        $mform->setDefault('latepenalty_max', $existing->max_penalty);
+        $mform->setDefault('latepenalty_daily', (float) $existing->daily_penalty);
+        $mform->setDefault('latepenalty_max', (float) $existing->max_penalty);
         $mform->setDefault('latepenalty_recalc_deadline', $existing->recalc_on_deadline ?? 1);
         $mform->setDefault('latepenalty_recalc_rate', $existing->recalc_on_rate ?? 1);
         if ($keepbestel) {

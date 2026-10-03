@@ -400,8 +400,8 @@ class controller {
         $record->cmid          = $this->cmid;
         $record->userid        = $this->resolve_override_userid($formdata);
         $record->deadline      = empty($formdata->deadline) ? null : (int) $formdata->deadline;
-        $record->daily_penalty = ($dailyraw === '') ? null : (float) $dailyraw;
-        $record->max_penalty   = ($maxraw === '') ? null : (float) $maxraw;
+        $record->daily_penalty = ($dailyraw === '') ? null : unformat_float($dailyraw);
+        $record->max_penalty   = ($maxraw === '') ? null : unformat_float($maxraw);
         $record->timemodified  = time();
 
         if ($this->overrideid) {
@@ -523,12 +523,12 @@ class controller {
                 'daily_grp'  => [
                     'enable' => ($this->editingoverride->daily_penalty !== null) ? 1 : 0,
                     'value'  => ($this->editingoverride->daily_penalty !== null)
-                        ? (string) $this->editingoverride->daily_penalty : '',
+                        ? penalty_helper::format_rate((float) $this->editingoverride->daily_penalty) : '',
                 ],
                 'max_grp'    => [
                     'enable' => ($this->editingoverride->max_penalty !== null) ? 1 : 0,
                     'value'  => ($this->editingoverride->max_penalty !== null)
-                        ? (string) $this->editingoverride->max_penalty : '',
+                        ? penalty_helper::format_rate((float) $this->editingoverride->max_penalty) : '',
                 ],
             ]);
         }

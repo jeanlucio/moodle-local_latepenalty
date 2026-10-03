@@ -291,6 +291,16 @@ class penalty_helper {
     }
 
     /**
+     * A percentage as the user's language writes it ("2,5" in Portuguese), without trailing zeros.
+     *
+     * @param float $rate Percentage.
+     * @return string
+     */
+    public static function format_rate(float $rate): string {
+        return format_float($rate, 2, true, true);
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

@@ -38,16 +38,21 @@ namespace local_latepenalty\group_override;
 use advanced_testcase;
 use context_module;
 use context_system;
+use local_latepenalty\form\group_override_form;
 use local_latepenalty\penalty_helper;
+use local_latepenalty\tests\comma_decimals;
 use stdClass;
 
 /**
  * Tests for local_latepenalty\group_override\controller.
  *
  * @covers \local_latepenalty\group_override\controller
+ * @covers \local_latepenalty\form\group_override_form
  * @covers \local_latepenalty\penalty_helper
  */
 final class controller_test extends advanced_testcase {
+    use comma_decimals;
+
     #[\Override]
     protected function setUp(): void {
         global $PAGE;
@@ -557,6 +562,39 @@ final class controller_test extends advanced_testcase {
 
         self::assertStringContainsString('Turma A &amp; B', $html);
         self::assertStringNotContainsString('&amp;amp;', $html);
+    }
+
+    /**
+     * Rates typed with the language's decimal comma are validated, saved and shown again as typed.
+     *
+     * Regression guard: "2,5" was rejected as out of range.
+     */
+    public function test_rates_with_decimal_comma(): void {
+        global $DB, $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $this->use_comma_decimals();
+        $form = new group_override_form(null, ['cmid' => $s['cm']->id, 'rule' => $s['rule'], 'groupoptions' => []]);
+        $data = [
+            'deadline' => 0,
+            'daily_grp' => ['enable' => 1, 'value' => '2,5'],
+            'max_grp' => ['enable' => 1, 'value' => '12,5'],
+        ];
+
+        self::assertSame([], $form->validation($data, []));
+        self::assertArrayHasKey('daily_grp', $form->validation(['daily_grp' => ['enable' => 1, 'value' => '2,5,1']] + $data, []));
+        self::assertArrayHasKey('max_grp', $form->validation(['daily_grp' => ['enable' => 1, 'value' => '20,5']] + $data, []));
+
+        $save = new \ReflectionMethod(controller::class, 'save_override');
+        $save->invoke($this->make_controller($s, 'add'), (object) (['groupid' => $s['group']->id] + $data));
+        $override = $DB->get_record('local_latepenalty_group_overrides', ['cmid' => $s['cm']->id], '*', MUST_EXIST);
+        self::assertEqualsWithDelta(2.5, (float) $override->daily_penalty, 0.001);
+        self::assertEqualsWithDelta(12.5, (float) $override->max_penalty, 0.001);
+
+        $edit = $this->make_controller($s, 'edit', (int) $override->id);
+        $edit->process();
+        self::assertStringContainsString('value="2,5"', $edit->render($PAGE->get_renderer('core')));
     }
 
     /**
