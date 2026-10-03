@@ -55,8 +55,9 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
     /**
      * Process one override record from the backup XML.
      *
-     * Maps the backed-up userid to the restored user ID. Records whose user
-     * was not included in the restore are silently skipped.
+     * Maps the backed-up userid to the restored user ID and shifts the deadline
+     * by the course start date offset. Records whose user was not included in
+     * the restore are silently skipped.
      *
      * @param array $data Raw element data from the XML.
      * @return void
@@ -72,6 +73,8 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         }
 
         $data->cmid = $this->task->get_moduleid();
+        // The deadline moves with the course start date, as the activity's own dates do.
+        $data->deadline = $this->apply_date_offset($data->deadline ?? null);
 
         $existing = $DB->get_record(
             'local_latepenalty_overrides',
@@ -79,7 +82,7 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         );
 
         if ($existing) {
-            $existing->deadline = $data->deadline ?? null;
+            $existing->deadline = $data->deadline;
             $existing->daily_penalty = $data->daily_penalty ?? null;
             $existing->max_penalty = $data->max_penalty ?? null;
             $existing->timemodified = time();
@@ -95,8 +98,9 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
     /**
      * Process one group override record from the backup XML.
      *
-     * Maps the backed-up groupid to the restored group ID. Records whose group
-     * was not included in the restore are silently skipped.
+     * Maps the backed-up groupid to the restored group ID and shifts the deadline
+     * by the course start date offset. Records whose group was not included in
+     * the restore are silently skipped.
      *
      * @param array $data Raw element data from the XML.
      * @return void
@@ -112,6 +116,8 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         }
 
         $data->cmid = $this->task->get_moduleid();
+        // The deadline moves with the course start date, as the activity's own dates do.
+        $data->deadline = $this->apply_date_offset($data->deadline ?? null);
 
         $existing = $DB->get_record(
             'local_latepenalty_group_overrides',
@@ -119,7 +125,7 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
         );
 
         if ($existing) {
-            $existing->deadline      = $data->deadline ?? null;
+            $existing->deadline      = $data->deadline;
             $existing->daily_penalty = $data->daily_penalty ?? null;
             $existing->max_penalty   = $data->max_penalty ?? null;
             $existing->timemodified  = time();

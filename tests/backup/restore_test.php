@@ -179,6 +179,53 @@ final class restore_test extends advanced_testcase {
     }
 
     /**
+     * Restoring with a new course start date moves the override deadlines with the activity dates.
+     *
+     * Regression guard: the per-user and per-group deadlines used to keep the source
+     * course's dates, so every student with an override was already late in the
+     * restored course. A null deadline (override of the rates only) stays null.
+     */
+    public function test_restore_shifts_override_deadlines(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $startdate = strtotime('1 Feb 2026 00:00 GMT');
+        $shift = 180 * DAYSECS;
+        [$course, $assign, $user, ] = $this->create_fixture(withusers: true, startdate: $startdate);
+        $cm = get_coursemodule_from_instance('assign', $assign->id, $course->id, false, MUST_EXIST);
+        $userdeadline = (int) $DB->get_field('local_latepenalty_overrides', 'deadline', ['cmid' => $cm->id]);
+        $groupdeadline = (int) $DB->get_field('local_latepenalty_group_overrides', 'deadline', ['cmid' => $cm->id]);
+        $rateonly = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $DB->insert_record('local_latepenalty_overrides', (object) [
+            'cmid' => $cm->id,
+            'userid' => $rateonly->id,
+            'deadline' => null,
+            'daily_penalty' => 2.00,
+            'max_penalty' => null,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        $newcourseid = $this->backup_and_restore($course, true, $startdate + $shift);
+
+        $newcmid = $this->get_restored_cmid($newcourseid);
+        $newassign = $DB->get_record('assign', ['course' => $newcourseid], 'duedate', MUST_EXIST);
+        $this->assertSame((int) $assign->duedate + $shift, (int) $newassign->duedate, 'The activity moved');
+        $this->assertSame(
+            $userdeadline + $shift,
+            (int) $DB->get_field('local_latepenalty_overrides', 'deadline', ['cmid' => $newcmid, 'userid' => $user->id])
+        );
+        $this->assertNull(
+            $DB->get_field('local_latepenalty_overrides', 'deadline', ['cmid' => $newcmid, 'userid' => $rateonly->id])
+        );
+        $this->assertSame(
+            $groupdeadline + $shift,
+            (int) $DB->get_field('local_latepenalty_group_overrides', 'deadline', ['cmid' => $newcmid])
+        );
+    }
+
+    /**
      * Restoring into a new course leaves the source course's rule untouched.
      */
     public function test_original_course_unaffected(): void {
@@ -205,18 +252,20 @@ final class restore_test extends advanced_testcase {
      * plus optional per-user and per-group overrides when users are requested.
      *
      * @param bool $withusers Whether to create an enrolled student, a group and overrides.
+     * @param int|null $startdate Course start date, or null for the generator default.
      * @return array{0: stdClass, 1: stdClass, 2: stdClass|null, 3: int}
      *   [course, assign, user, groupid]
      */
-    private function create_fixture(bool $withusers): array {
+    private function create_fixture(bool $withusers, ?int $startdate = null): array {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/group/lib.php');
 
-        $course = $this->getDataGenerator()->create_course();
+        $course = $this->getDataGenerator()->create_course($startdate === null ? [] : ['startdate' => $startdate]);
+        $now = $startdate ?? time();
         $assign = $this->getDataGenerator()->create_module('assign', [
             'course'  => $course->id,
             'name'    => 'Trabalho final',
-            'duedate' => time() + DAYSECS,
+            'duedate' => $now + DAYSECS,
         ]);
         $cm = get_coursemodule_from_instance('assign', $assign->id, $course->id, false, MUST_EXIST);
 
@@ -245,7 +294,7 @@ final class restore_test extends advanced_testcase {
             $DB->insert_record('local_latepenalty_overrides', (object) [
                 'cmid'          => $cm->id,
                 'userid'        => $user->id,
-                'deadline'      => time() + (2 * DAYSECS),
+                'deadline'      => $now + (2 * DAYSECS),
                 'daily_penalty' => 5.00,
                 'max_penalty'   => 30.00,
                 'timecreated'   => time(),
@@ -255,7 +304,7 @@ final class restore_test extends advanced_testcase {
             $DB->insert_record('local_latepenalty_group_overrides', (object) [
                 'cmid'          => $cm->id,
                 'groupid'       => $groupid,
-                'deadline'      => time() + (3 * DAYSECS),
+                'deadline'      => $now + (3 * DAYSECS),
                 'daily_penalty' => 7.50,
                 'max_penalty'   => 25.00,
                 'timecreated'   => time(),
@@ -287,9 +336,10 @@ final class restore_test extends advanced_testcase {
      *
      * @param stdClass $srccourse Source course.
      * @param bool $userinfo Whether to include user data in the backup.
+     * @param int|null $startdate Start date of the restored course, or null to keep the original.
      * @return int ID of the newly restored course.
      */
-    private function backup_and_restore(stdClass $srccourse, bool $userinfo): int {
+    private function backup_and_restore(stdClass $srccourse, bool $userinfo, ?int $startdate = null): int {
         global $USER, $CFG;
 
         $CFG->backup_file_logger_level = backup::LOG_NONE;
@@ -327,6 +377,9 @@ final class restore_test extends advanced_testcase {
 
         $rc->get_plan()->get_setting('users')->set_status(backup_setting::NOT_LOCKED);
         $rc->get_plan()->get_setting('users')->set_value($userinfo);
+        if ($startdate !== null) {
+            $rc->get_plan()->get_setting('course_startdate')->set_value($startdate);
+        }
 
         $this->assertTrue($rc->execute_precheck());
         $rc->execute_plan();

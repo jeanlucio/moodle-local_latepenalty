@@ -34,7 +34,7 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Páginas de sobreposição e restrição por grupos separados |
 | `engine_edges_test` | Casos de borda do motor, dos observadores e da tarefa agendada |
 | `privacy/provider_test` | Exportação e exclusão da API de Privacidade |
-| `backup/restore_test` | Regras e sobreposições no backup e na restauração |
+| `backup/restore_test` | Regras e sobreposições no backup e na restauração, com os prazos deslocados junto com a data de início do curso |
 | `upgrade_test` | A atualização a partir da 1.1.x e o passo de instalação |
 
 Rode a suíte inteira num Moodle com o PHPUnit inicializado:

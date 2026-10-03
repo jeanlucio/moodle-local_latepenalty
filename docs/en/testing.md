@@ -33,7 +33,7 @@ on a wrong assumption about where a module keeps its data.
 | `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Override pages and separate-groups restrictions |
 | `engine_edges_test` | Edge cases of the engine, the observers and the scheduled task |
 | `privacy/provider_test` | Privacy API export and deletion |
-| `backup/restore_test` | Rules and overrides through backup and restore |
+| `backup/restore_test` | Rules and overrides through backup and restore, deadlines shifted with the course start date |
 | `upgrade_test` | The upgrade from 1.1.x and the installation step |
 
 Run the whole suite inside a Moodle with PHPUnit initialised:
