@@ -617,12 +617,13 @@ class controller {
             $useroverrides[(int) $record->userid . '_' . (int) $record->cmid] = true;
         }
 
-        // Group overrides — resolved to individual users via groups_members.
+        // Group overrides — resolved to individual users via groups_members. One override
+        // yields one row per member, so read a recordset: a keyed result would keep one member.
         [$usql2, $uparams2] = $DB->get_in_or_equal($useridlist, SQL_PARAMS_NAMED, 'go_uid');
         [$csql2, $cparams2] = $DB->get_in_or_equal($cmidlist, SQL_PARAMS_NAMED, 'go_cm');
         $groupoverrides = [];
-        $records = $DB->get_records_sql(
-            "SELECT go.id, go.cmid, gm.userid
+        $records = $DB->get_recordset_sql(
+            "SELECT go.cmid, gm.userid
                FROM {local_latepenalty_group_overrides} go
                JOIN {groups_members} gm ON gm.groupid = go.groupid
               WHERE go.cmid $csql2 AND gm.userid $usql2",
@@ -631,6 +632,7 @@ class controller {
         foreach ($records as $record) {
             $groupoverrides[(int) $record->userid . '_' . (int) $record->cmid] = true;
         }
+        $records->close();
 
         return ['user' => $useroverrides, 'group' => $groupoverrides];
     }

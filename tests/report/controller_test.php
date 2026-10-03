@@ -322,6 +322,39 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * A group override marks every penalised member of the group, on screen and in the export.
+     *
+     * Regression guard: the lookup used to key its rows by override ID, so each
+     * member overwrote the previous one and only one student kept the badge.
+     */
+    public function test_group_override_marks_every_member(): void {
+        global $DB;
+
+        $s = $this->make_scenario();
+        groups_add_member($s['group1']->id, $s['student2']->id);
+        $DB->insert_record('local_latepenalty_group_overrides', (object) [
+            'cmid' => $s['cm']->cmid,
+            'groupid' => $s['group1']->id,
+            'deadline' => null,
+            'daily_penalty' => 10.0,
+            'max_penalty' => null,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+        $this->setAdminUser();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+        $controller = $this->make_controller($s, $groupscope);
+
+        $penalties = $controller->get_template_context()['penalties'];
+        self::assertCount(2, $penalties);
+        self::assertSame([true, true], array_column($penalties, 'hasgroupoverride'));
+
+        [, $rows] = $controller->get_export_data();
+        $label = get_string('report_override_group', 'local_latepenalty');
+        self::assertSame([$label, $label], array_map(fn(array $row): string => end($row), $rows));
+    }
+
+    /**
      * The CSV/Excel export data must honour the same group restriction as the
      * on-screen report — this is the path that lets a restricted teacher
      * exfiltrate every group's data in a single file if left unfiltered.
