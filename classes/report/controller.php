@@ -264,17 +264,13 @@ class controller {
             ];
 
             $cmname = isset($modinfo->cms[$row->cmid])
-                ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
+                ? penalty_helper::plain_text($modinfo->cms[$row->cmid]->name, $this->context)
                 : '';
 
             $deadline = $deadlines[$row->userid . '_' . $row->cmid];
 
             $penalties[] = [
-                'fullname'           => format_string(
-                    fullname($fakeuser),
-                    true,
-                    ['context' => $this->context]
-                ),
+                'fullname'           => penalty_helper::plain_text(fullname($fakeuser), $this->context),
                 'activity'           => $cmname,
                 'hasdeadline'        => $deadline->exists(),
                 'deadline'           => $deadline->exists() ? userdate($deadline->time) : '',
@@ -398,7 +394,7 @@ class controller {
             ];
 
             $cmname  = isset($modinfo->cms[$row->cmid])
-                ? format_string($modinfo->cms[$row->cmid]->name, true, ['context' => $this->context])
+                ? penalty_helper::plain_text($modinfo->cms[$row->cmid]->name, $this->context)
                 : '';
             $deadline = $deadlines[$row->userid . '_' . $row->cmid];
 
@@ -411,7 +407,7 @@ class controller {
             }
 
             $data[] = [
-                format_string(fullname($fakeuser), true, ['context' => $this->context]),
+                penalty_helper::plain_text(fullname($fakeuser), $this->context),
                 $cmname,
                 $deadline->exists() ? userdate($deadline->time) : '',
                 penalty_helper::deadline_origin_label($deadline),
@@ -489,7 +485,7 @@ class controller {
             ];
             $options[] = [
                 'value'    => (int) $row->id,
-                'label'    => format_string(fullname($fakeuser), true, ['context' => $this->context]),
+                'label'    => penalty_helper::plain_text(fullname($fakeuser), $this->context),
                 'selected' => (int) $row->id === $this->filteruserid,
             ];
         }
@@ -537,8 +533,8 @@ class controller {
         ]];
         foreach ($rows as $row) {
             $cmname = isset($modinfo->cms[$row->id])
-                ? format_string($modinfo->cms[$row->id]->name, true, ['context' => $this->context])
-                : format_string($row->itemname ?? '', true, ['context' => $this->context]);
+                ? penalty_helper::plain_text($modinfo->cms[$row->id]->name, $this->context)
+                : penalty_helper::plain_text($row->itemname ?? '', $this->context);
             $options[] = [
                 'value'    => (int) $row->id,
                 'label'    => $cmname,

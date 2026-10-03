@@ -48,6 +48,7 @@ use stdClass;
  * Tests for local_latepenalty\override\controller.
  *
  * @covers \local_latepenalty\override\controller
+ * @covers \local_latepenalty\penalty_helper
  */
 final class controller_test extends advanced_testcase {
     #[\Override]
@@ -464,6 +465,25 @@ final class controller_test extends advanced_testcase {
         self::assertNotNull($caught, 'moodle_exception must be thrown for a teacher.');
         self::assertSame('invaliduser', $caught->errorcode);
         self::assertFalse($DB->record_exists('local_latepenalty_overrides', ['cmid' => $s['cm']->id, 'userid' => $teacher->id]));
+    }
+
+    /**
+     * The list shows a name with "&" escaped once, not as a visible "&amp;".
+     */
+    public function test_render_list_escapes_name_once(): void {
+        global $DB, $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $DB->set_field('user', 'lastname', 'Silva & Souza', ['id' => $s['student']->id]);
+        $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, null, 5.5, null);
+
+        $ctrl = $this->make_controller($s, 'list');
+        $ctrl->process();
+        $html = $ctrl->render($PAGE->get_renderer('core'));
+
+        self::assertStringContainsString('Silva &amp; Souza', $html);
+        self::assertStringNotContainsString('&amp;amp;', $html);
     }
 
     // Tests: group restriction (separate groups).

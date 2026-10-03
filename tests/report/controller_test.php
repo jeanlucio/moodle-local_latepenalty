@@ -355,6 +355,43 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * Names with "&" or quotes reach the screen escaped once and the export as plain text.
+     *
+     * Regression guard: format_string() output was escaped again by the template
+     * ("Q&amp;A" on screen) and exported as HTML ("Q&amp;A" in the file). Both
+     * values of "Remove HTML tags from all activity names" are covered, since
+     * format_string() takes a different path for each.
+     */
+    public function test_names_are_escaped_once(): void {
+        global $CFG, $DB, $OUTPUT;
+
+        $s = $this->make_scenario();
+        $DB->set_field('assign', 'name', 'Q&A "1"', ['id' => $s['cm']->id]);
+        $DB->set_field('user', 'lastname', 'Silva & Souza', ['id' => $s['student1']->id]);
+        rebuild_course_cache($s['course']->id);
+        $this->setAdminUser();
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        foreach ([1, 0] as $striptags) {
+            $CFG->formatstringstriptags = $striptags;
+            $controller = $this->make_controller($s, $groupscope);
+            $ctx = $controller->get_template_context();
+
+            self::assertSame(['Q&A "1"', 'Q&A "1"'], array_column($ctx['penalties'], 'activity'), "striptags $striptags");
+            self::assertContains('Q&A "1"', array_column($ctx['cmoptions'], 'label'));
+            self::assertStringContainsString('Silva & Souza', implode(' ', array_column($ctx['useroptions'], 'label')));
+
+            $html = $OUTPUT->render_from_template('local_latepenalty/report', $ctx);
+            self::assertStringContainsString('Q&amp;A &quot;1&quot;', $html);
+            self::assertStringNotContainsString('&amp;amp;', $html);
+
+            [, $rows] = $controller->get_export_data();
+            self::assertSame(['Q&A "1"', 'Q&A "1"'], array_column($rows, 1));
+            self::assertStringContainsString('Silva & Souza', implode(' ', array_column($rows, 0)));
+        }
+    }
+
+    /**
      * The CSV/Excel export data must honour the same group restriction as the
      * on-screen report — this is the path that lets a restricted teacher
      * exfiltrate every group's data in a single file if left unfiltered.

@@ -275,6 +275,22 @@ class penalty_helper {
     }
 
     /**
+     * A name as plain text, filtered as format_string() filters it.
+     *
+     * format_string() returns HTML ("Q&amp;A"). Where the output escapes the value
+     * itself (a {{ }} template variable, an exported file), that HTML would show as
+     * "Q&amp;A", so it is turned back into plain text here and escaped once there.
+     *
+     * @param string $text Name as stored.
+     * @param \context $context Context for the filters.
+     * @return string
+     */
+    public static function plain_text(string $text, \context $context): string {
+        $html = format_string($text, true, ['context' => $context]);
+        return html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    /**
      * Calculate the number of days a submission is late.
      *
      * @param int $submissiontime Timestamp when the student submitted.

@@ -541,7 +541,7 @@ class controller {
             $group  = $groups[$override->groupid] ?? null;
             $rows[] = [
                 'groupname'     => $group
-                    ? format_string($group->name, true, ['context' => $this->modcontext])
+                    ? penalty_helper::plain_text($group->name, $this->modcontext)
                     : get_string('unknown', 'local_latepenalty'),
                 'deadline'      => ($override->deadline !== null)
                     ? penalty_helper::format_deadline((int) $override->deadline)

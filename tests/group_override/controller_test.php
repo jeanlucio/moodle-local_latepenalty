@@ -45,6 +45,7 @@ use stdClass;
  * Tests for local_latepenalty\group_override\controller.
  *
  * @covers \local_latepenalty\group_override\controller
+ * @covers \local_latepenalty\penalty_helper
  */
 final class controller_test extends advanced_testcase {
     #[\Override]
@@ -537,6 +538,25 @@ final class controller_test extends advanced_testcase {
             self::assertSame('redirecterrordetected', $e->errorcode);
         }
         self::assertFalse($DB->record_exists('local_latepenalty_group_overrides', ['id' => $override->id]));
+    }
+
+    /**
+     * The list shows a group name with "&" escaped once, not as a visible "&amp;".
+     */
+    public function test_render_list_escapes_name_once(): void {
+        global $DB, $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $DB->set_field('groups', 'name', 'Turma A & B', ['id' => $s['group']->id]);
+        $this->insert_group_override((int) $s['cm']->id, (int) $s['group']->id, null, 5.5, null);
+
+        $ctrl = $this->make_controller($s, 'list');
+        $ctrl->process();
+        $html = $ctrl->render($PAGE->get_renderer('core'));
+
+        self::assertStringContainsString('Turma A &amp; B', $html);
+        self::assertStringNotContainsString('&amp;amp;', $html);
     }
 
     /**
