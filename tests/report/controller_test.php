@@ -193,18 +193,24 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
-     * A course not using separate groups, with no activity overriding it, never
-     * restricts anything.
+     * Activities without separate groups restrict nothing, even for a teacher confined to one group.
+     *
+     * Covers no groups and visible groups, each on a real activity with a rule and
+     * penalties, so the group mode check itself is exercised (a course with no rule
+     * returns before reaching it).
      */
     public function test_resolve_group_restriction_non_separategroups_returns_no_restriction(): void {
-        $course  = $this->getDataGenerator()->create_course(['groupmode' => NOGROUPS]);
-        $context = context_course::instance($course->id);
-        $teacher = $this->enrol_teacher($course);
-        $this->setUser($teacher);
+        foreach ([NOGROUPS, VISIBLEGROUPS] as $groupmode) {
+            $s = $this->make_scenario(NOGROUPS, 0, $groupmode);
+            $teacher = $this->enrol_teacher($s['course']);
+            groups_add_member($s['group1']->id, $teacher->id);
+            $this->setUser($teacher);
 
-        $result = controller::resolve_group_restriction($course, $context);
+            $result = controller::resolve_group_restriction($s['course'], $s['context']);
 
-        self::assertSame([], $result['restrictedcmids']);
+            self::assertSame([], $result['restrictedcmids'], "Group mode $groupmode");
+            self::assertCount(2, $this->make_controller($s, $result)->get_template_context()['penalties']);
+        }
     }
 
     /**
