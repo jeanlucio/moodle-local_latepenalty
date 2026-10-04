@@ -538,7 +538,6 @@ final class submission_resolver {
      */
     public static function best_candidates(\stdClass $cm, \grade_item $gradeitem, array $userids, bool $keepbest): ?array {
         global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/quiz/lib.php');
         require_once($CFG->dirroot . '/rating/lib.php');
 
         $userids = array_values(array_unique(array_map('intval', $userids)));
@@ -549,6 +548,8 @@ final class submission_resolver {
 
         switch ($cm->modname) {
             case 'quiz':
+                // Loaded here only: the quiz module may be uninstalled on sites that use no quiz.
+                require_once($CFG->dirroot . '/mod/quiz/lib.php');
                 $quiz = $DB->get_record('quiz', ['id' => $instanceid], 'id, grademethod, grade, sumgrades', MUST_EXIST);
                 $highest = (int) $quiz->grademethod === (int) QUIZ_GRADEHIGHEST;
                 if (!$highest || (int) $gradeitem->itemnumber !== 0 || empty((float) $quiz->sumgrades)) {

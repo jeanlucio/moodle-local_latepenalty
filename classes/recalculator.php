@@ -143,21 +143,30 @@ class recalculator {
     public static function rules_with_group_deadline(int $courseid, int $groupid): array {
         global $DB;
 
+        // Assignment, quiz and lesson can be uninstalled: only ask the override tables that exist.
+        $dbman = $DB->get_manager();
+        $activities = ['assign' => ['assign_overrides', 'assignid'], 'quiz' => ['quiz_overrides', 'quiz'],
+            'lesson' => ['lesson_overrides', 'lessonid']];
+        $conditions = ['EXISTS (SELECT 1 FROM {local_latepenalty_group_overrides} go WHERE go.cmid = r.cmid AND go.groupid = :g0)'];
+        $params = ['courseid' => $courseid, 'g0' => $groupid];
+        foreach ($activities as $modname => [$table, $instancefield]) {
+            if (!$dbman->table_exists($table)) {
+                continue;
+            }
+            $conditions[] = "(m.name = :m$modname AND EXISTS (SELECT 1 FROM {{$table}} o
+                                                              WHERE o.$instancefield = cm.instance AND o.groupid = :g$modname))";
+            $params["m$modname"] = $modname;
+            $params["g$modname"] = $groupid;
+        }
+
         return $DB->get_records_sql(
             "SELECT r.cmid, r.daily_penalty, r.max_penalty
                FROM {local_latepenalty_rules} r
                JOIN {course_modules} cm ON cm.id = r.cmid
                JOIN {modules} m ON m.id = cm.module
               WHERE cm.course = :courseid AND r.enabled = 1
-                AND (EXISTS (SELECT 1 FROM {local_latepenalty_group_overrides} go
-                              WHERE go.cmid = r.cmid AND go.groupid = :g1)
-                     OR (m.name = 'assign' AND EXISTS (SELECT 1 FROM {assign_overrides} o
-                                                        WHERE o.assignid = cm.instance AND o.groupid = :g2))
-                     OR (m.name = 'quiz' AND EXISTS (SELECT 1 FROM {quiz_overrides} o
-                                                      WHERE o.quiz = cm.instance AND o.groupid = :g3))
-                     OR (m.name = 'lesson' AND EXISTS (SELECT 1 FROM {lesson_overrides} o
-                                                        WHERE o.lessonid = cm.instance AND o.groupid = :g4)))",
-            ['courseid' => $courseid, 'g1' => $groupid, 'g2' => $groupid, 'g3' => $groupid, 'g4' => $groupid]
+                AND (" . implode(' OR ', $conditions) . ")",
+            $params
         );
     }
 

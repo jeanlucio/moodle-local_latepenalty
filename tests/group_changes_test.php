@@ -190,6 +190,32 @@ final class group_changes_test extends latepenalty_testcase {
     }
 
     /**
+     * A site without one of the optional modules still recalculates on group changes.
+     *
+     * Assignment, quiz and lesson can be uninstalled; their override tables are then
+     * missing. Regression guard: the lookup queried all three tables at once, failed
+     * on the missing one and so no group change recalculated anything. The lesson
+     * table is hidden for the test only, and restored whatever happens.
+     *
+     * @return void
+     */
+    public function test_group_change_without_lesson_module(): void {
+        global $DB;
+
+        [$assign, $student, $group] = $this->graded_with_group(false);
+        $dbman = $DB->get_manager();
+        $table = new \xmldb_table('lesson_overrides');
+        $dbman->rename_table($table, 'lp_test_hidden_lesson_overrides');
+        try {
+            groups_add_member($group->id, $student->id);
+        } finally {
+            $dbman->rename_table(new \xmldb_table('lp_test_hidden_lesson_overrides'), 'lesson_overrides');
+        }
+
+        $this->assertSame(100.0, $this->final_grade('assign', $assign->id, $student->id));
+    }
+
+    /**
      * Deleting the group recalculates its former members in the background.
      *
      * The members are gone when the event fires, so the course's activities are
