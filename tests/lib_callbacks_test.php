@@ -73,28 +73,37 @@ final class lib_callbacks_test extends latepenalty_testcase {
     }
 
     /**
-     * Validation: ranges, maximum below daily, disabled rule and object input.
+     * Form validation through core: the rule's ranges are checked as the activity form checks them.
+     *
+     * Core calls the callback with the form first and the submitted data second
+     * (moodleform_mod::plugin_extend_coursemodule_validation()). Regression guard:
+     * the callback read its first argument as the data, so it never found the rule
+     * and accepted any rate, 150% or -10% included.
      *
      * @return void
      */
     public function test_validation(): void {
-        $this->assertSame([], local_latepenalty_coursemodule_validation(['latepenalty_enabled' => 0,
-            'latepenalty_daily' => 500, 'latepenalty_max' => -3], []));
-        $this->assertSame([], local_latepenalty_coursemodule_validation((object) ['latepenalty_enabled' => 1,
-            'latepenalty_daily' => 10, 'latepenalty_max' => 50], []));
+        global $CFG;
+        require_once($CFG->dirroot . '/course/moodleform_mod.php');
+        require_once($CFG->dirroot . '/mod/assign/mod_form.php');
 
-        $errors = local_latepenalty_coursemodule_validation(['latepenalty_enabled' => 1,
-            'latepenalty_daily' => 101, 'latepenalty_max' => -1], []);
+        $this->resetAfterTest();
+        // Core's own caller; it reads no form state, so the form is not built (no constructor).
+        $form = (new \ReflectionClass(\mod_assign_mod_form::class))->newInstanceWithoutConstructor();
+        $validate = fn(array $values): array => (new \ReflectionMethod($form, 'plugin_extend_coursemodule_validation'))
+            ->invoke($form, $values);
+
+        $this->assertSame([], $validate(['latepenalty_enabled' => 0, 'latepenalty_daily' => 500, 'latepenalty_max' => -3]));
+        $this->assertSame([], $validate(['latepenalty_enabled' => 1, 'latepenalty_daily' => 10, 'latepenalty_max' => 50]));
+
+        $errors = $validate(['latepenalty_enabled' => 1, 'latepenalty_daily' => 150, 'latepenalty_max' => 50]);
         $this->assertSame(get_string('error_daily_range', 'local_latepenalty'), $errors['latepenalty_daily']);
-        $this->assertArrayHasKey('latepenalty_max', $errors);
 
-        $errors = local_latepenalty_coursemodule_validation(['latepenalty_enabled' => 1,
-            'latepenalty_daily' => 30, 'latepenalty_max' => 20], []);
+        $errors = $validate(['latepenalty_enabled' => 1, 'latepenalty_daily' => 30, 'latepenalty_max' => 20]);
         $this->assertSame(get_string('error_max_less_than_daily', 'local_latepenalty'), $errors['latepenalty_max']);
         $this->assertArrayNotHasKey('latepenalty_daily', $errors);
 
-        $errors = local_latepenalty_coursemodule_validation(['latepenalty_enabled' => 1,
-            'latepenalty_daily' => -1, 'latepenalty_max' => 150], []);
+        $errors = $validate(['latepenalty_enabled' => 1, 'latepenalty_daily' => -1, 'latepenalty_max' => 1000]);
         $this->assertSame(get_string('error_daily_range', 'local_latepenalty'), $errors['latepenalty_daily']);
         $this->assertSame(get_string('error_max_range', 'local_latepenalty'), $errors['latepenalty_max']);
     }

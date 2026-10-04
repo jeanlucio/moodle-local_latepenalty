@@ -248,19 +248,17 @@ function local_latepenalty_without_numeric_grade(int $cmid): bool {
 }
 
 /**
- * Validate late penalty configuration fields.
+ * Validate the late penalty fields of the activity settings form.
  *
- * @param stdClass|array $data Form data object or array.
- * @param array $files Array of uploaded files.
- * @return array Array of errors (empty if validation passes).
+ * Core calls this with the form first and the submitted data second
+ * (moodleform_mod::plugin_extend_coursemodule_validation()).
+ *
+ * @param moodleform_mod $form The activity settings form.
+ * @param array $data Submitted form data.
+ * @return array Errors keyed by field name (empty if validation passes).
  */
-function local_latepenalty_coursemodule_validation($data, $files): array {
+function local_latepenalty_coursemodule_validation(moodleform_mod $form, array $data): array {
     $errors = [];
-
-    // Convert object to array if needed.
-    if (is_object($data)) {
-        $data = (array) $data;
-    }
 
     if (!empty($data['latepenalty_enabled'])) {
         // Validate daily penalty range.
