@@ -14,6 +14,8 @@ The report shows every grade adjustment applied by the plugin in that course:
 | **Final grade** | Grade after the penalty |
 | **Date applied** | Date the penalty was recorded |
 
+The report lists the course's **current students** (a graded role and an active enrolment). Students who left the course, whose enrolment is suspended or ended, or who belonged to a term closed by a course reset are left out; their penalties remain in Moodle's grade history.
+
 The report includes **filters** for student and activity. Only students and activities that have at least one recorded penalty appear in the filter dropdowns — the report is always available regardless of the course format.
 
 The report reads Moodle's grade history. With grade history disabled or kept for a limited time on the site, it shows a warning and lists only what the history still holds (see *Grade history* under Penalty Recalculation).

@@ -226,28 +226,45 @@ class penalty_helper {
      * @return int[] Student IDs.
      */
     public static function graded_student_ids(\context_course $context, ?array $groupids): array {
-        global $CFG, $DB;
+        global $DB;
 
-        if ($groupids === [] || empty($CFG->gradebookroles)) {
-            // A caller in no group of a restricted activity sees nothing, and no role is graded.
+        if ($groupids === []) {
+            // A caller in no group of a restricted activity sees nothing.
             return [];
         }
 
+        [$studentsql, $studentparams] = self::graded_students_sql($context);
+        [$groupjoin, $groupparams] = self::group_scope_join('gs.id', $groupids);
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT gs.id FROM ($studentsql) gs $groupjoin",
+            array_merge($studentparams, $groupparams)
+        ));
+    }
+
+    /**
+     * SQL returning the IDs of the students of a course (see graded_student_ids()), to embed in a query.
+     *
+     * @param \context_course $context Course context.
+     * @return array [SQL selecting one "id" column, named parameters].
+     */
+    public static function graded_students_sql(\context_course $context): array {
+        global $CFG, $DB;
+
         [$enrolledsql, $enrolledparams] = get_enrolled_sql($context, '', 0, true);
+        if (empty($CFG->gradebookroles)) {
+            // No graded role: nobody is a student.
+            return ["SELECT je.id FROM ($enrolledsql) je WHERE 1 = 0", $enrolledparams];
+        }
         [$rolesql, $roleparams] = $DB->get_in_or_equal(explode(',', $CFG->gradebookroles), SQL_PARAMS_NAMED, 'grbr');
         [$ctxsql, $ctxparams] = $DB->get_in_or_equal($context->get_parent_context_ids(true), SQL_PARAMS_NAMED, 'relctx');
-        [$groupjoin, $groupparams] = self::group_scope_join('je.id', $groupids);
-        return array_map('intval', $DB->get_fieldset_sql(
-            "SELECT je.id
-               FROM ($enrolledsql) je
-                    $groupjoin
-              WHERE EXISTS (SELECT 1
-                              FROM {role_assignments} ra
-                             WHERE ra.userid = je.id
-                               AND ra.roleid $rolesql
-                               AND ra.contextid $ctxsql)",
-            array_merge($enrolledparams, $groupparams, $roleparams, $ctxparams)
-        ));
+        $sql = "SELECT je.id
+                  FROM ($enrolledsql) je
+                 WHERE EXISTS (SELECT 1
+                                 FROM {role_assignments} ra
+                                WHERE ra.userid = je.id
+                                  AND ra.roleid $rolesql
+                                  AND ra.contextid $ctxsql)";
+        return [$sql, array_merge($enrolledparams, $roleparams, $ctxparams)];
     }
 
     /**

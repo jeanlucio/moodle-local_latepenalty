@@ -148,6 +148,21 @@ class controller {
     }
 
     /**
+     * WHERE fragment and params confining a query's rows to whom the caller may see now.
+     *
+     * The course's current students only (graded role, active enrolment): the grade
+     * history keeps the penalties of students who left or of a term that ended, as no
+     * unenrolment or reset clears it. Then the caller's own groups, see group_scope_where().
+     *
+     * @return array{0: string, 1: array} [SQL fragment starting with " AND ...", params].
+     */
+    private function scope_where(): array {
+        [$studentsql, $studentparams] = penalty_helper::graded_students_sql($this->context);
+        [$groupwhere, $groupparams] = $this->group_scope_where();
+        return [" AND ggh.userid IN ($studentsql)" . $groupwhere, array_merge($studentparams, $groupparams)];
+    }
+
+    /**
      * Build the WHERE fragment and params that confine a query's rows — for
      * course modules in $this->restrictedcmids — to the caller's own groups.
      *
@@ -201,7 +216,7 @@ class controller {
             $params['filtercmid'] = $this->filtercmid;
         }
 
-        [$groupwhere, $groupparams] = $this->group_scope_where();
+        [$groupwhere, $groupparams] = $this->scope_where();
         $params = array_merge($params, $groupparams);
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
@@ -222,10 +237,15 @@ class controller {
                                           AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
+                   AND ggh.id = (SELECT MAX(h2.id)
+                                   FROM {grade_grades_history} h2
+                                  WHERE h2.itemid = ggh.itemid
+                                    AND h2.userid = ggh.userid
+                                    AND h2.source = 'local_latepenalty')
                        {$userwhere}
                        {$cmwhere}
                        {$groupwhere}
-                 ORDER BY u.lastname, u.firstname, cm.id, ggh.timemodified DESC";
+                 ORDER BY u.lastname, u.firstname, cm.id, ggh.itemid";
 
         $rows = $DB->get_records_sql($sql, $params);
 
@@ -233,17 +253,9 @@ class controller {
         $deadlines = self::load_deadlines($rows);
         $overrides = self::load_overrides($rows);
 
-        // Keep only the most recent penalty per student + grade item (ORDER BY DESC above).
-        $seen      = [];
+        // One row per student and grade item: the query keeps the latest penalty only.
         $penalties = [];
-
         foreach ($rows as $row) {
-            $key = $row->userid . '_' . $row->itemid;
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-
             $rawgrade   = (float) $row->rawgrade;
             $finalgrade = (float) $row->finalgrade;
             $discount   = ($rawgrade > 0)
@@ -332,7 +344,7 @@ class controller {
             $params['filtercmid'] = $this->filtercmid;
         }
 
-        [$groupwhere, $groupparams] = $this->group_scope_where();
+        [$groupwhere, $groupparams] = $this->scope_where();
         $params = array_merge($params, $groupparams);
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
@@ -353,10 +365,15 @@ class controller {
                                           AND cm.module = m.id
                   JOIN {local_latepenalty_rules} r ON r.cmid = cm.id AND r.enabled = 1
                  WHERE ggh.source = 'local_latepenalty'
+                   AND ggh.id = (SELECT MAX(h2.id)
+                                   FROM {grade_grades_history} h2
+                                  WHERE h2.itemid = ggh.itemid
+                                    AND h2.userid = ggh.userid
+                                    AND h2.source = 'local_latepenalty')
                        {$userwhere}
                        {$cmwhere}
                        {$groupwhere}
-                 ORDER BY u.lastname, u.firstname, cm.id, ggh.timemodified DESC";
+                 ORDER BY u.lastname, u.firstname, cm.id, ggh.itemid";
 
         $rows = $DB->get_records_sql($sql, $params);
 
@@ -364,16 +381,8 @@ class controller {
         $deadlines = self::load_deadlines($rows);
         $overrides      = self::load_overrides($rows);
 
-        $seen = [];
         $data = [];
-
         foreach ($rows as $row) {
-            $key = $row->userid . '_' . $row->itemid;
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-
             $rawgrade   = (float) $row->rawgrade;
             $finalgrade = (float) $row->finalgrade;
             $discount   = ($rawgrade > 0)
@@ -445,7 +454,7 @@ class controller {
     private function build_user_options(): array {
         global $DB;
 
-        [$groupwhere, $groupparams] = $this->group_scope_where();
+        [$groupwhere, $groupparams] = $this->scope_where();
 
         $sql = "SELECT DISTINCT u.id, u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
@@ -501,7 +510,7 @@ class controller {
     private function build_cm_options(): array {
         global $DB;
 
-        [$groupwhere, $groupparams] = $this->group_scope_where();
+        [$groupwhere, $groupparams] = $this->scope_where();
 
         // Grouped by course module: an activity may have several penalised grade items.
         $sql = "SELECT cm.id, MIN(gi.itemname) AS itemname

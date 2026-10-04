@@ -392,6 +392,61 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * The report lists the course's current students, not those of a term that ended.
+     *
+     * Regression guard: it read every penalty in the grade history, which no reset or
+     * unenrolment clears, so students who had left (or whose enrolment was suspended)
+     * kept appearing next to the current ones, on screen, in the filter and in the export.
+     */
+    public function test_report_lists_current_students_only(): void {
+        global $DB;
+
+        $s = $this->make_scenario();
+        $this->setAdminUser();
+        $instances = enrol_get_instances($s['course']->id, true);
+        $manual = reset($instances);
+        enrol_get_plugin('manual')->unenrol_user($manual, $s['student2']->id);
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        self::assertCount(1, $ctx['penalties']);
+        self::assertNotContains((int) $s['student2']->id, array_column($ctx['useroptions'], 'value'));
+        [, $rows] = $this->make_controller($s, $groupscope)->get_export_data();
+        self::assertCount(1, $rows);
+
+        $DB->set_field('user_enrolments', 'status', ENROL_USER_SUSPENDED, ['userid' => $s['student1']->id]);
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        self::assertCount(0, $ctx['penalties'], 'Suspended');
+        self::assertCount(1, $ctx['useroptions'], 'Only "All students"');
+    }
+
+    /**
+     * After several recalculations the report shows the latest penalty, once per student and activity.
+     *
+     * Regression guard: the latest row was picked by time, and writes within the same
+     * second came back in no particular order, so an older penalty could be shown.
+     */
+    public function test_report_shows_latest_penalty_only(): void {
+        $s = $this->make_scenario();
+        $this->setAdminUser();
+        \local_latepenalty\recalculator::recalculate_for_student((int) $s['cm']->cmid, (int) $s['student1']->id, 20.0, 50.0);
+        \local_latepenalty\recalculator::recalculate_for_student((int) $s['cm']->cmid, (int) $s['student1']->id, 30.0, 50.0);
+        $groupscope = controller::resolve_group_restriction($s['course'], $s['context']);
+
+        $gradeitem = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'assign', 'iteminstance' => $s['cm']->id]);
+        $grade = new \grade_grade(['itemid' => $gradeitem->id, 'userid' => $s['student1']->id]);
+        self::assertEqualsWithDelta(70.0, (float) $grade->finalgrade, 0.001, 'Recalculated');
+
+        $ctx = $this->make_controller($s, $groupscope)->get_template_context();
+        $byname = array_column($ctx['penalties'], 'discount', 'fullname');
+
+        self::assertCount(2, $ctx['penalties']);
+        self::assertSame(format_float(30.0, 1), $byname[fullname($s['student1'])]);
+        [, $rows] = $this->make_controller($s, $groupscope)->get_export_data();
+        self::assertCount(2, $rows);
+    }
+
+    /**
      * The CSV/Excel export data must honour the same group restriction as the
      * on-screen report — this is the path that lets a restricted teacher
      * exfiltrate every group's data in a single file if left unfiltered.

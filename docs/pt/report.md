@@ -14,6 +14,8 @@ O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
 | **Nota final** | Nota após a penalidade |
 | **Penalidade aplicada** | Data em que a penalidade foi registrada |
 
+O relatório lista os **estudantes atuais** do curso (papel avaliado e matrícula ativa). Estudantes que saíram do curso, com matrícula suspensa ou encerrada, ou de um período fechado por uma reconfiguração do curso ficam de fora; as penalidades deles continuam no histórico de notas do Moodle.
+
 O relatório inclui **filtros** por estudante e por atividade. Somente estudantes e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
 
 O relatório lê o histórico de notas do Moodle. Com o histórico desabilitado ou guardado por tempo limitado no site, ele mostra um aviso e lista só o que o histórico ainda guarda (veja *Histórico de notas* em Recálculo de Penalidades).
