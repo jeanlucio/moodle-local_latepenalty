@@ -1,5 +1,36 @@
 # Changes
 
+## [v1.3.0] — 2026-10-04
+
+### Rules and deadlines
+
+- The activity form now refuses a daily penalty or a maximum outside 0–100%, or a daily penalty above the maximum; these checks never ran before, so any value was saved
+- The daily penalty and the maximum accept the decimal separator of the user's language ("2,5" in Portuguese), in the activity form and in overrides; a decimal comma used to be cut off without warning
+- Saving an activity through the course API (scripts, other plugins) keeps the rule as it was saved and only follows a changed due date, instead of switching the rule off
+- Restoring a course, or resetting it, with a new start date moves the override deadlines along with the activity dates; after a reset, the first save of the activity no longer recalculates the grades of the term that ended
+
+### Groups
+
+- A student joining or leaving a group is recalculated at once in the activities where that group changes the deadline, through a Late Penalty override or the assignment's, quiz's or lesson's own group override
+- Deleting a group removes its Late Penalty overrides and recalculates the course in the background; overrides left behind by earlier versions can now be edited or deleted
+- A course reset that removes groups or their members recalculates nothing
+
+### Report and screens
+
+- The report lists the course's current students only (graded role and active enrolment); students who left, or of a term closed by a course reset, no longer appear
+- The report shows the latest penalty when several were recorded in the same second, and marks every member of an overridden group
+- Names with "&" or quotes show correctly on screen and in the CSV/Excel export
+- Rates are written with the language's decimal separator in notices, badges and override lists
+- Pending-student counts on teacher badges leave out suspended and ended enrolments, and include custom graded roles and roles given on the category
+- The student list for a new override offers only graded students with an active enrolment: no teachers, no suspended students
+- The activity form and the report warn when grade history is disabled or kept for a limited time, as penalties cannot then be undone or recalculated
+- The overrides link uses an icon that exists in every supported Moodle version
+
+### Compatibility
+
+- Requires Moodle 4.5, as already stated: the installer no longer accepts Moodle 4.4
+- Works on sites where the quiz or lesson module has been uninstalled
+
 ## [v1.2.0] — 2026-10-01
 
 ### Deadlines
