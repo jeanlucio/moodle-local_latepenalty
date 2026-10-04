@@ -330,27 +330,29 @@ class hook_listener {
         $datestr = penalty_helper::format_deadline($deadline);
         $daysoverdue = (int) ceil(($now - $deadline) / DAYSECS);
         $penalty = min($daysoverdue * $daily, $max);
+        // Rates as the user's language writes them ("2,5" in Portuguese).
+        [$pct, $dailystr, $maxstr] = array_map([penalty_helper::class, 'format_rate'], [$penalty, $daily, $max]);
 
         if ($state === 'danger') {
             $label = get_string('badge_teacher_pending_max', 'local_latepenalty', [
-                'pct'     => $max,
+                'pct'     => $maxstr,
                 'pending' => $pending,
             ]);
             $notice = get_string('courseinfo_teacher_overdue_max', 'local_latepenalty', (object) [
                 'deadline' => $datestr,
-                'max'      => (string) $max,
+                'max'      => $maxstr,
                 'pending'  => $pending,
             ]);
         } else {
             $label = get_string('badge_teacher_pending', 'local_latepenalty', [
-                'pct'     => $penalty,
+                'pct'     => $pct,
                 'pending' => $pending,
             ]);
             $notice = get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
                 'deadline' => $datestr,
-                'pct'      => (string) $penalty,
-                'daily'    => (string) $daily,
-                'max'      => (string) $max,
+                'pct'      => $pct,
+                'daily'    => $dailystr,
+                'max'      => $maxstr,
                 'pending'  => $pending,
             ]);
         }
@@ -442,35 +444,38 @@ class hook_listener {
         int $now
     ): array {
         $datestr = penalty_helper::format_deadline($deadline);
+        // Rates as the user's language writes them ("2,5" in Portuguese).
+        [$dailystr, $maxstr] = array_map([penalty_helper::class, 'format_rate'], [$daily, $max]);
 
         if ($deadline > $now) {
             $label  = get_string('badge_ontime', 'local_latepenalty', ['date' => $datestr]);
             $notice = get_string('courseinfo_notice', 'local_latepenalty', (object) [
                 'deadline' => $datestr,
-                'daily'    => (string) $daily,
-                'max'      => (string) $max,
+                'daily'    => $dailystr,
+                'max'      => $maxstr,
             ]);
             return [$label, 'ontime', $notice];
         }
 
         $daysoverdue = (int) ceil(($now - $deadline) / DAYSECS);
         $penalty = min($daysoverdue * $daily, $max);
+        $pct = penalty_helper::format_rate($penalty);
 
         if ($penalty >= $max) {
-            $label  = get_string('badge_penalty_max', 'local_latepenalty', ['pct' => $max]);
+            $label  = get_string('badge_penalty_max', 'local_latepenalty', ['pct' => $maxstr]);
             $notice = get_string('courseinfo_notice_overdue_max', 'local_latepenalty', (object) [
                 'deadline' => $datestr,
-                'max'      => (string) $max,
+                'max'      => $maxstr,
             ]);
             return [$label, 'danger', $notice];
         }
 
-        $label  = get_string('badge_penalty', 'local_latepenalty', ['pct' => $penalty]);
+        $label  = get_string('badge_penalty', 'local_latepenalty', ['pct' => $pct]);
         $notice = get_string('courseinfo_notice_overdue', 'local_latepenalty', (object) [
             'deadline' => $datestr,
-            'pct'      => (string) $penalty,
-            'daily'    => (string) $daily,
-            'max'      => (string) $max,
+            'pct'      => $pct,
+            'daily'    => $dailystr,
+            'max'      => $maxstr,
         ]);
         return [$label, 'warning', $notice];
     }

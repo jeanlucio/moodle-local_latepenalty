@@ -597,10 +597,10 @@ class controller {
                     ? penalty_helper::format_deadline((int) $override->deadline)
                     : $inherit,
                 'daily_penalty' => ($override->daily_penalty !== null)
-                    ? get_string('percent', 'local_latepenalty', $override->daily_penalty)
+                    ? get_string('percent', 'local_latepenalty', penalty_helper::format_rate((float) $override->daily_penalty))
                     : $inherit,
                 'max_penalty'   => ($override->max_penalty !== null)
-                    ? get_string('percent', 'local_latepenalty', $override->max_penalty)
+                    ? get_string('percent', 'local_latepenalty', penalty_helper::format_rate((float) $override->max_penalty))
                     : $inherit,
                 'editurl'       => (new moodle_url(
                     '/local/latepenalty/overrides.php',

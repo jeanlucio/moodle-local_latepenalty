@@ -492,6 +492,28 @@ final class controller_test extends advanced_testcase {
     }
 
     /**
+     * The list writes rates the way the user's language does, without trailing zeros.
+     *
+     * Regression guard: the stored value went out as it is ("2.50%").
+     */
+    public function test_render_list_rates_in_language_format(): void {
+        global $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, null, 2.5, 12.5);
+        $this->use_comma_decimals();
+
+        $ctrl = $this->make_controller($s, 'list');
+        $ctrl->process();
+        $html = $ctrl->render($PAGE->get_renderer('core'));
+
+        self::assertStringContainsString('2,5%', $html);
+        self::assertStringContainsString('12,5%', $html);
+        self::assertStringNotContainsString('2.50', $html);
+    }
+
+    /**
      * Rates typed with the language's decimal comma are validated, saved and shown again as typed.
      *
      * Regression guard: "2,5" was rejected as out of range.

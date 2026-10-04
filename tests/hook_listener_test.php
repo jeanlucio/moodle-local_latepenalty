@@ -27,6 +27,7 @@ namespace local_latepenalty;
 
 use advanced_testcase;
 use core\hook\output\before_standard_footer_html_generation;
+use local_latepenalty\tests\comma_decimals;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -44,6 +45,8 @@ use ReflectionProperty;
  * @covers \local_latepenalty\local\deadline
  */
 final class hook_listener_test extends advanced_testcase {
+    use comma_decimals;
+
     #[\Override]
     protected function setUp(): void {
         parent::setUp();
@@ -349,6 +352,36 @@ final class hook_listener_test extends advanced_testcase {
         } else {
             self::assertStringContainsString('"cmid":' . $native->cmid, $code);
         }
+    }
+
+    /**
+     * Notices and badges write rates the way the user's language does.
+     *
+     * Regression guard: rates went out as raw PHP numbers ("2.5%", "7.5%") while the
+     * form showed "2,5".
+     */
+    public function test_rates_use_language_decimal_separator(): void {
+        $this->use_comma_decimals();
+        $badge = new ReflectionMethod(hook_listener::class, 'compute_badge');
+        $teacher = new ReflectionMethod(hook_listener::class, 'compute_teacher_badge');
+        $now = time();
+
+        [, , $notice] = $badge->invoke(null, $now + DAYSECS, 2.5, 12.5, $now);
+        self::assertStringContainsString('2,5%', $notice);
+        self::assertStringContainsString('12,5%', $notice);
+
+        [$label, , $notice] = $badge->invoke(null, $now - 3 * DAYSECS + 60, 2.5, 12.5, $now);
+        self::assertStringContainsString('7,5%', $label);
+        self::assertStringContainsString('7,5%', $notice);
+        self::assertStringNotContainsString('.5%', $label . $notice);
+
+        [$label, $notice] = $teacher->invoke(null, $now - 3 * DAYSECS + 60, 2.5, 12.5, $now, 1, 'warning');
+        self::assertStringContainsString('7,5%', $label);
+        self::assertStringNotContainsString('.5%', $label . $notice);
+
+        [$label, $notice] = $teacher->invoke(null, $now - 9 * DAYSECS, 2.5, 12.5, $now, 1, 'danger');
+        self::assertStringContainsString('12,5%', $label);
+        self::assertStringNotContainsString('.5%', $label . $notice);
     }
 
     /**
