@@ -34,7 +34,7 @@ use local_latepenalty\penalty_helper;
  * Queries grade_grades_history for rows written by this plugin and
  * returns the most recent penalty event per student+activity pair.
  *
- * @package local_latepenalty\report
+ * @package    local_latepenalty
  */
 class controller {
     /** @var int The course id. */

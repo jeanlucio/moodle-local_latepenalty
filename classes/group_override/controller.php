@@ -37,7 +37,7 @@ use stdClass;
 /**
  * Handles all actions for the group override management page (list, add, edit, delete).
  *
- * @package local_latepenalty\group_override
+ * @package    local_latepenalty
  */
 class controller {
     /** @var int Course module ID. */

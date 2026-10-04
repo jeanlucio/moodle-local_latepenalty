@@ -38,7 +38,7 @@ use stdClass;
 /**
  * Handles all actions for the override management page (list, add, edit, delete).
  *
- * @package local_latepenalty\override
+ * @package    local_latepenalty
  */
 class controller {
     /** @var int Course module ID. */
