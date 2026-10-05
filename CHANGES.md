@@ -1,5 +1,19 @@
 # Changes
 
+## [v1.4.0] — 2026-10-05
+
+### Recalculation
+
+- Grades that already existed when the rule was first enabled are now left alone by every later recalculation, not only by the first enabling; deleting a group, enabling the rule again, an override, an extension or a group change used to penalise grades given before the rule existed
+- Deleting a group recalculates only the activities where that group changed the deadline, instead of every activity with a rule in the course
+- On Moodle 4.5, 5.0, and 5.1/5.2 without MDL-88407, rewriting a penalty keeps the grade's date; for SCORM, H5P, external tools and modules that report no submission date, each recalculation used to move that date and could count the student late
+- On upgrade, each existing rule is dated from its first penalty, or from the upgrade if it never penalised; backup, restore and course reset keep that date
+
+### Override screens
+
+- A link to an override that no longer exists, or is outside the teacher's groups, now says so with a way back to the list, instead of a "{$a}" error
+- Student names that carry markup or entities show as plain text on the override edit, delete and student selection screens
+
 ## [v1.3.0] — 2026-10-04
 
 ### Rules and deadlines
