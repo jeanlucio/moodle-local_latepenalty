@@ -415,6 +415,16 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
         return $data;
     }
 
+    // The first enabling is dated (F19): grades that arrived before it are left alone from then on. Enabling
+    // again keeps the date; a rule without one that already penalised (an old backup) is enabled again as before.
+    $record->timeenabled = $existing ? (int) $existing->timeenabled : 0;
+    $enabling = $record->enabled && (!$existing || !$existing->enabled);
+    $firstenabling = $enabling && $record->timeenabled === 0
+        && !($existing && \local_latepenalty\recalculator::has_penalised($cmid));
+    if ($firstenabling) {
+        $record->timeenabled = time();
+    }
+
     // Store the new rule first: the recalculations below read it (keep-best option).
     $record->last_deadline = $newdeadline;
     if ($existing) {
@@ -427,13 +437,11 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
     if ($existing && $existing->enabled && !$record->enabled) {
         // Disabling the rule gives back the original grades.
         \local_latepenalty\recalculator::restore($cmid);
-    } else if ($existing && !$existing->enabled && $record->enabled) {
-        // Enabling again re-applies the rule to every graded student, including grades given while it
-        // was off. Enabling for the first time (the plugin never discounted anything here) leaves the
-        // grades that already exist as they are; only grades arriving afterwards are penalised.
-        if (\local_latepenalty\recalculator::has_penalised($cmid)) {
-            \local_latepenalty\recalculator::recalculate_all($cmid, $record->daily_penalty, $record->max_penalty);
-        }
+    } else if ($existing && $enabling && !$firstenabling) {
+        // Enabling again re-applies the rule to the grades given since it was first enabled, including
+        // those given while it was off. Enabling for the first time leaves the grades that already exist
+        // as they are; only grades arriving afterwards are penalised.
+        \local_latepenalty\recalculator::recalculate_all($cmid, $record->daily_penalty, $record->max_penalty);
     } else if ($existing && $record->enabled) {
         // A removed deadline (0) counts as a change: it gives back the grades of students left without one.
         $deadlinechanged = (int) $existing->last_deadline !== $newdeadline;

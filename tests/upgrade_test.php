@@ -86,13 +86,15 @@ final class upgrade_test extends latepenalty_testcase {
             $this->assertTrue($dbman->field_exists($table, 'keepbest'));
             $after = $DB->get_record('local_latepenalty_rules', ['cmid' => $assign->cmid], '*', MUST_EXIST);
             $this->assertSame('0', (string) $after->keepbest);
-            unset($after->keepbest, $before->keepbest);
+            // The rule is on and penalised: it is dated from its first penalty (F19).
+            $this->assertGreaterThan(0, (int) $after->timeenabled);
+            unset($after->keepbest, $before->keepbest, $after->timeenabled, $before->timeenabled);
             $this->assertEquals($before, $after);
             $this->assertSame(
                 (int) $DB->get_field_sql('SELECT MAX(id) FROM {grade_grades_history}'),
                 (int) get_config('local_latepenalty', reprocess_grades::CURSOR)
             );
-            $this->assertEquals(2026100100, get_config('local_latepenalty', 'version'));
+            $this->assertEquals(2026100501, get_config('local_latepenalty', 'version'));
 
             // Running the step again (an interrupted upgrade resumed) does not fail.
             set_config('version', self::V112, 'local_latepenalty');
@@ -106,7 +108,7 @@ final class upgrade_test extends latepenalty_testcase {
     }
 
     /**
-     * A site already on 1.2.0 runs no step.
+     * A site already on the current version runs no step.
      *
      * @return void
      */
@@ -114,9 +116,62 @@ final class upgrade_test extends latepenalty_testcase {
         $this->resetAfterTest();
         set_config(reprocess_grades::CURSOR, 42, 'local_latepenalty');
 
-        $this->assertTrue(xmldb_local_latepenalty_upgrade(2026100100));
+        $this->assertTrue(xmldb_local_latepenalty_upgrade(2026100501));
 
         $this->assertEquals(42, get_config('local_latepenalty', reprocess_grades::CURSOR));
+    }
+
+    /**
+     * The first enabling date is filled from what the site can tell (F19-15).
+     *
+     * Where the plugin penalised, its first penalty; a rule that is on but never penalised, the upgrade
+     * time; a rule that is off and never penalised, 0 (the next enabling counts as the first).
+     *
+     * @return void
+     */
+    public function test_upgrade_fills_first_enabling(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course, $student, $teacher] = $this->create_course_with_users();
+        $late = time() - 2 * DAYSECS + HOURSECS;
+        $penalised = $this->create_assign_activity($course, ['duedate' => $late]);
+        $this->enable_rule($penalised->cmid);
+        $this->submit_assign($penalised, $student);
+        $this->grade_assign($penalised, $student, $teacher, 100);
+        $offpenalised = $this->create_assign_activity($course, ['duedate' => $late]);
+        $this->enable_rule($offpenalised->cmid);
+        $this->submit_assign($offpenalised, $student);
+        $this->grade_assign($offpenalised, $student, $teacher, 100);
+        $this->lp_generator()->create_rule(['cmid' => $offpenalised->cmid, 'enabled' => 0]);
+        $onnever = $this->create_assign_activity($course, ['duedate' => time() + DAYSECS]);
+        $this->enable_rule($onnever->cmid);
+        $offnever = $this->create_assign_activity($course, ['duedate' => time() + DAYSECS]);
+        $firstpenalty = fn(\stdClass $assign): int => (int) $DB->get_field_sql(
+            "SELECT MIN(h.timemodified)
+               FROM {grade_grades_history} h
+               JOIN {grade_items} gi ON gi.id = h.itemid
+              WHERE gi.itemmodule = 'assign' AND gi.iteminstance = :instance AND h.source = :source",
+            ['instance' => $assign->id, 'source' => 'local_latepenalty']
+        );
+        $this->assertGreaterThan(0, $firstpenalty($penalised));
+        // Every rule as before the upgrade: no first enabling date yet.
+        $DB->set_field_select('local_latepenalty_rules', 'timeenabled', 0, 'timeenabled <> 0');
+        $before = time();
+        set_config('version', 2026100100, 'local_latepenalty');
+
+        $this->assertTrue(xmldb_local_latepenalty_upgrade(2026100100));
+
+        $timeenabled = fn(\stdClass $assign): int => (int) $DB->get_field(
+            'local_latepenalty_rules',
+            'timeenabled',
+            ['cmid' => $assign->cmid]
+        );
+        $this->assertSame($firstpenalty($penalised), $timeenabled($penalised), 'On, penalised');
+        $this->assertSame($firstpenalty($offpenalised), $timeenabled($offpenalised), 'Off, penalised');
+        $this->assertGreaterThanOrEqual($before, $timeenabled($onnever), 'On, never penalised');
+        $this->assertSame(0, $timeenabled($offnever), 'Off, never penalised');
     }
 
     /**

@@ -144,11 +144,14 @@ class observer {
     }
 
     /**
-     * Delete the group overrides of a group that was removed.
+     * Delete the group overrides of a group that was removed, and recalculate where it changed a deadline.
      *
-     * Its members are gone by the time the event fires, so the override applies to
-     * nobody; left behind, it would show as an unknown group in the override list.
-     * Course resets and "Delete all groups" also fire this event once per group.
+     * Its members are gone from groups_members by the time the event fires, so the
+     * activities where the group changed a deadline are recalculated in the background,
+     * and only those (F19). This observer runs before the assignment, quiz and lesson
+     * ones (higher priority in db/events.php), while their group overrides still tell
+     * which activities those are. Course resets and "Delete all groups" also fire this
+     * event once per group; a reset recalculates nothing.
      *
      * @param \core\event\group_deleted $event The event.
      * @return void
@@ -156,16 +159,19 @@ class observer {
     public static function group_deleted(\core\event\group_deleted $event): void {
         global $DB;
 
-        $DB->delete_records('local_latepenalty_group_overrides', ['groupid' => (int) $event->objectid]);
-
-        // The former members lose the group's deadlines, but they are already gone from
-        // groups_members: recalculate the whole course in the background (once per course).
         $courseid = (int) $event->courseid;
-        if (self::$resetcourseid === $courseid || !self::course_has_rules($courseid)) {
+        $groupid = (int) $event->objectid;
+        $cmids = self::$resetcourseid === $courseid
+            ? []
+            : array_keys(recalculator::rules_with_group_deadline($courseid, $groupid));
+
+        $DB->delete_records('local_latepenalty_group_overrides', ['groupid' => $groupid]);
+
+        if (empty($cmids)) {
             return;
         }
         $task = new task\recalculate_course();
-        $task->set_custom_data(['courseid' => $courseid]);
+        $task->set_custom_data(['courseid' => $courseid, 'cmids' => array_map('intval', $cmids)]);
         \core\task\manager::queue_adhoc_task($task, true);
     }
 
@@ -250,24 +256,6 @@ class observer {
         $DB->execute(
             "UPDATE {local_latepenalty_rules} SET last_deadline = last_deadline + :shift WHERE last_deadline <> 0 AND $incourse",
             $params
-        );
-    }
-
-    /**
-     * Whether a course has an activity with an enabled rule.
-     *
-     * @param int $courseid Course ID.
-     * @return bool
-     */
-    private static function course_has_rules(int $courseid): bool {
-        global $DB;
-
-        return $DB->record_exists_sql(
-            "SELECT 1
-               FROM {local_latepenalty_rules} r
-               JOIN {course_modules} cm ON cm.id = r.cmid
-              WHERE cm.course = :courseid AND r.enabled = 1",
-            ['courseid' => $courseid]
         );
     }
 

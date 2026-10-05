@@ -36,7 +36,7 @@ class local_latepenalty_generator extends component_generator_base {
      * activity deadline for a new row, unless the record gives one.
      *
      * @param array $record Must contain cmid; optional enabled, daily_penalty, max_penalty,
-     *                      recalc_on_deadline, recalc_on_rate, keepbest, last_deadline.
+     *                      recalc_on_deadline, recalc_on_rate, keepbest, last_deadline, timeenabled.
      * @return stdClass The stored rule.
      */
     public function create_rule(array $record): stdClass {
@@ -61,6 +61,8 @@ class local_latepenalty_generator extends component_generator_base {
             'recalc_on_deadline' => 1,
             'recalc_on_rate' => 1,
             'last_deadline' => $lastdeadline,
+            // No cutoff unless a test asks for one: grades that predate the rule are a test subject of their own.
+            'timeenabled' => 0,
         ], $record);
 
         if ($existing) {

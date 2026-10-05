@@ -104,25 +104,36 @@ class recalculator {
                 'itemid = :itemid AND rawgrade IS NOT NULL',
                 ['itemid' => $gradeitem->id]
             );
-            self::run($cm, $gradeitem, $userids, $daily, $max, null);
+            self::run($cm, $gradeitem, self::without_predating($cm, $gradeitem, $userids), $daily, $max, null);
         }
     }
 
     /**
-     * Apply the rules again to every activity of a course with an enabled rule.
+     * Apply the rules again to the activities of a course with an enabled rule.
      *
      * @param int $courseid Course ID.
+     * @param int[]|null $cmids Only these course modules, or null for every one of the course.
      * @return void
      */
-    public static function recalculate_course(int $courseid): void {
+    public static function recalculate_course(int $courseid, ?array $cmids = null): void {
         global $DB;
 
+        if ($cmids === []) {
+            return;
+        }
+        $where = '';
+        $params = ['courseid' => $courseid];
+        if ($cmids !== null) {
+            [$insql, $inparams] = $DB->get_in_or_equal(array_map('intval', $cmids), SQL_PARAMS_NAMED, 'cm');
+            $where = " AND r.cmid $insql";
+            $params += $inparams;
+        }
         $rules = $DB->get_records_sql(
             "SELECT r.cmid, r.daily_penalty, r.max_penalty
                FROM {local_latepenalty_rules} r
                JOIN {course_modules} cm ON cm.id = r.cmid
-              WHERE cm.course = :courseid AND r.enabled = 1",
-            ['courseid' => $courseid]
+              WHERE cm.course = :courseid AND r.enabled = 1$where",
+            $params
         );
         foreach ($rules as $rule) {
             self::recalculate_all((int) $rule->cmid, (float) $rule->daily_penalty, (float) $rule->max_penalty);
@@ -260,8 +271,61 @@ class recalculator {
             return;
         }
         foreach (penalty_helper::get_penalisable_items($cm) as $gradeitem) {
-            self::run($cm, $gradeitem, $userids, $daily, $max, null);
+            self::run($cm, $gradeitem, self::without_predating($cm, $gradeitem, $userids), $daily, $max, null);
         }
+    }
+
+    /**
+     * Leave out the students whose grade arrived before the rule was first enabled and was never penalised.
+     *
+     * Enabling the rule for the first time leaves the grades that already exist alone (F17); background
+     * recalculations (enabling again, overrides, extensions, groups) keep that promise (F19). A grade the
+     * plugin penalised stays in its care. A grade arrives when someone other than the plugin writes it:
+     * the latest such write in the grade history, which records the real time of each write whatever date
+     * the module reports; without history, the date of the grade itself. New grades reaching the observer
+     * never pass here: they arrive now.
+     *
+     * @param \stdClass $cm Course module.
+     * @param \grade_item $gradeitem Grade item.
+     * @param int[] $userids Student IDs.
+     * @return int[] The students to recalculate.
+     */
+    private static function without_predating(\stdClass $cm, \grade_item $gradeitem, array $userids): array {
+        global $DB;
+
+        $userids = array_values(array_unique(array_map('intval', $userids)));
+        $timeenabled = (int) $DB->get_field('local_latepenalty_rules', 'timeenabled', ['cmid' => $cm->id]);
+        if ($timeenabled === 0 || empty($userids)) {
+            return $userids;
+        }
+
+        [$usql, $uparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
+        $params = ['itemid' => $gradeitem->id, 'source' => penalty_writer::SOURCE] + $uparams;
+        $penalised = $DB->get_fieldset_sql(
+            "SELECT DISTINCT userid
+               FROM {grade_grades_history}
+              WHERE itemid = :itemid AND userid $usql AND source = :source",
+            $params
+        );
+        $arrived = $DB->get_records_sql_menu(
+            "SELECT userid, MAX(timemodified)
+               FROM {grade_grades_history}
+              WHERE itemid = :itemid AND userid $usql AND (source IS NULL OR source <> :source)
+           GROUP BY userid",
+            $params
+        );
+        $graded = $DB->get_records_sql_menu(
+            "SELECT userid, timemodified
+               FROM {grade_grades}
+              WHERE itemid = :itemid AND userid $usql",
+            ['itemid' => $gradeitem->id] + $uparams
+        );
+
+        $penalised = array_flip(array_map('intval', $penalised));
+        return array_values(array_filter($userids, static function (int $userid) use ($penalised, $arrived, $graded, $timeenabled) {
+            $arrival = $arrived[$userid] ?? $graded[$userid] ?? null;
+            return isset($penalised[$userid]) || $arrival === null || (int) $arrival >= $timeenabled;
+        }));
     }
 
     /**

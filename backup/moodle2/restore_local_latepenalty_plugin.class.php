@@ -169,6 +169,10 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
 
         // Backups made before 1.2.0 have no keepbest.
         $data->keepbest = $data->keepbest ?? 0;
+        // Kept as it was, not shifted with the course dates: restored grades and grade history keep
+        // their own dates too, so each grade stays before or after it as in the original course (F19).
+        // Backups made before 1.4.0 have none: no cutoff, as then.
+        $data->timeenabled = $data->timeenabled ?? 0;
 
         $existing = $DB->get_record('local_latepenalty_rules', ['cmid' => $data->cmid]);
         if ($existing) {
@@ -178,6 +182,7 @@ class restore_local_latepenalty_plugin extends restore_local_plugin {
             $existing->recalc_on_deadline = $data->recalc_on_deadline ?? 1;
             $existing->recalc_on_rate = $data->recalc_on_rate ?? 1;
             $existing->keepbest = $data->keepbest ?? 0;
+            $existing->timeenabled = $data->timeenabled;
             $existing->last_deadline = $data->last_deadline;
             $DB->update_record('local_latepenalty_rules', $existing);
         } else {

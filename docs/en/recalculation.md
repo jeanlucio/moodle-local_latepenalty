@@ -16,19 +16,19 @@ Two checkboxes in the Late penalty section (both on by default) control what hap
 ## Disabling and enabling the rule
 
 * **Disabling** the rule and saving gives back the original grades (the form warns about it before saving).
-* **Enabling it again** applies the current rule to every student with a grade, including grades given while it was off, and with the deadline as it is now.
-* **Enabling it for the first time** changes no existing grade: only grades given from then on are discounted.
+* **Enabling it again** applies the current rule, with the deadline as it is now, to every grade given since the rule was first enabled, including grades given while it was off.
+* **Enabling it for the first time** changes no existing grade: only grades given from then on are discounted. No later recalculation changes those earlier grades either — enabling again, an override, an extension or a group change leaves them as they are. A grade given again after the rule was enabled (a new attempt, a regrade) counts as a new grade.
 * **To forgive one student**, give a later deadline with a Late Penalty override, or with the activity's own extension or override. Disabling the rule affects everybody.
 
 ## When an override or extension changes
 
-Saving or deleting any of these recalculates the affected students at once, whether or not they were penalised before:
+Saving or deleting any of these recalculates the affected students at once, whether or not they were penalised before (grades that predate the rule excepted, see above):
 
 * a **Late Penalty override** (student) or **group override** (its members);
 * an **activity override**: Assignment, Quiz or Lesson, for a student or a group;
 * an **Assignment extension** (*Grant extension*).
 
-A **student joining or leaving a group** gains or loses that group's overrides, from Late Penalty or from the activity, and is recalculated at once in the activities they change. **Deleting a group** recalculates the course's activities in the background, shortly after, because its members are no longer known by then. A **course reset** (*Reset course*) that removes groups or their members recalculates nothing: the grades of the term that ended stay as they were. A reset with a new start date moves the Late Penalty override deadlines by the same amount as the activity dates, as Moodle does with the activities' own overrides.
+A **student joining or leaving a group** gains or loses that group's overrides, from Late Penalty or from the activity, and is recalculated at once in the activities they change. **Deleting a group** recalculates, in the background and shortly after, the activities where that group changed the deadline, because its members are no longer known by then. A **course reset** (*Reset course*) that removes groups or their members recalculates nothing: the grades of the term that ended stay as they were. A reset with a new start date moves the Late Penalty override deadlines by the same amount as the activity dates, as Moodle does with the activities' own overrides.
 
 ## When the activity sends a new grade
 

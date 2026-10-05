@@ -47,5 +47,46 @@ function xmldb_local_latepenalty_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026100100, 'local', 'latepenalty');
     }
 
+    if ($oldversion < 2026100501) {
+        // When each rule was first enabled: grades that arrived earlier are left alone (F19).
+        $table = new xmldb_table('local_latepenalty_rules');
+        $field = new xmldb_field('timeenabled', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'keepbest');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // The real date was never stored. Where the plugin penalised, its first penalty is the closest
+        // to it; a rule that is on but never penalised protects every grade that exists today. One
+        // statement for the whole table, as core upgrade steps do; rules left at 0 count as never enabled.
+        $DB->execute(
+            "UPDATE {local_latepenalty_rules}
+                SET timeenabled = (SELECT MIN(h.timemodified)
+                                     FROM {course_modules} cm
+                                     JOIN {modules} m ON m.id = cm.module
+                                     JOIN {grade_items} gi ON gi.itemtype = 'mod'
+                                                          AND gi.itemmodule = m.name
+                                                          AND gi.iteminstance = cm.instance
+                                                          AND gi.courseid = cm.course
+                                     JOIN {grade_grades_history} h ON h.itemid = gi.id
+                                    WHERE cm.id = {local_latepenalty_rules}.cmid
+                                      AND h.source = :source)
+              WHERE timeenabled = 0
+                AND EXISTS (SELECT 1
+                              FROM {course_modules} cm
+                              JOIN {modules} m ON m.id = cm.module
+                              JOIN {grade_items} gi ON gi.itemtype = 'mod'
+                                                   AND gi.itemmodule = m.name
+                                                   AND gi.iteminstance = cm.instance
+                                                   AND gi.courseid = cm.course
+                              JOIN {grade_grades_history} h ON h.itemid = gi.id
+                             WHERE cm.id = {local_latepenalty_rules}.cmid
+                               AND h.source = :source2)",
+            ['source' => 'local_latepenalty', 'source2' => 'local_latepenalty']
+        );
+        $DB->set_field_select('local_latepenalty_rules', 'timeenabled', time(), 'enabled = 1 AND timeenabled = 0');
+
+        upgrade_plugin_savepoint(true, 2026100501, 'local', 'latepenalty');
+    }
+
     return true;
 }

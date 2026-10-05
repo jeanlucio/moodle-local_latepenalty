@@ -99,6 +99,8 @@ final class course_reset_test extends latepenalty_testcase {
             'other' => (int) $DB->get_field('local_latepenalty_overrides', 'deadline', ['cmid' => $otherassign->cmid]),
         ];
 
+        $DB->set_field('local_latepenalty_rules', 'timeenabled', $course->startdate + DAYSECS, ['cmid' => $assign->cmid]);
+
         reset_course_userdata((object) [
             'id' => $course->id,
             'reset_start_date' => $course->startdate + $shift,
@@ -121,6 +123,11 @@ final class course_reset_test extends latepenalty_testcase {
         $this->assertSame(
             $before['rule'] + $shift,
             (int) $DB->get_field('local_latepenalty_rules', 'last_deadline', ['cmid' => $assign->cmid])
+        );
+        $this->assertSame(
+            $course->startdate + DAYSECS,
+            (int) $DB->get_field('local_latepenalty_rules', 'timeenabled', ['cmid' => $assign->cmid]),
+            'First enabling not shifted (F19-17)'
         );
         $this->assertSame(
             $before['other'],

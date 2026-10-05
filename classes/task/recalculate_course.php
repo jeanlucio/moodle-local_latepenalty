@@ -19,15 +19,17 @@ namespace local_latepenalty\task;
 use local_latepenalty\recalculator;
 
 /**
- * Applies the rules again to every activity of a course, after a group was deleted.
+ * Applies the rules again to the activities where a deleted group changed the deadline.
  *
  * A deleted group takes its deadline away from its former members, but core
  * removes the members before it reports the deletion, so who they were is no
- * longer known: the whole course is recalculated instead. Running later also
+ * longer known: those activities are recalculated instead. Running later also
  * lets the activities' own group_deleted observers remove their group overrides
- * first. Recalculating an unchanged grade writes nothing.
+ * first. Recalculating an unchanged grade writes nothing, and grades that predate
+ * the rule are left alone (F19).
  *
- * Custom data: courseid.
+ * Custom data: courseid, cmids. Tasks queued by 1.3.0 carry no cmids and cover
+ * the whole course.
  *
  * @package    local_latepenalty
  * @copyright  2026 Jean Lúcio
@@ -38,9 +40,10 @@ class recalculate_course extends \core\task\adhoc_task {
     public function execute(): void {
         global $DB;
 
-        $courseid = (int) $this->get_custom_data()->courseid;
+        $data = $this->get_custom_data();
+        $courseid = (int) $data->courseid;
         if ($DB->record_exists('course', ['id' => $courseid])) {
-            recalculator::recalculate_course($courseid);
+            recalculator::recalculate_course($courseid, isset($data->cmids) ? (array) $data->cmids : null);
         }
     }
 }

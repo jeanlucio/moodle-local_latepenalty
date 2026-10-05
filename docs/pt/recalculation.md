@@ -16,19 +16,19 @@ Duas caixas na seção Penalidade por atraso (as duas marcadas por padrão) cont
 ## Desativar e ativar a regra
 
 * **Desativar** a regra e salvar devolve as notas originais (o formulário avisa antes de salvar).
-* **Ativar de novo** aplica a regra atual a todos os estudantes com nota, inclusive notas dadas enquanto ela estava desligada, e com o prazo como está agora.
-* **Ativar pela primeira vez** não muda nenhuma nota existente: só as notas dadas a partir daí são descontadas.
+* **Ativar de novo** aplica a regra atual, com o prazo como está agora, a todas as notas dadas desde a primeira ativação, inclusive as dadas enquanto ela estava desligada.
+* **Ativar pela primeira vez** não muda nenhuma nota existente: só as notas dadas a partir daí são descontadas. Nenhum recálculo posterior muda essas notas anteriores — ativar de novo, uma sobreposição, uma extensão ou uma mudança de grupo as deixa como estão. Uma nota dada de novo depois da ativação (nova tentativa, nova correção) conta como nota nova.
 * **Para perdoar um estudante**, dê um prazo mais tarde com uma sobreposição do Late Penalty, ou com a extensão ou sobreposição da própria atividade. Desativar a regra afeta todos.
 
 ## Quando muda uma sobreposição ou extensão
 
-Salvar ou apagar qualquer uma destas recalcula na hora os estudantes afetados, tenham sido penalizados antes ou não:
+Salvar ou apagar qualquer uma destas recalcula na hora os estudantes afetados, tenham sido penalizados antes ou não (exceto as notas anteriores à regra, ver acima):
 
 * uma **sobreposição do Late Penalty** (o estudante) ou **sobreposição de grupo** (os membros);
 * uma **sobreposição da atividade**: Tarefa, Questionário ou Lição, para um estudante ou grupo;
 * uma **extensão da Tarefa** (*Atribuir extensão*).
 
-Um **estudante que entra ou sai de um grupo** ganha ou perde as sobreposições desse grupo, do Late Penalty ou da atividade, e é recalculado na hora nas atividades em que elas mudam o prazo. **Apagar um grupo** recalcula as atividades do curso em segundo plano, logo depois, porque a essa altura os membros já não são conhecidos. Uma **reconfiguração do curso** (*Reconfigurar curso*) que remove grupos ou membros não recalcula nada: as notas do período encerrado ficam como estavam. Uma reconfiguração com nova data de início desloca os prazos das sobreposições do Late Penalty pela mesma diferença das datas das atividades, como o Moodle faz com as sobreposições das próprias atividades.
+Um **estudante que entra ou sai de um grupo** ganha ou perde as sobreposições desse grupo, do Late Penalty ou da atividade, e é recalculado na hora nas atividades em que elas mudam o prazo. **Apagar um grupo** recalcula, em segundo plano e logo depois, as atividades em que aquele grupo mudava o prazo, porque a essa altura os membros já não são conhecidos. Uma **reconfiguração do curso** (*Reconfigurar curso*) que remove grupos ou membros não recalcula nada: as notas do período encerrado ficam como estavam. Uma reconfiguração com nova data de início desloca os prazos das sobreposições do Late Penalty pela mesma diferença das datas das atividades, como o Moodle faz com as sobreposições das próprias atividades.
 
 ## Quando a atividade envia uma nota nova
 

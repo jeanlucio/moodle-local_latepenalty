@@ -226,6 +226,31 @@ final class restore_test extends advanced_testcase {
     }
 
     /**
+     * The first enabling date travels as it is, not shifted with the course dates (F19-16).
+     *
+     * Restored grades and grade history keep their own dates, so each grade stays before or after
+     * the first enabling as in the original course.
+     */
+    public function test_restore_keeps_first_enabling_unshifted(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $startdate = strtotime('1 Feb 2026 00:00 GMT');
+        [$course, $assign] = $this->create_fixture(withusers: false, startdate: $startdate);
+        $cm = get_coursemodule_from_instance('assign', $assign->id, $course->id, false, MUST_EXIST);
+        $timeenabled = $startdate + 10 * DAYSECS;
+        $DB->set_field('local_latepenalty_rules', 'timeenabled', $timeenabled, ['cmid' => $cm->id]);
+
+        $newcourseid = $this->backup_and_restore($course, false, $startdate + 180 * DAYSECS);
+
+        $this->assertSame(
+            $timeenabled,
+            (int) $DB->get_field('local_latepenalty_rules', 'timeenabled', ['cmid' => $this->get_restored_cmid($newcourseid)])
+        );
+    }
+
+    /**
      * Restoring into a new course leaves the source course's rule untouched.
      */
     public function test_original_course_unaffected(): void {

@@ -34,8 +34,10 @@ $observers = [
         'callback' => '\local_latepenalty\observer::course_module_deleted',
     ],
     [
+        // Before the assignment, quiz and lesson observers delete their group overrides.
         'eventname' => '\core\event\group_deleted',
         'callback' => '\local_latepenalty\observer::group_deleted',
+        'priority' => 100,
     ],
     [
         'eventname' => '\core\event\group_member_added',
