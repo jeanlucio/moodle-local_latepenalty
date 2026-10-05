@@ -46,9 +46,6 @@ class controller {
     /** @var stdClass Course record. */
     private stdClass $course;
 
-    /** @var stdClass Course module record. */
-    private stdClass $cm;
-
     /** @var context_module Module context. */
     private context_module $modcontext;
 
@@ -92,7 +89,6 @@ class controller {
      *
      * @param int            $cmid       Course module ID.
      * @param stdClass       $course     Course record.
-     * @param stdClass       $cm         Course module record.
      * @param context_module $modcontext Module context.
      * @param stdClass       $rule       Active penalty rule record.
      * @param string         $action           Requested action (list, add, edit, delete).
@@ -104,7 +100,6 @@ class controller {
     public function __construct(
         int $cmid,
         stdClass $course,
-        stdClass $cm,
         context_module $modcontext,
         stdClass $rule,
         string $action,
@@ -114,7 +109,6 @@ class controller {
     ) {
         $this->cmid             = $cmid;
         $this->course           = $course;
-        $this->cm               = $cm;
         $this->modcontext       = $modcontext;
         $this->rule             = $rule;
         $this->action           = $action;

@@ -168,7 +168,6 @@ final class controller_test extends advanced_testcase {
         return new controller(
             (int) $s['cm']->id,
             $s['course'],
-            $s['cm'],
             $s['ctx'],
             $s['rule'],
             $action,
@@ -672,7 +671,6 @@ final class controller_test extends advanced_testcase {
         $ctrl = new controller(
             (int) $s1['cm']->id,
             $s1['course'],
-            $s1['cm'],
             $s1['ctx'],
             $s1['rule'],
             'delete',

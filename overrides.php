@@ -77,7 +77,6 @@ if ($mode === 'group') {
     $ctrl = new group_controller(
         $cmid,
         $course,
-        $cm,
         $modcontext,
         $rule,
         $action,
@@ -89,7 +88,6 @@ if ($mode === 'group') {
     $ctrl = new user_controller(
         $cmid,
         $course,
-        $cm,
         $modcontext,
         $rule,
         $action,
