@@ -76,6 +76,87 @@ final class module_generic_test extends latepenalty_testcase {
     }
 
     /**
+     * Both storage paths.
+     *
+     * @return array
+     */
+    public static function storage_paths(): array {
+        return [
+            'deducted mark' => [true],
+            'overridden final grade' => [false],
+        ];
+    }
+
+    /**
+     * Force one storage path, skipping the deducted mark where the core lacks the fix.
+     *
+     * @param bool $deductedmark Whether to use the deducted mark.
+     * @return void
+     */
+    private function use_path(bool $deductedmark): void {
+        if ($deductedmark && !local\penalty_writer::core_supports_deducted_mark()) {
+            $this->markTestSkipped('This core has no MDL-88407 fix.');
+        }
+        local\penalty_writer::force_path_for_tests($deductedmark);
+    }
+
+    /**
+     * Rewriting a penalty keeps the time the module reported, so later recalculations measure from it.
+     *
+     * Graded one day late: 90 at 10%/day; 95 at 5%; 90 again at 10%. Regression guard:
+     * on the override path every rewrite stamped the grade with the time of the
+     * rewrite, which is also the submission time for modules that report no other,
+     * so the third calculation counted five days late and gave 50.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_rewrites_keep_submission_time(bool $deductedmark): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path($deductedmark);
+        [$lti, $student, $deadline] = $this->scenario();
+
+        $this->push($lti, $student->id, 100, null, $deadline + DAYSECS - 60);
+        $this->assertSame(90.0, $this->final_grade('lti', $lti->id, $student->id));
+
+        recalculator::recalculate_for_student($lti->cmid, $student->id, 5.0, 50.0);
+        $this->assertSame(95.0, $this->final_grade('lti', $lti->id, $student->id));
+
+        recalculator::recalculate_for_student($lti->cmid, $student->id, 10.0, 50.0);
+        $this->assertSame(90.0, $this->final_grade('lti', $lti->id, $student->id));
+    }
+
+    /**
+     * A better grade picked up by the hourly task keeps its time too.
+     *
+     * On the override path the core reports no event when the module raises a
+     * penalised grade, so the scheduled task applies the new penalty, possibly an
+     * hour later. Regression guard: that write stamped the grade with the task's
+     * time, and the next recalculation measured from it.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_task_rewrite_keeps_submission_time(bool $deductedmark): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path($deductedmark);
+        [$lti, $student, $deadline] = $this->scenario();
+
+        $this->push($lti, $student->id, 60, null, $deadline + DAYSECS - 60);
+        $this->assertSame(54.0, $this->final_grade('lti', $lti->id, $student->id));
+        $this->push($lti, $student->id, 100, null, $deadline + DAYSECS - 60);
+        (new task\reprocess_grades())->execute();
+        $this->assertSame(90.0, $this->final_grade('lti', $lti->id, $student->id));
+
+        recalculator::recalculate_for_student($lti->cmid, $student->id, 10.0, 50.0);
+        $this->assertSame(90.0, $this->final_grade('lti', $lti->id, $student->id));
+    }
+
+    /**
      * A reported on-time submission stays on time when the grade is redone later (F12-01).
      *
      * @return void

@@ -285,7 +285,10 @@ final class penalty_writer {
             return false;
         }
         self::$pending[$userid . '_' . $gradeitem->id] = (float) $gradeitem->bounded_grade($finalgrade);
-        $gradeitem->update_final_grade($userid, $finalgrade, self::SOURCE, false, FORMAT_MOODLE, null, null, true);
+        // Pass the grade's own date: without it, core stamps the time of this write, and modules that
+        // report no submission date have their submission time read from it in later recalculations.
+        $timemodified = empty($grade->timemodified) ? null : (int) $grade->timemodified;
+        $gradeitem->update_final_grade($userid, $finalgrade, self::SOURCE, false, FORMAT_MOODLE, null, $timemodified, true);
         return true;
     }
 
