@@ -105,7 +105,6 @@ $string['overrides_mode_user'] = 'User overrides';
 $string['overrides_rule_disabled'] = 'The late penalty rule for this activity is currently disabled.';
 $string['percent'] = '{$a}%';
 $string['pluginname'] = 'Late Penalty';
-$string['privacy:metadata'] = 'The Late Penalty plugin stores per-student penalty overrides in the local_latepenalty_overrides table. These overrides may include a custom deadline, daily penalty rate, and maximum penalty cap configured by a teacher for a specific student and activity.';
 $string['privacy:metadata:local_latepenalty_overrides'] = 'Per-student deadline and penalty rate overrides configured by teachers for specific activities.';
 $string['privacy:metadata:local_latepenalty_overrides:cmid'] = 'The course module this override applies to.';
 $string['privacy:metadata:local_latepenalty_overrides:daily_penalty'] = 'Custom daily penalty percentage for this student, or null to inherit the activity rule.';

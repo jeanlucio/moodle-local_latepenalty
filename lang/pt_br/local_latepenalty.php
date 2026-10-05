@@ -105,7 +105,6 @@ $string['overrides_mode_user'] = 'Sobreposições de usuário';
 $string['overrides_rule_disabled'] = 'A regra de penalidade por atraso desta atividade está atualmente desabilitada.';
 $string['percent'] = '{$a}%';
 $string['pluginname'] = 'Penalidade por Atraso';
-$string['privacy:metadata'] = 'O plugin Penalidade por Atraso armazena sobreposições de penalidade por estudante na tabela local_latepenalty_overrides. Essas sobreposições podem incluir prazo personalizado, taxa diária e limite máximo configurados pelo professor para um estudante e atividade específicos.';
 $string['privacy:metadata:local_latepenalty_overrides'] = 'Sobreposições de prazo e taxa de penalidade por estudante, configuradas pelos professores para atividades específicas.';
 $string['privacy:metadata:local_latepenalty_overrides:cmid'] = 'O módulo do curso ao qual esta sobreposição se aplica.';
 $string['privacy:metadata:local_latepenalty_overrides:daily_penalty'] = 'Percentual de desconto diário personalizado para este estudante, ou nulo para herdar a regra da atividade.';
