@@ -95,6 +95,7 @@ $string['override_hint'] = 'Leave a field blank to inherit the activity\'s confi
 $string['override_inherit'] = 'Activity default';
 $string['override_max'] = 'Maximum penalty (%)';
 $string['override_no_students'] = 'All enrolled students already have an override for this activity.';
+$string['override_notfound'] = 'This override no longer exists, or it is outside your groups.';
 $string['override_saved'] = 'Override saved successfully.';
 $string['override_student'] = 'Student';
 $string['overrides'] = 'Late penalty overrides';

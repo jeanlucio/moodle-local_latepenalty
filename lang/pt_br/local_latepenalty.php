@@ -95,6 +95,7 @@ $string['override_hint'] = 'Deixe um campo em branco para herdar o valor configu
 $string['override_inherit'] = 'Padrão da atividade';
 $string['override_max'] = 'Limite máximo de desconto (%)';
 $string['override_no_students'] = 'Todos os estudantes matriculados já possuem uma sobreposição para esta atividade.';
+$string['override_notfound'] = 'Esta sobreposição não existe mais ou está fora dos seus grupos.';
 $string['override_saved'] = 'Sobreposição salva com sucesso.';
 $string['override_student'] = 'Estudante';
 $string['overrides'] = 'Sobreposições de penalidade por atraso';

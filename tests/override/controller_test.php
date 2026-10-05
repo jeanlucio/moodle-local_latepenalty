@@ -663,7 +663,8 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown when editing an out-of-scope override.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
+        self::assertStringNotContainsString('{$a}', $caught->getMessage(), 'Complete message');
     }
 
     /**
@@ -690,7 +691,7 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown when deleting an out-of-scope override.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
         self::assertTrue(
             $DB->record_exists('local_latepenalty_overrides', ['id' => $override2->id]),
             'An out-of-scope override must survive a blocked delete attempt.'
@@ -718,7 +719,7 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown rendering an out-of-scope delete confirmation.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
     }
 
     // Tests: process() in delete mode.
@@ -824,8 +825,8 @@ final class controller_test extends advanced_testcase {
             $ctrl->process();
         } catch (\moodle_exception $e) {
             // Fetch_scoped_override() now rejects a cmid mismatch outright
-            // (invalidrecord) before process_delete() ever reaches redirect().
-            self::assertSame('invalidrecord', $e->errorcode);
+            // (override_notfound) before process_delete() ever reaches redirect().
+            self::assertSame('override_notfound', $e->errorcode);
         }
 
         self::assertTrue(

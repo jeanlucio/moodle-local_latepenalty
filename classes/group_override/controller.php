@@ -201,7 +201,7 @@ class controller {
 
         $overriderow = $this->fetch_scoped_override('groupid');
         if (!$overriderow) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
         }
 
         $DB->delete_records(
@@ -260,7 +260,7 @@ class controller {
         if ($this->action === 'edit' && $this->overrideid) {
             $this->editingoverride = $this->fetch_scoped_override('*');
             if (!$this->editingoverride) {
-                throw new \moodle_exception('invalidrecord');
+                throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
             }
             $groupname       = $this->group_name((int) $this->editingoverride->groupid);
             $existinggroupid = (int) $this->editingoverride->groupid;
@@ -369,18 +369,18 @@ class controller {
         if ($this->overrideid) {
             $override = $this->fetch_scoped_override('id, groupid');
             if (!$override) {
-                throw new \moodle_exception('invalidrecord');
+                throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
             }
             return (int) $override->groupid;
         }
 
         $groupid = (int) ($formdata->groupid ?? 0);
         if (!$groupid || !$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $this->course->id])) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('invalidgroupid', 'error', $this->listurl);
         }
 
         if ($this->restrictgroupids !== null && !in_array($groupid, $this->restrictgroupids, true)) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('invalidgroupid', 'error', $this->listurl);
         }
 
         if ($DB->record_exists('local_latepenalty_group_overrides', ['cmid' => $this->cmid, 'groupid' => $groupid])) {
@@ -421,7 +421,7 @@ class controller {
 
         $override = $this->fetch_scoped_override('*');
         if (!$override) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
         }
 
         return $output->confirm(

@@ -366,7 +366,7 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown for a group outside the restriction.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('invalidgroupid', $caught->errorcode);
         self::assertFalse(
             $DB->record_exists('local_latepenalty_group_overrides', ['cmid' => $s['cm']->id, 'groupid' => $s['group2']->id])
         );
@@ -413,7 +413,7 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown when editing an out-of-scope group override.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
     }
 
     /**
@@ -440,7 +440,7 @@ final class controller_test extends advanced_testcase {
         }
 
         self::assertNotNull($caught, 'moodle_exception must be thrown when deleting an out-of-scope group override.');
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
         self::assertTrue(
             $DB->record_exists('local_latepenalty_group_overrides', ['id' => $override2->id]),
             'An out-of-scope group override must survive a blocked delete attempt.'
@@ -471,7 +471,7 @@ final class controller_test extends advanced_testcase {
             $caught,
             'moodle_exception must be thrown rendering an out-of-scope group delete confirmation.'
         );
-        self::assertSame('invalidrecord', $caught->errorcode);
+        self::assertSame('override_notfound', $caught->errorcode);
     }
 
     // Tests: process() in delete mode.
@@ -682,8 +682,8 @@ final class controller_test extends advanced_testcase {
             $ctrl->process();
         } catch (\moodle_exception $e) {
             // Fetch_scoped_override() now rejects a cmid mismatch outright
-            // (invalidrecord) before process_delete() ever reaches redirect().
-            self::assertSame('invalidrecord', $e->errorcode);
+            // (override_notfound) before process_delete() ever reaches redirect().
+            self::assertSame('override_notfound', $e->errorcode);
         }
 
         self::assertTrue(

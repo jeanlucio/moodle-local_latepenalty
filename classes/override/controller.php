@@ -240,7 +240,7 @@ class controller {
 
         $overriderow = $this->fetch_scoped_override('userid');
         if (!$overriderow) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
         }
 
         $DB->delete_records(
@@ -301,7 +301,7 @@ class controller {
         if ($this->action === 'edit' && $this->overrideid) {
             $this->editingoverride = $this->fetch_scoped_override('*');
             if (!$this->editingoverride) {
-                throw new \moodle_exception('invalidrecord');
+                throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
             }
             $user           = $DB->get_record('user', ['id' => $this->editingoverride->userid], '*', MUST_EXIST);
             $studentname    = fullname($user);
@@ -426,7 +426,7 @@ class controller {
         if ($this->overrideid) {
             $override = $this->fetch_scoped_override('id, userid');
             if (!$override) {
-                throw new \moodle_exception('invalidrecord');
+                throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
             }
             return (int) $override->userid;
         }
@@ -476,7 +476,7 @@ class controller {
 
         $override = $this->fetch_scoped_override('*');
         if (!$override) {
-            throw new \moodle_exception('invalidrecord');
+            throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
         }
         $user = $DB->get_record('user', ['id' => $override->userid], '*', MUST_EXIST);
 
