@@ -1,6 +1,6 @@
 # 🧪 Automated Tests
 
-Late Penalty ships with **385 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
+Late Penalty ships with **386 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
 across the full matrix: Moodle 4.5, 5.0, 5.1, 5.2 and 5.3 (`main`), each on PostgreSQL and
 MariaDB. A few tests only apply where the core offers the feature they check (the quiz due date
 from 5.3, deducted marks from the core late-penalty fix) and are skipped elsewhere.

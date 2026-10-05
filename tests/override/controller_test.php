@@ -544,6 +544,38 @@ final class controller_test extends advanced_testcase {
         self::assertStringContainsString('value="2,5"', $edit->render($PAGE->get_renderer('core')));
     }
 
+    /**
+     * Student names are escaped on the edit label, the delete confirmation and the student select.
+     *
+     * Core forms store names without tags, but an external source (LDAP, a database
+     * sync) may not. Regression guard: these three outputs printed fullname() as HTML.
+     */
+    public function test_student_names_escaped_in_forms(): void {
+        global $DB, $OUTPUT, $PAGE;
+
+        $this->setAdminUser();
+        $s = $this->make_scenario();
+        $DB->set_field('user', 'lastname', 'Silva <b>Souza</b>', ['id' => $s['student']->id]);
+        $other = $this->getDataGenerator()->create_and_enrol($s['course'], 'student');
+        $DB->set_field('user', 'lastname', 'Lima <i>Neto</i>', ['id' => $other->id]);
+        $override = $this->insert_override((int) $s['cm']->id, (int) $s['student']->id, null, 5.0, null);
+
+        $edit = $this->make_controller($s, 'edit', (int) $override->id);
+        $edit->process();
+        $confirm = $this->make_controller($s, 'delete', (int) $override->id);
+        $add = $this->make_controller($s, 'add');
+        $add->process();
+        $pages = [
+            'edit' => [$edit->render($PAGE->get_renderer('core')), 'Silva &lt;b&gt;Souza&lt;/b&gt;', '<b>Souza</b>'],
+            'delete' => [$confirm->render($PAGE->get_renderer('core')), 'Silva &lt;b&gt;Souza&lt;/b&gt;', '<b>Souza</b>'],
+            'add' => [$add->render($OUTPUT), 'Lima &lt;i&gt;Neto&lt;/i&gt;', '<i>Neto</i>'],
+        ];
+        foreach ($pages as $label => [$html, $escaped, $raw]) {
+            self::assertStringContainsString($escaped, $html, $label);
+            self::assertStringNotContainsString($raw, $html, $label);
+        }
+    }
+
     // Tests: group restriction (separate groups).
 
     /**

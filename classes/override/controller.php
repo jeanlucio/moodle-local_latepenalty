@@ -304,7 +304,7 @@ class controller {
                 throw new \moodle_exception('override_notfound', 'local_latepenalty', $this->listurl);
             }
             $user           = $DB->get_record('user', ['id' => $this->editingoverride->userid], '*', MUST_EXIST);
-            $studentname    = fullname($user);
+            $studentname    = s(fullname($user));
             $existinguserid = (int) $this->editingoverride->userid;
         } else {
             $studentoptions = $this->build_student_options();
@@ -370,7 +370,7 @@ class controller {
         $options = [];
         foreach ($enrolled as $enrolleduser) {
             if (!in_array((int) $enrolleduser->id, $existinguserids)) {
-                $options[$enrolleduser->id] = fullname($enrolleduser);
+                $options[$enrolleduser->id] = s(fullname($enrolleduser));
             }
         }
         return $options;
@@ -481,7 +481,7 @@ class controller {
         $user = $DB->get_record('user', ['id' => $override->userid], '*', MUST_EXIST);
 
         return $output->confirm(
-            get_string('override_confirm_delete', 'local_latepenalty', fullname($user)),
+            get_string('override_confirm_delete', 'local_latepenalty', s(fullname($user))),
             new moodle_url('/local/latepenalty/overrides.php', [
                 'cmid'       => $this->cmid,
                 'action'     => 'delete',
