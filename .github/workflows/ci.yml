@@ -56,17 +56,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Moodle 5.3 is still beta with no MOODLE_503_STABLE branch yet — main is the
-          # only way to test against it before that branch is cut, a moving target
-          # moodle-plugin-ci itself supports for exactly this. PHP 8.3 is main's own declared
+          # Moodle 5.3 is stable (MOODLE_503_STABLE, released 2026-10-03). PHP 8.3 is its declared
           # minimum (public/admin/environment.xml).
-          - {moodle-branch: 'main', php: '8.3', database: 'pgsql'}
-          - {moodle-branch: 'main', php: '8.4', database: 'mariadb'}
           # runchecks: 'all' (the full lint suite) only needs one leg total — phpcs/phpdoc
           # come from moodle-plugin-ci's own toolchain, fixed regardless of MOODLE_BRANCH.
           # grunt is the one exception (ESLint/stylelint configs live in the checked-out
-          # core), so this leg is kept on the newest true stable, not on main.
-          - {moodle-branch: 'MOODLE_502_STABLE', php: '8.3', database: 'pgsql', runchecks: 'all'}
+          # core), so this leg is kept on the newest true stable.
+          - {moodle-branch: 'MOODLE_503_STABLE', php: '8.3', database: 'pgsql', runchecks: 'all'}
+          - {moodle-branch: 'MOODLE_503_STABLE', php: '8.4', database: 'mariadb'}
+          - {moodle-branch: 'MOODLE_502_STABLE', php: '8.3', database: 'pgsql'}
           - {moodle-branch: 'MOODLE_502_STABLE', php: '8.4', database: 'mariadb'}
           - {moodle-branch: 'MOODLE_501_STABLE', php: '8.3', database: 'pgsql'}
           - {moodle-branch: 'MOODLE_501_STABLE', php: '8.2', database: 'mariadb'}
