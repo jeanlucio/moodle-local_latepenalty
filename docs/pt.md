@@ -48,6 +48,9 @@ do Livro de Notas e funciona com qualquer tipo de atividade que registra nota.
 <span id="recalculation"></span>
 {% include_relative pt/recalculation.md %}
 
+<span id="playerhud"></span>
+{% include_relative pt/playerhud.md %}
+
 <span id="testing"></span>
 {% include_relative pt/testing.md %}
 

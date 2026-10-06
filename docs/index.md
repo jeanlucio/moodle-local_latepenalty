@@ -48,6 +48,9 @@ and works with every activity type that records a grade.
 <span id="recalculation"></span>
 {% include_relative en/recalculation.md %}
 
+<span id="playerhud"></span>
+{% include_relative en/playerhud.md %}
+
 <span id="testing"></span>
 {% include_relative en/testing.md %}
 
