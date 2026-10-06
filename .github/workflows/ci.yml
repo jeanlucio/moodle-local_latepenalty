@@ -158,3 +158,89 @@ jobs:
       - name: Mark cancelled jobs as failed
         if: ${{ cancelled() }}
         run: exit 1
+
+  playerhud:
+    # block_playerhud (same author) optionally drives this plugin's API and tables for its
+    # Deadline Extension item power. Its tests that touch local_latepenalty run here against
+    # this commit, so a change here that breaks it fails this job instead of surfacing at the
+    # next push to block_playerhud. The block is taken from its default branch, next to the
+    # plugins its own CI installs; its tests are picked by grepping for "latepenalty", so new
+    # ones join without editing this file. The oldest and the newest supported Moodle cover
+    # both grade write paths (override and deducted mark).
+    name: PlayerHUD integration (${{ matrix.moodle-branch }}, ${{ matrix.database }})
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: ${{ matrix.database == 'pgsql' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+
+      mariadb:
+        image: ${{ matrix.database == 'mariadb' && 'mariadb:11' || '' }}
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MYSQL_CHARACTER_SET_SERVER: 'utf8mb4'
+          MYSQL_COLLATION_SERVER: 'utf8mb4_unicode_ci'
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval 10s --health-timeout 5s --health-retries 3
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {moodle-branch: 'MOODLE_503_STABLE', php: '8.4', database: 'mariadb'}
+          - {moodle-branch: 'MOODLE_405_STABLE', php: '8.1', database: 'pgsql'}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          path: plugin
+          persist-credentials: false
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pgsql, mysqli, gd, xml, dom, json, zip, bcmath, intl, soap, sodium
+          ini-values: max_input_vars=5000, opcache.enable_cli=1
+          coverage: none
+
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo $(cd ci/bin; pwd) >> $GITHUB_PATH
+          echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
+          sudo locale-gen en_AU.UTF-8
+          echo "NVM_DIR=$HOME/.nvm" >> $GITHUB_ENV
+
+      - name: Add block_playerhud and the plugins its CI installs
+        run: |
+          moodle-plugin-ci add-plugin jeanlucio/moodle-block_playerhud
+          moodle-plugin-ci add-plugin jeanlucio/moodle-filter_playerhud
+          moodle-plugin-ci add-plugin jeanlucio/moodle-local_aihub
+
+      - name: Install moodle-plugin-ci
+        run: moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
+        env:
+          DB: ${{ matrix.database }}
+          MOODLE_BRANCH: ${{ matrix.moodle-branch }}
+
+      - name: block_playerhud tests that use local_latepenalty
+        run: |
+          playerhud=moodle-plugin-ci-plugins/moodle-block_playerhud
+          tests=$(grep -rl latepenalty "$playerhud/tests" --include='*_test.php' \
+            | xargs -n1 basename -s .php | sort -u | paste -sd'|')
+          test -n "$tests"
+          echo "Running: $tests"
+          moodle-plugin-ci phpunit --fail-on-warning --filter "($tests)" "$playerhud"
+
+      - name: Mark cancelled jobs as failed
+        if: ${{ cancelled() }}
+        run: exit 1
