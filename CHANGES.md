@@ -1,5 +1,11 @@
 # Changes
 
+## [v1.4.1] — 2026-10-07
+
+### Activity page
+
+- The late-penalty notice no longer shows on the assignment grader, where it overlapped the student's name and the navigation links; it still shows on the activity page itself
+
 ## [v1.4.0] — 2026-10-05
 
 ### Recalculation
