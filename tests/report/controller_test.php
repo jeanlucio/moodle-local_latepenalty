@@ -69,8 +69,18 @@ final class controller_test extends advanced_testcase {
         ]);
         $context = context_course::instance($course->id);
 
-        $student1 = $this->getDataGenerator()->create_and_enrol($course, 'student');
-        $student2 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        // The generator draws random names from a short list, and two students can get the same one;
+        // tests that look rows up by full name would then read the other student's row.
+        $student1 = $this->getDataGenerator()->create_and_enrol(
+            $course,
+            'student',
+            ['firstname' => 'Student', 'lastname' => 'One']
+        );
+        $student2 = $this->getDataGenerator()->create_and_enrol(
+            $course,
+            'student',
+            ['firstname' => 'Student', 'lastname' => 'Two']
+        );
 
         $group1 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
         $group2 = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
