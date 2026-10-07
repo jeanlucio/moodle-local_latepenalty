@@ -236,6 +236,12 @@ class hook_listener {
             return;
         }
 
+        // The assignment grader (and other embedded pages) disable the activity header but still render its
+        // empty container, inside a fixed-height toolbar where the notice would overlap the page.
+        if ($PAGE->pagelayout === 'embedded') {
+            return;
+        }
+
         $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cm->id, 'enabled' => 1]);
         if (!$rule) {
             return;

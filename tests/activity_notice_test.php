@@ -65,9 +65,10 @@ final class activity_notice_test extends latepenalty_testcase {
      *
      * @param \stdClass $module Module record.
      * @param \stdClass|null $user User, or null for a guest.
+     * @param string $layout Page layout of the page.
      * @return string|null The notice text, or null when none was queued.
      */
-    private function notice(\stdClass $module, ?\stdClass $user): ?string {
+    private function notice(\stdClass $module, ?\stdClass $user, string $layout = 'incourse'): ?string {
         global $PAGE;
 
         if ($user === null) {
@@ -79,6 +80,7 @@ final class activity_notice_test extends latepenalty_testcase {
         $PAGE->set_course($this->course);
         $PAGE->set_cm(get_fast_modinfo($this->course)->get_cm($module->cmid));
         $PAGE->set_url('/mod/assign/view.php', ['id' => $module->cmid]);
+        $PAGE->set_pagelayout($layout);
 
         $hook = (new \ReflectionClass(\core\hook\output\before_http_headers::class))->newInstanceWithoutConstructor();
         hook_listener::inject_activity_notice($hook);
@@ -254,6 +256,20 @@ final class activity_notice_test extends latepenalty_testcase {
         $scale = $this->getDataGenerator()->create_scale(['courseid' => $this->course->id]);
         $scaled = $this->assignment(['duedate' => time() + DAYSECS, 'grade' => -$scale->id]);
         $this->assertNull($this->notice($scaled, $this->student), 'Scale grade');
+    }
+
+    /**
+     * No notice on the assignment grader, which uses the embedded layout and has no activity header.
+     *
+     * @return void
+     */
+    public function test_no_notice_on_embedded_layout(): void {
+        $overdue = $this->assignment(['duedate' => time() - 2 * DAYSECS]);
+
+        $this->assertNotNull($this->notice($overdue, $this->student), 'Student, regular page');
+        $this->assertNull($this->notice($overdue, $this->student, 'embedded'), 'Student, embedded');
+        $this->assertNotNull($this->notice($overdue, $this->teacher), 'Teacher, regular page');
+        $this->assertNull($this->notice($overdue, $this->teacher, 'embedded'), 'Teacher, embedded');
     }
 
     /**

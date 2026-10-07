@@ -44,8 +44,9 @@ export const init = (notice) => {
         return;
     }
 
+    // A page that disables the activity header still renders its empty container, which is not a place to write to.
     const header = document.querySelector(SELECTOR_HEADER);
-    if (header) {
+    if (header && header.childElementCount > 0) {
         header.appendChild(div);
     }
 };
