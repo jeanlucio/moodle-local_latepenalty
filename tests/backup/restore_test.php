@@ -251,6 +251,29 @@ final class restore_test extends advanced_testcase {
     }
 
     /**
+     * The penalty base travels with the rule (F20-24, F20-36).
+     *
+     * Creating the restored activity already inserts a rule with the default base,
+     * so this is the path where the backed-up rule is merged into an existing row.
+     */
+    public function test_backup_restore_penalty_base(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        [$course, $assign] = $this->create_fixture(withusers: false);
+        $cm = get_coursemodule_from_instance('assign', $assign->id, $course->id, false, MUST_EXIST);
+        $DB->set_field('local_latepenalty_rules', 'penaltybase', 1, ['cmid' => $cm->id]);
+
+        $newcourseid = $this->backup_and_restore($course, false);
+
+        $this->assertSame(
+            1,
+            (int) $DB->get_field('local_latepenalty_rules', 'penaltybase', ['cmid' => $this->get_restored_cmid($newcourseid)])
+        );
+    }
+
+    /**
      * Restoring into a new course leaves the source course's rule untouched.
      */
     public function test_original_course_unaffected(): void {

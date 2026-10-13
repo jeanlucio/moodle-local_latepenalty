@@ -69,6 +69,19 @@ final class activity_notice_test extends latepenalty_testcase {
      * @return string|null The notice text, or null when none was queued.
      */
     private function notice(\stdClass $module, ?\stdClass $user, string $layout = 'incourse'): ?string {
+        $arguments = $this->notice_arguments($module, $user, $layout);
+        return $arguments === null ? null : $arguments[0];
+    }
+
+    /**
+     * Open the activity page as a user and return every argument of the queued notice call.
+     *
+     * @param \stdClass $module Module record.
+     * @param \stdClass|null $user User, or null for a guest.
+     * @param string $layout Page layout of the page.
+     * @return array|null The arguments (notice, base sentence), or null when none was queued.
+     */
+    private function notice_arguments(\stdClass $module, ?\stdClass $user, string $layout = 'incourse'): ?array {
         global $PAGE;
 
         if ($user === null) {
@@ -89,9 +102,9 @@ final class activity_notice_test extends latepenalty_testcase {
         if (!str_contains($code, 'local_latepenalty/activityinfo')) {
             return null;
         }
-        // The call looks like amd.init("notice"); followed by core's own completion call.
-        preg_match('/\.init\((".*?")\);/s', $code, $matches);
-        return json_decode($matches[1]);
+        // The call looks like amd.init("notice", "base"); followed by core's own completion call.
+        preg_match('/activityinfo.*?\.init\((.*?)\);/s', $code, $matches);
+        return json_decode('[' . $matches[1] . ']');
     }
 
     /**
@@ -123,6 +136,32 @@ final class activity_notice_test extends latepenalty_testcase {
             'deadline' => penalty_helper::format_deadline($longago),
             'max' => '50',
         ]), $this->notice($atmax, $this->student));
+    }
+
+    /**
+     * The notices say which grade the percentage applies to, for student and teacher alike (F20-28, P14).
+     *
+     * @return void
+     */
+    public function test_notice_says_the_base(): void {
+        $past = time() - 2 * DAYSECS + HOURSECS;
+        $obtained = $this->assignment(['duedate' => $past]);
+        $maximum = $this->assignment(['duedate' => $past]);
+        $this->lp_generator()->create_rule(['cmid' => $maximum->cmid, 'penaltybase' => penalty_helper::BASE_MAX]);
+        $future = $this->assignment(['duedate' => time() + DAYSECS]);
+        $this->lp_generator()->create_rule(['cmid' => $future->cmid, 'penaltybase' => penalty_helper::BASE_MAX]);
+        $gradestring = get_string('notice_base_grade', 'local_latepenalty');
+        $maxstring = get_string('notice_base_max', 'local_latepenalty');
+
+        foreach ([$this->student, $this->teacher] as $user) {
+            $this->assertSame($gradestring, $this->notice_arguments($obtained, $user)[1] ?? null);
+            $this->assertSame($maxstring, $this->notice_arguments($maximum, $user)[1] ?? null);
+            $this->assertSame($maxstring, $this->notice_arguments($future, $user)[1] ?? null);
+
+            $badges = $this->course_badges($user);
+            $this->assertSame($gradestring, $badges[$obtained->cmid]['basenote'] ?? null);
+            $this->assertSame($maxstring, $badges[$maximum->cmid]['basenote'] ?? null);
+        }
     }
 
     /**

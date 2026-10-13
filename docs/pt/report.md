@@ -10,11 +10,14 @@ O relatório exibe cada ajuste de nota aplicado pelo plugin naquele curso:
 | **Atividade** | Nome da atividade avaliada |
 | **Prazo** | O prazo do estudante, com a origem logo abaixo: Sobreposição do Late Penalty, Sobreposição de grupo do Late Penalty, Extensão, Sobreposição da atividade, Fechamento da sobreposição da atividade, Data de entrega ou Definir lembrete na linha do tempo. Um estudante isento por sobreposição aparece com "sem data de entrega". |
 | **Nota bruta** | Nota antes da penalidade |
-| **Desconto** | Percentual aplicado. Quando uma sobreposição de usuário ou de grupo zera a penalidade, um badge (*Sobreposição de usuário* ou *Sobreposição de grupo*) aparece ao lado do valor 0,0% para explicar a isenção. |
+| **Desconto** | Percentual aplicado, da nota obtida ou da nota máxima, conforme a regra. Quando uma sobreposição de usuário ou de grupo zera a penalidade, um badge (*Sobreposição de usuário* ou *Sobreposição de grupo*) aparece ao lado do valor 0,0% para explicar a isenção. |
+| **Pontos descontados** | Pontos que a penalidade tirou, na mesma escala da nota bruta |
 | **Nota final** | Nota após a penalidade |
 | **Penalidade aplicada** | Data em que a penalidade foi registrada |
 
 O relatório lista os **estudantes atuais** do curso (papel avaliado e matrícula ativa). Estudantes que saíram do curso, com matrícula suspensa ou encerrada, ou de um período fechado por uma reconfiguração do curso ficam de fora; as penalidades deles continuam no histórico de notas do Moodle.
+
+O percentual é calculado com o *Desconto calculado sobre* atual da regra. Se ele for trocado com "Recalcular penalidades ao alterar a configuração da penalidade" desmarcada, as notas já descontadas ficam com a base antiga e o percentual delas aparece diferente; os pontos descontados continuam exatos.
 
 O relatório inclui **filtros** por estudante e por atividade. Somente estudantes e atividades com ao menos uma penalidade registrada aparecem nos filtros — o relatório está sempre disponível independentemente do formato de curso.
 

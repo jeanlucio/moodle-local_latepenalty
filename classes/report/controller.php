@@ -220,8 +220,9 @@ class controller {
         $params = array_merge($params, $groupparams);
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
-                       ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
-                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       ggh.rawgrade, ggh.finalgrade, ggh.timemodified, ggh.rawgrademin, ggh.rawgrademax,
+                       gi.grademin, gi.grademax, gi.multfactor, gi.plusfactor, gi.itemmodule, gi.iteminstance,
+                       r.penaltybase,
                        cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
@@ -258,9 +259,7 @@ class controller {
         foreach ($rows as $row) {
             $rawgrade   = (float) $row->rawgrade;
             $finalgrade = (float) $row->finalgrade;
-            $discount   = ($rawgrade > 0)
-                ? round((1.0 - $finalgrade / $rawgrade) * 100.0, 1)
-                : 0.0;
+            [$points, $discount] = self::figures($row);
 
             $overridekey    = $row->userid . '_' . $row->cmid;
             $hasuseroverride  = !empty($overrides['user'][$overridekey]);
@@ -290,6 +289,7 @@ class controller {
                 'rawgrade'           => format_float($rawgrade, 2),
                 'hasdiscount'        => $discount > 0,
                 'discount'           => format_float($discount, 1),
+                'points'             => format_float($points, 2),
                 'finalgrade'         => format_float($finalgrade, 2),
                 'grademax'           => format_float((float) $row->grademax, 2),
                 'penaltydate'        => userdate((int) $row->timemodified),
@@ -314,6 +314,28 @@ class controller {
             'filtercmid'   => $this->filtercmid,
             'historywarning' => penalty_helper::grade_history_warning(true),
         ];
+    }
+
+    /**
+     * Points discounted and percentage of one report row, rounded for display.
+     *
+     * The percentage uses the rule's current base: after the base changed without
+     * recalculating, older penalties show a percentage of the new base, while the
+     * points stay exact.
+     *
+     * @param \stdClass $row Report row (history grades, item range and factors, rule base).
+     * @return float[] [points, percentage].
+     */
+    private static function figures(\stdClass $row): array {
+        [$points, $percentage] = penalty_helper::discount_figures(
+            $row,
+            (float) $row->rawgrade,
+            (float) $row->finalgrade,
+            (float) $row->rawgrademin,
+            (float) $row->rawgrademax,
+            (int) $row->penaltybase
+        );
+        return [round($points, 2), round($percentage, 1)];
     }
 
     /**
@@ -348,8 +370,9 @@ class controller {
         $params = array_merge($params, $groupparams);
 
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
-                       ggh.rawgrade, ggh.finalgrade, ggh.timemodified,
-                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       ggh.rawgrade, ggh.finalgrade, ggh.timemodified, ggh.rawgrademin, ggh.rawgrademax,
+                       gi.grademin, gi.grademax, gi.multfactor, gi.plusfactor, gi.itemmodule, gi.iteminstance,
+                       r.penaltybase,
                        cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
                        u.firstnamephonetic, u.lastnamephonetic,
@@ -385,9 +408,7 @@ class controller {
         foreach ($rows as $row) {
             $rawgrade   = (float) $row->rawgrade;
             $finalgrade = (float) $row->finalgrade;
-            $discount   = ($rawgrade > 0)
-                ? round((1.0 - $finalgrade / $rawgrade) * 100.0, 1)
-                : 0.0;
+            [$points, $discount] = self::figures($row);
 
             $overridekey    = $row->userid . '_' . $row->cmid;
             $hasuseroverride  = !empty($overrides['user'][$overridekey]);
@@ -423,6 +444,7 @@ class controller {
                 $rawgrade,
                 (float) $row->grademax,
                 $discount,
+                $points,
                 $finalgrade,
                 userdate((int) $row->timemodified),
                 $overridelabel,
@@ -437,6 +459,7 @@ class controller {
             get_string('report_col_rawgrade', 'local_latepenalty'),
             get_string('report_export_grademax', 'local_latepenalty'),
             get_string('report_col_discount', 'local_latepenalty'),
+            get_string('report_col_points', 'local_latepenalty'),
             get_string('report_col_finalgrade', 'local_latepenalty'),
             get_string('report_col_date', 'local_latepenalty'),
             get_string('report_export_override', 'local_latepenalty'),

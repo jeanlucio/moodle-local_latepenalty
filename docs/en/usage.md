@@ -6,7 +6,7 @@
    - **Assignment**, **Forum** and, from Moodle 5.3, **Quiz** have a due date that still accepts late work. Late Penalty uses it. (Do not confuse it with the Assignment cut-off date or the Quiz close date, which block submissions.)
    - **Every other activity** (Lesson, SCORM, H5P, Glossary, Database, external tools…): set **"Set reminder in Timeline"** (*Completion conditions*). It does not block anything and serves as the penalty deadline. Without it there is no deadline and no penalty.
 
-3. The teacher opens the **Late penalty** section, ticks **Enable progressive penalty?** and enters the **Daily penalty (%)** and the **Maximum penalty (%)**. Example: 10% a day, 50% maximum.
+3. The teacher opens the **Late penalty** section, ticks **Enable progressive penalty?** and enters the **Daily penalty (%)** and the **Maximum penalty (%)**. Example: 10% a day, 50% maximum. **Penalty applies to** chooses which grade the percentage is taken from: the **grade obtained** (default) or the **maximum grade**.
 
 4. When the activity already exists, the section shows the line **"Deadline used for the penalty: <date> (<origin>)"**, or warns that there is no deadline. It shows the value as saved; save the form after changing the dates.
 
@@ -18,7 +18,7 @@
 
 1. **Days late** — counted from the deadline to the moment the student handed in. Every day started counts as a whole day: 1 minute late is already 1 day, and 25 hours are 2 days.
 2. **Discount** — days late × daily rate, never above the maximum.
-3. **Final grade** — the grade minus the discount percentage. A grade never goes below the item's minimum.
+3. **Final grade** — the grade minus the discount: a percentage of the **grade obtained** (default) or of the **maximum grade**, as set in *Penalty applies to*. A grade never goes below the item's minimum.
 
 **Example** (grade 100, 10% a day, 50% maximum):
 
@@ -28,6 +28,17 @@
 | 1 day late | 10% | 90 |
 | 2 days late | 20% | 80 |
 | 5 days late or more | 50% (maximum) | 50 |
+
+With a grade of 100 out of 100 both bases give the same result. Below the maximum they differ. **Example** (20% penalty, maximum grade 10):
+
+| Grade | On the grade obtained | On the maximum grade |
+|---|---|---|
+| 10 | 10 − 2 = 8 | 10 − 2 = 8 |
+| 8 | 8 − 1.6 = 6.4 | 8 − 2 = 6 |
+| 1 | 1 − 0.2 = 0.8 | 0 (stops at the minimum grade) |
+
+* **Grade obtained:** the discount follows each student's grade, and a late submission is never brought down to the minimum.
+* **Maximum grade:** each day late costs the same points for every student, as Moodle's own assignment penalty does; the maximum penalty limits how far a low grade can drop.
 
 ## Which deadline applies to each student
 

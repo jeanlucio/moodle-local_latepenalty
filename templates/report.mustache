@@ -31,7 +31,7 @@
     * exporturl    - Base URL for the export entry point (without format param).
     * historywarning - Warning about a disabled or time-limited grade history ('' when none).
     * penalties    - Array of penalty rows: fullname, activity, hasdeadline, deadline,
-                     deadlineorigin, rawgrade, hasdiscount, discount, finalgrade,
+                     deadlineorigin, rawgrade, hasdiscount, discount, points, finalgrade,
                      grademax, penaltydate, hasuseroverride, hasgroupoverride.
 
     Example context (json):
@@ -61,6 +61,7 @@
                 "rawgrade": "8,00",
                 "hasdiscount": true,
                 "discount": "10,0",
+                "points": "0,80",
                 "finalgrade": "7,20",
                 "grademax": "10,00",
                 "penaltydate": "7 May 2026, 2:14 PM",
@@ -76,6 +77,7 @@
                 "rawgrade": "9,50",
                 "hasdiscount": false,
                 "discount": "0,0",
+                "points": "0,00",
                 "finalgrade": "9,50",
                 "grademax": "10,00",
                 "penaltydate": "4 May 2026, 9:00 AM",
@@ -162,6 +164,9 @@
                                 {{#str}} report_col_discount, local_latepenalty {{/str}}
                             </th>
                             <th scope="col" class="text-center">
+                                {{#str}} report_col_points, local_latepenalty {{/str}}
+                            </th>
+                            <th scope="col" class="text-center">
                                 {{#str}} report_col_finalgrade, local_latepenalty {{/str}}
                             </th>
                             <th scope="col">{{#str}} report_col_date, local_latepenalty {{/str}}</th>
@@ -190,6 +195,7 @@
                                 </span>
                                 {{/hasgroupoverride}}
                             </td>
+                            <td class="text-center">{{#hasdiscount}}&minus;{{/hasdiscount}}{{points}}</td>
                             <td class="text-center">{{finalgrade}} / {{grademax}}</td>
                             <td>{{penaltydate}}</td>
                         </tr>

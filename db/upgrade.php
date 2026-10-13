@@ -88,5 +88,16 @@ function xmldb_local_latepenalty_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026100501, 'local', 'latepenalty');
     }
 
+    if ($oldversion < 2026101300) {
+        // What the percentage applies to (F20). Existing rules keep the grade obtained, the default.
+        $table = new xmldb_table('local_latepenalty_rules');
+        $field = new xmldb_field('penaltybase', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'timeenabled');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026101300, 'local', 'latepenalty');
+    }
+
     return true;
 }

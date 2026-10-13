@@ -61,7 +61,7 @@ class hook_listener {
         $courseid = (int) $PAGE->course->id;
 
         // Load all enabled rules for modules in this course in a single query.
-        $sql = "SELECT r.cmid, r.daily_penalty, r.max_penalty,
+        $sql = "SELECT r.cmid, r.daily_penalty, r.max_penalty, r.penaltybase,
                        cm.completionexpected, cm.instance, m.name AS modname
                   FROM {local_latepenalty_rules} r
                   JOIN {course_modules} cm ON cm.id = r.cmid
@@ -149,6 +149,7 @@ class hook_listener {
                 $notices[] = [
                     'cmid'       => $cmid,
                     'notice'     => $notice,
+                    'basenote'   => self::base_note($record),
                     'badgelabel' => $badgelabel,
                     'badgestate' => $badgestate,
                 ];
@@ -198,6 +199,7 @@ class hook_listener {
                 $notices[] = [
                     'cmid'       => (int) $record->cmid,
                     'notice'     => $notice,
+                    'basenote'   => self::base_note($record),
                     'badgelabel' => $badgelabel,
                     'badgestate' => $badgestate,
                 ];
@@ -290,7 +292,7 @@ class hook_listener {
                 );
             }
 
-            $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
+            $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice, self::base_note($rule)]);
             return;
         }
 
@@ -308,7 +310,18 @@ class hook_listener {
         $max = $resolved->max_for($rule);
         [, , $notice] = self::compute_badge($deadline, $daily, $max, time());
 
-        $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice]);
+        $PAGE->requires->js_call_amd('local_latepenalty/activityinfo', 'init', [$notice, self::base_note($rule)]);
+    }
+
+    /**
+     * The sentence that says which grade the percentage of a rule applies to.
+     *
+     * @param \stdClass $rule Rule record (penaltybase).
+     * @return string
+     */
+    private static function base_note(\stdClass $rule): string {
+        $basemax = (int) $rule->penaltybase === penalty_helper::BASE_MAX;
+        return get_string($basemax ? 'notice_base_max' : 'notice_base_grade', 'local_latepenalty');
     }
 
     /**

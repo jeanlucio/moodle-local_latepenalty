@@ -7,7 +7,7 @@ Two checkboxes in the Late penalty section (both on by default) control what hap
 | Checkbox | When saving changes… | Effect |
 |---|---|---|
 | **Recalculate penalties when deadline changes** | the activity deadline | Grades already discounted are recalculated with the new deadline |
-| **Recalculate penalties when daily rate or maximum changes** | the daily rate, the maximum, or "Do not let a new late attempt lower the grade" | Grades already discounted are recalculated with the new values |
+| **Recalculate penalties when the penalty settings change** | the daily rate, the maximum, "Penalty applies to", or "Do not let a new late attempt lower the grade" | Grades already discounted are recalculated with the new values |
 
 * **A later deadline** reduces or removes the discount.
 * **An earlier deadline is not retroactive for students who were on time:** only students who were already late get a bigger discount. Students who handed in within the old deadline keep their grade.

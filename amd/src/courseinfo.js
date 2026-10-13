@@ -50,7 +50,7 @@ const findCmElement = (cmid) => document.getElementById(`module-${cmid}`)
  * Safe to call multiple times: returns immediately if the badge already exists.
  *
  * @param {HTMLElement}                                              el   The activity li element.
- * @param {{notice: string, badgelabel: string, badgestate: string}} item Penalty data for this activity.
+ * @param {{notice: string, basenote: string, badgelabel: string, badgestate: string}} item Penalty data for this activity.
  */
 const markItem = (el, item) => {
     const actname = el.querySelector('.activityname');
@@ -67,8 +67,9 @@ const markItem = (el, item) => {
     badge.textContent = item.badgelabel;
     badge.setAttribute('data-bs-toggle', 'tooltip');
     badge.setAttribute('data-bs-placement', 'bottom');
-    badge.setAttribute('data-bs-title', item.notice);
-    badge.setAttribute('title', item.notice);
+    const title = item.basenote ? `${item.notice} ${item.basenote}` : item.notice;
+    badge.setAttribute('data-bs-title', title);
+    badge.setAttribute('title', title);
 
     actname.appendChild(badge);
     if (typeof Tooltip.getOrCreateInstance === 'function') {
@@ -81,10 +82,11 @@ const markItem = (el, item) => {
 /**
  * Inject penalty badges into the course activity list.
  *
- * @param {Array<{cmid: number, notice: string, badgelabel: string, badgestate: string}>} notices One entry per activity.
+ * @param {Array<{cmid: number, notice: string, basenote: string, badgelabel: string, badgestate: string}>} notices
+ *     One entry per activity.
  */
 export const init = (notices) => {
-    /** @type {Map<number, {notice: string, badgelabel: string, badgestate: string}>} */
+    /** @type {Map<number, {notice: string, basenote: string, badgelabel: string, badgestate: string}>} */
     const noticeMap = new Map(notices.map(item => [item.cmid, item]));
 
     const tryMarkAll = () => {

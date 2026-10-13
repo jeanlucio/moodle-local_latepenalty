@@ -84,6 +84,30 @@ Feature: Late Penalty discounts late work and explains its deadline
     And I am on the "Draft" "assign activity editing" page
     And I should see "No deadline: no late penalty is applied."
 
+  Scenario: The form offers the penalty base, the grade obtained by default
+    When I am on the "Essay" "assign activity editing" page logged in as teacher1
+    Then the field "Penalty applies to" matches value "Grade obtained"
+    And I should see "Maximum grade" in the "Penalty applies to" "field"
+
+  Scenario: On the maximum grade every late student loses the same points
+    Given the following "local_latepenalty > rules" exist:
+      | activity | enabled | daily_penalty | max_penalty | penaltybase |
+      | essay1   | 1       | 10            | 50          | 1           |
+    And the following "mod_assign > submissions" exist:
+      | assign | user     | onlinetext  |
+      | Essay  | student1 | My answer   |
+      | Essay  | student2 | Your answer |
+    And the following "grade grades" exist:
+      | gradeitem | user     | grade |
+      | Essay     | student1 | 100   |
+      | Essay     | student2 | 60    |
+    And I am on the "Course 1" course page logged in as teacher1
+    When I follow "Late penalty report"
+    Then I should see "Points discounted"
+    And I should see "80.00"
+    And I should see "40.00"
+    And I should not see "48.00"
+
   Scenario: Scale-graded activities are never discounted
     Given the following "activities" exist:
       | activity | course | name   | idnumber | grade | duedate                |

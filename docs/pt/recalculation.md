@@ -7,7 +7,7 @@ Duas caixas na seção Penalidade por atraso (as duas marcadas por padrão) cont
 | Caixa | Ao salvar uma mudança… | Efeito |
 |---|---|---|
 | **Recalcular penalidades ao alterar o prazo de entrega** | no prazo da atividade | As notas já descontadas são recalculadas com o prazo novo |
-| **Recalcular penalidades ao alterar a taxa diária ou o limite máximo** | na taxa diária, no máximo ou em "Não deixar uma nova tentativa atrasada baixar a nota" | As notas já descontadas são recalculadas com os valores novos |
+| **Recalcular penalidades ao alterar a configuração da penalidade** | na taxa diária, no máximo, em "Desconto calculado sobre" ou em "Não deixar uma nova tentativa atrasada baixar a nota" | As notas já descontadas são recalculadas com os valores novos |
 
 * **Um prazo mais tarde** reduz ou remove o desconto.
 * **Um prazo mais cedo não é retroativo para quem entregou no prazo:** só quem já estava atrasado recebe desconto maior. Quem entregou dentro do prazo antigo mantém a nota.

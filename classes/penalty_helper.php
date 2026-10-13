@@ -28,6 +28,12 @@ namespace local_latepenalty;
  * Static helpers for grade items, dates and grade maths.
  */
 class penalty_helper {
+    /** @var int Penalty base: a percentage of the grade the student obtained (the default). */
+    public const BASE_GRADE = 0;
+
+    /** @var int Penalty base: a percentage of the maximum grade, the same points for every student. */
+    public const BASE_MAX = 1;
+
     /**
      * Whether late penalties apply to a grade item.
      *
@@ -333,13 +339,61 @@ class penalty_helper {
     }
 
     /**
+     * Points a penalty took from a grade and their percentage of the base, read back from the grade history.
+     *
+     * The history keeps the raw grade and the final grade only. The penalised raw grade is found by
+     * undoing what grade_item::adjust_raw_grade() does to a numeric grade (multiplier and offset, then
+     * the mapping to the item range, which modules that rescale their own grades skip), so both figures
+     * stay on the raw grade's scale whatever the item range and factors.
+     *
+     * @param \stdClass $item Grade item fields: itemmodule, grademin, grademax, multfactor, plusfactor.
+     * @param float $raw Raw grade.
+     * @param float $final Final grade the penalty left.
+     * @param float $rawmin Minimum recorded with the raw grade.
+     * @param float $rawmax Maximum recorded with the raw grade.
+     * @param int $base Penalty base of the rule.
+     * @return float[] [points discounted, percentage of the base].
+     */
+    public static function discount_figures(
+        \stdClass $item,
+        float $raw,
+        float $final,
+        float $rawmin,
+        float $rawmax,
+        int $base
+    ): array {
+        $grademin = (float) $item->grademin;
+        $grademax = (float) $item->grademax;
+        $multfactor = (float) $item->multfactor;
+        if ($grademax <= $grademin || $multfactor == 0.0) {
+            // The item maps every grade to one value: nothing to read back.
+            return [0.0, 0.0];
+        }
+
+        $penalised = ($final - (float) $item->plusfactor) / $multfactor;
+        $rescaled = component_callback_exists('mod_' . $item->itemmodule, 'rescale_activity_grades') === false;
+        if ($rescaled && ($rawmin != $grademin || $rawmax != $grademax)) {
+            $penalised = \grade_grade::standardise_score($penalised, $grademin, $grademax, $rawmin, $rawmax);
+        }
+
+        $points = max(0.0, $raw - $penalised);
+        $basevalue = $base === self::BASE_MAX ? $rawmax : $raw;
+        $percentage = $basevalue > 0 ? $points / $basevalue * 100.0 : 0.0;
+        return [$points, $percentage];
+    }
+
+    /**
      * Apply the late penalty to a raw grade.
+     *
+     * The percentage applies to the grade itself, or to the maximum grade when
+     * one is given (the same points for every student).
      *
      * @param float $rawgrade     Original grade before penalty.
      * @param int   $dayslate     Number of days late.
      * @param float $dailypenalty Daily penalty percentage (0–100).
      * @param float $maxpenalty   Maximum penalty cap percentage (0–100).
      * @param float $grademin     Minimum allowed grade (floor). Defaults to 0.
+     * @param float|null $grademax Maximum grade the percentage applies to, on the raw grade's scale; null for the grade.
      * @return float Final grade after penalty (never below $grademin).
      */
     public static function apply_penalty(
@@ -347,10 +401,15 @@ class penalty_helper {
         int $dayslate,
         float $dailypenalty,
         float $maxpenalty,
-        float $grademin = 0.0
+        float $grademin = 0.0,
+        ?float $grademax = null
     ): float {
         $discountpct = min($dayslate * $dailypenalty, $maxpenalty);
-        $finalgrade  = $rawgrade * (1.0 - $discountpct / 100.0);
+        if ($grademax === null) {
+            $finalgrade = $rawgrade * (1.0 - $discountpct / 100.0);
+        } else {
+            $finalgrade = $rawgrade - $grademax * $discountpct / 100.0;
+        }
 
         return max($grademin, $finalgrade);
     }

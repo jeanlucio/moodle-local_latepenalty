@@ -530,11 +530,17 @@ final class submission_resolver {
      * earlier grades come from the grade history, timed when they reached the
      * gradebook, since the history keeps no submission date).
      *
+     * Each candidate carries the maximum its grade is expressed on, or null when it
+     * is already on the scale of the grade in the gradebook. They differ while a
+     * module changes its maximum grade: the gradebook regrades the grade already
+     * stored before the module sends it again on the new scale.
+     *
      * @param \stdClass $cm Course module (id, modname, instance).
      * @param \grade_item $gradeitem Grade item being penalised.
      * @param int[] $userids Student IDs.
      * @param bool $keepbest Rule option for modules without a readable grading method.
-     * @return array|null Lists of [raw grade, time] keyed by user ID, or null when the activity keeps no best grade.
+     * @return array|null Lists of [raw grade, time, maximum or null] keyed by user ID, or null when the activity keeps no
+     *                    best grade.
      */
     public static function best_candidates(\stdClass $cm, \grade_item $gradeitem, array $userids, bool $keepbest): ?array {
         global $CFG, $DB;
@@ -557,18 +563,23 @@ final class submission_resolver {
                 }
                 return self::quiz_candidates($quiz, $userids);
             case 'lesson':
-                $lesson = $DB->get_record('lesson', ['id' => $instanceid], 'id, retake, usemaxgrade', MUST_EXIST);
+                $lesson = $DB->get_record('lesson', ['id' => $instanceid], 'id, grade, retake, usemaxgrade', MUST_EXIST);
                 if (empty($lesson->retake) || empty($lesson->usemaxgrade)) {
                     return null;
                 }
-                return self::lesson_candidates($instanceid, (float) $gradeitem->grademax, $userids);
+                return self::lesson_candidates($instanceid, (float) $lesson->grade, $userids);
             case 'h5pactivity':
-                $h5p = $DB->get_record('h5pactivity', ['id' => $instanceid], 'id, grademethod, enabletracking', MUST_EXIST);
+                $h5p = $DB->get_record(
+                    'h5pactivity',
+                    ['id' => $instanceid],
+                    'id, grade, grademethod, enabletracking',
+                    MUST_EXIST
+                );
                 $highest = \mod_h5pactivity\local\manager::GRADEHIGHESTATTEMPT;
                 if ((int) $h5p->grademethod !== $highest || empty($h5p->enabletracking)) {
                     return null;
                 }
-                return self::h5p_candidates($instanceid, (float) $gradeitem->grademax, $userids);
+                return self::h5p_candidates($instanceid, (float) $h5p->grade, $userids);
             case 'scorm':
                 require_once($CFG->dirroot . '/mod/scorm/locallib.php');
                 $scorm = $DB->get_record('scorm', ['id' => $instanceid], '*', MUST_EXIST);
@@ -599,7 +610,7 @@ final class submission_resolver {
      *
      * @param \stdClass $quiz Quiz (id, grade, sumgrades).
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, quiz maximum grade] keyed by user ID.
      */
     private static function quiz_candidates(\stdClass $quiz, array $userids): array {
         global $DB;
@@ -622,19 +633,23 @@ final class submission_resolver {
         foreach ($rs as $attempt) {
             // Same scaling as quiz_rescale_grade().
             $raw = (float) $attempt->sumgrades * (float) $quiz->grade / (float) $quiz->sumgrades;
-            $result[(int) $attempt->userid][] = [$raw, (int) ($attempt->timefinish ?: $attempt->timemodified)];
+            $result[(int) $attempt->userid][] = [
+                $raw,
+                (int) ($attempt->timefinish ?: $attempt->timemodified),
+                (float) $quiz->grade,
+            ];
         }
         $rs->close();
         return $result;
     }
 
     /**
-     * Lesson attempts, with their grade on the gradebook scale (lesson_update_grades()).
+     * Lesson attempts, with their grade on the lesson's maximum grade (lesson_update_grades()).
      *
      * @param int $lessonid Lesson ID.
-     * @param float $grademax Grade item maximum.
+     * @param float $grademax Lesson maximum grade.
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, lesson maximum grade] keyed by user ID.
      */
     private static function lesson_candidates(int $lessonid, float $grademax, array $userids): array {
         global $DB;
@@ -649,19 +664,19 @@ final class submission_resolver {
         );
         $result = [];
         foreach ($rs as $row) {
-            $result[(int) $row->userid][] = [(float) $row->grade * $grademax / 100, (int) $row->completed];
+            $result[(int) $row->userid][] = [(float) $row->grade * $grademax / 100, (int) $row->completed, $grademax];
         }
         $rs->close();
         return $result;
     }
 
     /**
-     * Completed H5P attempts, with their grade on the gradebook scale (\mod_h5pactivity\local\grader).
+     * Completed H5P attempts, with their grade on the activity's maximum grade (\mod_h5pactivity\local\grader).
      *
      * @param int $h5pid H5P activity ID.
-     * @param float $grademax Grade item maximum.
+     * @param float $grademax H5P activity maximum grade.
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, activity maximum grade] keyed by user ID.
      */
     private static function h5p_candidates(int $h5pid, float $grademax, array $userids): array {
         global $DB;
@@ -676,7 +691,7 @@ final class submission_resolver {
         );
         $result = [];
         foreach ($rs as $attempt) {
-            $result[(int) $attempt->userid][] = [$grademax * (float) $attempt->scaled, (int) $attempt->timemodified];
+            $result[(int) $attempt->userid][] = [$grademax * (float) $attempt->scaled, (int) $attempt->timemodified, $grademax];
         }
         $rs->close();
         return $result;
@@ -688,11 +703,11 @@ final class submission_resolver {
      * The per-attempt grade depends on the SCO tracks and the grading method,
      * so the module's function is called for each attempt, exactly as
      * scorm_grade_user() does for "highest attempt"; the attempt times come in
-     * one query.
+     * one query. SCORM sends that grade as it is, whatever the maximum grade.
      *
      * @param \stdClass $scorm SCORM record.
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, null] keyed by user ID.
      */
     private static function scorm_candidates(\stdClass $scorm, array $userids): array {
         global $CFG, $DB;
@@ -712,7 +727,7 @@ final class submission_resolver {
         foreach ($rs as $attempt) {
             $raw = scorm_grade_user_attempt($scorm, (int) $attempt->userid, (int) $attempt->attempt);
             if ($raw !== null) {
-                $result[(int) $attempt->userid][] = [(float) $raw, (int) $attempt->timemodified];
+                $result[(int) $attempt->userid][] = [(float) $raw, (int) $attempt->timemodified, null];
             }
         }
         $rs->close();
@@ -722,9 +737,11 @@ final class submission_resolver {
     /**
      * Ratings given to the student's items: with maximum aggregation each rating is a possible grade.
      *
+     * The rating API sends the aggregate as it is, whatever the maximum of the scale.
+     *
      * @param \stdClass $cm Course module (id, modname).
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, null] keyed by user ID.
      */
     private static function rating_candidates(\stdClass $cm, array $userids): array {
         global $DB;
@@ -750,7 +767,7 @@ final class submission_resolver {
         );
         $result = [];
         foreach ($rs as $rating) {
-            $result[(int) $rating->userid][] = [(float) $rating->rating, (int) $rating->itemtime];
+            $result[(int) $rating->userid][] = [(float) $rating->rating, (int) $rating->itemtime, null];
         }
         $rs->close();
         return $result;
@@ -766,14 +783,14 @@ final class submission_resolver {
      * @param \stdClass $cm Course module.
      * @param \grade_item $gradeitem Grade item.
      * @param int[] $userids User IDs.
-     * @return array Lists of [raw, time] keyed by user ID.
+     * @return array Lists of [raw, time, maximum the grade was sent with] keyed by user ID.
      */
     private static function history_candidates(\stdClass $cm, \grade_item $gradeitem, array $userids): array {
         global $DB;
 
         [$usql, $uparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'usr');
         $rs = $DB->get_recordset_sql(
-            "SELECT id, userid, rawgrade, timemodified
+            "SELECT id, userid, rawgrade, rawgrademax, timemodified
                FROM {grade_grades_history}
               WHERE itemid = :itemid AND userid $usql AND rawgrade IS NOT NULL
                 AND (source IS NULL OR source <> :source)",
@@ -781,21 +798,21 @@ final class submission_resolver {
         );
         $result = [];
         foreach ($rs as $row) {
-            $result[(int) $row->userid][] = [(float) $row->rawgrade, (int) $row->timemodified];
+            $result[(int) $row->userid][] = [(float) $row->rawgrade, (int) $row->timemodified, (float) $row->rawgrademax];
         }
         $rs->close();
 
         $current = self::for_users($cm, $gradeitem, $userids);
-        $raws = $DB->get_records_select_menu(
+        $raws = $DB->get_records_select(
             'grade_grades',
             "itemid = :itemid AND userid $usql AND rawgrade IS NOT NULL",
             ['itemid' => $gradeitem->id] + $uparams,
             '',
-            'userid, rawgrade'
+            'userid, rawgrade, rawgrademax'
         );
         foreach ($raws as $userid => $raw) {
             if (!empty($current[$userid])) {
-                $result[(int) $userid][] = [(float) $raw, (int) $current[$userid]];
+                $result[(int) $userid][] = [(float) $raw->rawgrade, (int) $current[$userid], (float) $raw->rawgrademax];
             }
         }
         return $result;

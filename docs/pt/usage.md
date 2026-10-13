@@ -6,7 +6,7 @@
    - **Tarefa**, **Fórum** e, a partir do Moodle 5.3, **Questionário** têm uma data de entrega: passada essa data, o estudante continua podendo entregar, só que com atraso. O Late Penalty usa essa data. (Não confundir com a data limite da Tarefa nem com o fechamento do Questionário, que bloqueiam a entrega.)
    - **Todas as outras atividades** (Lição, SCORM, H5P, Glossário, Base de dados, ferramentas externas…): preencha **"Definir lembrete na linha do tempo"** (*Condições de conclusão*). Esse campo não bloqueia nada e serve como prazo da penalidade. Sem ele não há prazo nem penalidade.
 
-3. O professor abre a seção **Penalidade por atraso**, marca **Habilitar penalidade progressiva?** e informa o **Desconto por dia de atraso (%)** e o **Limite máximo de desconto (%)**. Exemplo: 10% ao dia, máximo de 50%.
+3. O professor abre a seção **Penalidade por atraso**, marca **Habilitar penalidade progressiva?** e informa o **Desconto por dia de atraso (%)** e o **Limite máximo de desconto (%)**. Exemplo: 10% ao dia, máximo de 50%. **Desconto calculado sobre** escolhe de qual nota sai a porcentagem: a **nota obtida** (padrão) ou a **nota máxima**.
 
 4. Quando a atividade já existe, a seção mostra a linha **"Prazo usado para a penalidade: <data> (<origem>)"**, ou avisa que não há prazo. Ela mostra o valor salvo; salve o formulário depois de mudar as datas.
 
@@ -18,7 +18,7 @@
 
 1. **Dias de atraso** — contados do prazo até o momento em que o estudante entregou. Cada dia começado conta como um dia inteiro: 1 minuto de atraso já é 1 dia, e 25 horas são 2 dias.
 2. **Desconto** — dias de atraso × desconto diário, nunca acima do máximo.
-3. **Nota final** — a nota menos o percentual de desconto. A nota nunca fica abaixo do mínimo do item.
+3. **Nota final** — a nota menos o desconto: uma porcentagem da **nota obtida** (padrão) ou da **nota máxima**, conforme *Desconto calculado sobre*. A nota nunca fica abaixo do mínimo do item.
 
 **Exemplo** (nota 100, 10% ao dia, máximo de 50%):
 
@@ -28,6 +28,17 @@
 | 1 dia de atraso | 10% | 90 |
 | 2 dias de atraso | 20% | 80 |
 | 5 dias de atraso ou mais | 50% (máximo) | 50 |
+
+Com nota 100 de 100 as duas bases dão o mesmo resultado. Abaixo da máxima, elas diferem. **Exemplo** (penalidade de 20%, nota máxima 10):
+
+| Nota | Sobre a nota obtida | Sobre a nota máxima |
+|---|---|---|
+| 10 | 10 − 2 = 8 | 10 − 2 = 8 |
+| 8 | 8 − 1,6 = 6,4 | 8 − 2 = 6 |
+| 1 | 1 − 0,2 = 0,8 | 0 (para na nota mínima) |
+
+* **Nota obtida:** o desconto acompanha a nota de cada estudante, e uma entrega atrasada nunca é levada à nota mínima.
+* **Nota máxima:** cada dia de atraso custa os mesmos pontos para todos, como na penalidade de atraso da própria tarefa do Moodle; o limite máximo de desconto define até onde uma nota baixa pode cair.
 
 ## Qual prazo vale para cada estudante
 

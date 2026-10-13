@@ -75,6 +75,20 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
     $mform->setDefault('latepenalty_max', 0.00);
     $mform->hideIf('latepenalty_max', 'latepenalty_enabled', 'notchecked');
 
+    $baseel = $mform->addElement(
+        'select',
+        'latepenalty_base',
+        get_string('latepenalty_base', 'local_latepenalty'),
+        [
+            \local_latepenalty\penalty_helper::BASE_GRADE => get_string('latepenalty_base_grade', 'local_latepenalty'),
+            \local_latepenalty\penalty_helper::BASE_MAX => get_string('latepenalty_base_max', 'local_latepenalty'),
+        ]
+    );
+    $mform->addHelpButton('latepenalty_base', 'latepenalty_base', 'local_latepenalty');
+    $mform->setType('latepenalty_base', PARAM_INT);
+    $mform->setDefault('latepenalty_base', \local_latepenalty\penalty_helper::BASE_GRADE);
+    $mform->hideIf('latepenalty_base', 'latepenalty_enabled', 'notchecked');
+
     $keepbestel = null;
     if (local_latepenalty_offers_keepbest($modname)) {
         $keepbestel = $mform->addElement(
@@ -113,6 +127,7 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         'latepenalty_enabled' => $enabledel,
         'latepenalty_daily' => $dailyel,
         'latepenalty_max' => $maxel,
+        'latepenalty_base' => $baseel,
     ];
     if ($keepbestel) {
         $elements['latepenalty_keepbest'] = $keepbestel;
@@ -209,6 +224,7 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         $mform->setDefault('latepenalty_enabled', $existing->enabled);
         $mform->setDefault('latepenalty_daily', (float) $existing->daily_penalty);
         $mform->setDefault('latepenalty_max', (float) $existing->max_penalty);
+        $mform->setDefault('latepenalty_base', (int) $existing->penaltybase);
         $mform->setDefault('latepenalty_recalc_deadline', $existing->recalc_on_deadline ?? 1);
         $mform->setDefault('latepenalty_recalc_rate', $existing->recalc_on_rate ?? 1);
         if ($keepbestel) {
@@ -396,6 +412,7 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
         $record->recalc_on_deadline = (int) $existing->recalc_on_deadline;
         $record->recalc_on_rate = (int) $existing->recalc_on_rate;
         $record->keepbest = (int) $existing->keepbest;
+        $record->penaltybase = (int) $existing->penaltybase;
     } else {
         $record->enabled = !empty($data->latepenalty_enabled) ? 1 : 0;
         $record->daily_penalty = isset($data->latepenalty_daily) ? (float) $data->latepenalty_daily : 0.00;
@@ -403,6 +420,14 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
         $record->recalc_on_deadline = !empty($data->latepenalty_recalc_deadline) ? 1 : 0;
         $record->recalc_on_rate = !empty($data->latepenalty_recalc_rate) ? 1 : 0;
         $record->keepbest = !empty($data->latepenalty_keepbest) ? 1 : 0;
+        // Anything but the maximum grade is the grade obtained, the default; without the field, the saved base stays.
+        if (isset($data->latepenalty_base)) {
+            $basemax = (int) $data->latepenalty_base === \local_latepenalty\penalty_helper::BASE_MAX;
+            $record->penaltybase = $basemax ? \local_latepenalty\penalty_helper::BASE_MAX
+                : \local_latepenalty\penalty_helper::BASE_GRADE;
+        } else {
+            $record->penaltybase = $existing ? (int) $existing->penaltybase : \local_latepenalty\penalty_helper::BASE_GRADE;
+        }
     }
 
     // Resolve the current (post-save) deadline from the module.
@@ -445,11 +470,12 @@ function local_latepenalty_coursemodule_edit_post_actions(stdClass $data, stdCla
     } else if ($existing && $record->enabled) {
         // A removed deadline (0) counts as a change: it gives back the grades of students left without one.
         $deadlinechanged = (int) $existing->last_deadline !== $newdeadline;
-        // Changing the keep-best option recalculates like a rate change.
+        // Changing the keep-best option or the penalty base recalculates like a rate change.
         $ratechanged = (
             abs((float) $existing->daily_penalty - $record->daily_penalty) > 0.001 ||
             abs((float) $existing->max_penalty - $record->max_penalty) > 0.001 ||
-            (int) ($existing->keepbest ?? 0) !== $record->keepbest
+            (int) ($existing->keepbest ?? 0) !== $record->keepbest ||
+            (int) $existing->penaltybase !== $record->penaltybase
         );
 
         $shouldrecalc = (

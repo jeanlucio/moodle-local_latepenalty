@@ -32,11 +32,12 @@ const SELECTOR_HEADER = '[data-for="page-activity-header"]';
  * Inject a penalty notice into the activity header.
  *
  * @param {string} notice The formatted penalty notice string.
+ * @param {string} basenote The sentence saying which grade the percentage applies to.
  */
-export const init = (notice) => {
+export const init = (notice, basenote = '') => {
     const div = document.createElement('div');
     div.className = 'local-latepenalty-notice';
-    div.textContent = notice;
+    div.textContent = basenote ? `${notice} ${basenote}` : notice;
 
     const infoRegion = document.querySelector(SELECTOR_ACTINFO);
     if (infoRegion) {

@@ -4,6 +4,7 @@
 * 📅 **Uma cadeia de prazo em todo lugar:** sobreposição do Late Penalty → sobreposição de grupo do Late Penalty → extensão ou sobreposição da própria atividade (Tarefa, Questionário, Lição) → data de entrega da atividade (Tarefa, Fórum e, a partir do Moodle 5.3, Questionário) → "Definir lembrete na linha do tempo". A mesma cadeia vale para as notas, os badges do curso, o relatório e o formulário.
 * 👥 **Sobreposições de grupo:** Professores podem definir prazo, taxa diária e limite máximo customizados para grupos inteiros. Quando o estudante pertencer a múltiplos grupos com sobreposições, o valor mais favorável por campo é aplicado de forma independente (prazo mais tardio, menores taxas de penalidade), espelhando o comportamento nativo do Moodle para questionários.
 * 📉 **Penalidade diária progressiva:** Percentual configurável por dia de atraso (ex.: 5% ao dia).
+* ⚖️ **Base do desconto:** porcentagem da nota obtida (padrão) ou da nota máxima, escolhida em cada atividade.
 * 🔒 **Limite máximo de penalidade:** O desconto nunca excede o teto configurado (ex.: 50% no máximo) e a nota final é sempre ≥ 0.
 * 🕒 **Atraso da ação do próprio estudante:** a tentativa, post, verbete ou registro por trás da nota, ou a data de entrega que a atividade informa — nunca o momento da correção.
 * 🏆 **Nota mais alta respeitada:** quando a atividade fica com a maior nota, uma tentativa atrasada nunca a baixa.

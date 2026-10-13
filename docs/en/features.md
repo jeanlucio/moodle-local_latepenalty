@@ -4,6 +4,7 @@
 * 📅 **One deadline chain everywhere:** Late Penalty override → Late Penalty group override → the activity's own extension or override (Assignment, Quiz, Lesson) → the activity due date (Assignment, Forum, and Quiz from Moodle 5.3) → "Set reminder in Timeline". The same chain drives the grades, the course badges, the report and the form.
 * 👥 **Group overrides:** Teachers can set a custom deadline, daily rate, and maximum cap for entire groups. When a student belongs to multiple groups with overrides, the most lenient value per field is applied independently (latest deadline, lowest penalty rates), mirroring Moodle's native quiz behaviour.
 * 📉 **Progressive daily penalty:** Configurable percentage deducted per day late (e.g., 5% per day).
+* ⚖️ **Penalty base:** A percentage of the grade obtained (default) or of the maximum grade, chosen per activity.
 * 🔒 **Maximum penalty cap:** Deduction never exceeds the configured cap (e.g., 50% maximum), and the final grade is always ≥ 0.
 * 🕒 **Lateness of the student's own action:** The attempt, post, entry or record behind the grade, or the submission date the activity reports — never the moment of grading.
 * 🏆 **Highest grade respected:** When an activity keeps the highest grade, a late attempt never lowers it.

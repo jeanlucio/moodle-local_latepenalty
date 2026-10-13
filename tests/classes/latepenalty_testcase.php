@@ -61,14 +61,21 @@ abstract class latepenalty_testcase extends \advanced_testcase {
      * @param int $cmid Course module ID.
      * @param float $daily Daily penalty percentage.
      * @param float $max Maximum penalty percentage.
+     * @param int $base Penalty base (penalty_helper::BASE_GRADE or BASE_MAX).
      * @return void
      */
-    protected function enable_rule(int $cmid, float $daily = 10.0, float $max = 50.0): void {
+    protected function enable_rule(
+        int $cmid,
+        float $daily = 10.0,
+        float $max = 50.0,
+        int $base = \local_latepenalty\penalty_helper::BASE_GRADE
+    ): void {
         $this->lp_generator()->create_rule([
             'cmid' => $cmid,
             'enabled' => 1,
             'daily_penalty' => $daily,
             'max_penalty' => $max,
+            'penaltybase' => $base,
         ]);
     }
 
@@ -290,6 +297,7 @@ abstract class latepenalty_testcase extends \advanced_testcase {
             $data->latepenalty_recalc_deadline = $rule->recalc_on_deadline;
             $data->latepenalty_recalc_rate = $rule->recalc_on_rate;
             $data->latepenalty_keepbest = $rule->keepbest ?? 0;
+            $data->latepenalty_base = $rule->penaltybase ?? \local_latepenalty\penalty_helper::BASE_GRADE;
         }
         foreach ($changes as $field => $value) {
             $data->$field = $value;

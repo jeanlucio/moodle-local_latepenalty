@@ -10,11 +10,14 @@ The report shows every grade adjustment applied by the plugin in that course:
 | **Activity** | Name of the graded activity |
 | **Deadline** | The student's deadline, with where it comes from underneath: Late Penalty override, Late Penalty group override, Extension, Activity override, Close date of the activity override, Due date or Set reminder in Timeline. A student exempted by an override shows "no due date". |
 | **Raw grade** | Grade before the penalty |
-| **Discount** | Percentage applied. When a user or group override zeroes the penalty, a badge (*User override* or *Group override*) appears next to the 0.0% value to explain the waiver. |
+| **Discount** | Percentage applied, of the grade obtained or of the maximum grade as the rule says. When a user or group override zeroes the penalty, a badge (*User override* or *Group override*) appears next to the 0.0% value to explain the waiver. |
+| **Points discounted** | Points the penalty took, on the same scale as the raw grade |
 | **Final grade** | Grade after the penalty |
 | **Date applied** | Date the penalty was recorded |
 
 The report lists the course's **current students** (a graded role and an active enrolment). Students who left the course, whose enrolment is suspended or ended, or who belonged to a term closed by a course reset are left out; their penalties remain in Moodle's grade history.
+
+The percentage is worked out with the rule's current *Penalty applies to*. If it is changed with "Recalculate penalties when the penalty settings change" unticked, the grades already discounted keep the old base and their percentage reads differently; the points discounted stay exact.
 
 The report includes **filters** for student and activity. Only students and activities that have at least one recorded penalty appear in the filter dropdowns — the report is always available regardless of the course format.
 

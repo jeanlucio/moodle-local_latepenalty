@@ -36,6 +36,9 @@ final class upgrade_test extends latepenalty_testcase {
     /** @var int Version of local_latepenalty 1.1.2. */
     private const V112 = 2026092500;
 
+    /** @var int Version of local_latepenalty 1.4.1. */
+    private const V141 = 2026100701;
+
     #[\Override]
     public static function setUpBeforeClass(): void {
         global $CFG;
@@ -94,7 +97,7 @@ final class upgrade_test extends latepenalty_testcase {
                 (int) $DB->get_field_sql('SELECT MAX(id) FROM {grade_grades_history}'),
                 (int) get_config('local_latepenalty', reprocess_grades::CURSOR)
             );
-            $this->assertEquals(2026100501, get_config('local_latepenalty', 'version'));
+            $this->assertEquals(2026101300, get_config('local_latepenalty', 'version'));
 
             // Running the step again (an interrupted upgrade resumed) does not fail.
             set_config('version', self::V112, 'local_latepenalty');
@@ -116,7 +119,7 @@ final class upgrade_test extends latepenalty_testcase {
         $this->resetAfterTest();
         set_config(reprocess_grades::CURSOR, 42, 'local_latepenalty');
 
-        $this->assertTrue(xmldb_local_latepenalty_upgrade(2026100501));
+        $this->assertTrue(xmldb_local_latepenalty_upgrade(2026101300));
 
         $this->assertEquals(42, get_config('local_latepenalty', reprocess_grades::CURSOR));
     }
@@ -172,6 +175,45 @@ final class upgrade_test extends latepenalty_testcase {
         $this->assertSame($firstpenalty($offpenalised), $timeenabled($offpenalised), 'Off, penalised');
         $this->assertGreaterThanOrEqual($before, $timeenabled($onnever), 'On, never penalised');
         $this->assertSame(0, $timeenabled($offnever), 'Off, never penalised');
+    }
+
+    /**
+     * A 1.4 site: the penalty base column is added, every existing rule keeps the grade obtained (F20-23).
+     *
+     * @return void
+     */
+    public function test_upgrade_adds_penalty_base(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course, $student, $teacher] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course, ['duedate' => time() - 2 * DAYSECS + HOURSECS]);
+        $this->enable_rule($assign->cmid);
+        $this->submit_assign($assign, $student);
+        $this->grade_assign($assign, $student, $teacher, 60);
+
+        $dbman = $DB->get_manager();
+        $table = new \xmldb_table('local_latepenalty_rules');
+        $field = new \xmldb_field('penaltybase', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'timeenabled');
+        try {
+            if ($dbman->field_exists($table, $field)) {
+                $dbman->drop_field($table, $field);
+            }
+            set_config('version', self::V141, 'local_latepenalty');
+
+            $this->assertTrue(xmldb_local_latepenalty_upgrade(self::V141));
+
+            $this->assertTrue($dbman->field_exists($table, 'penaltybase'));
+            $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $assign->cmid], '*', MUST_EXIST);
+            $this->assertSame(penalty_helper::BASE_GRADE, (int) $rule->penaltybase);
+            $this->assertSame(48.0, $this->final_grade('assign', $assign->id, $student->id));
+            $this->assertEquals(2026101300, get_config('local_latepenalty', 'version'));
+        } finally {
+            if (!$dbman->field_exists($table, 'penaltybase')) {
+                $dbman->add_field($table, $field);
+            }
+        }
     }
 
     /**

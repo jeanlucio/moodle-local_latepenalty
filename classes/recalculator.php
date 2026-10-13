@@ -390,7 +390,9 @@ class recalculator {
         $ids = array_keys($grades);
         $deadlines = deadline_resolver::for_users($cm, $ids);
         $submissions = submission_resolver::for_users($cm, $gradeitem, $ids);
-        $keepbest = (bool) $DB->get_field('local_latepenalty_rules', 'keepbest', ['cmid' => $cm->id]);
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => $cm->id], 'keepbest, penaltybase');
+        $keepbest = !empty($rule->keepbest);
+        $basemax = $rule && (int) $rule->penaltybase === penalty_helper::BASE_MAX;
         $candidates = $restore ? null : submission_resolver::best_candidates($cm, $gradeitem, $ids, $keepbest);
 
         foreach ($grades as $userid => $grade) {
@@ -412,11 +414,21 @@ class recalculator {
             $raw = (float) $grade->rawgrade;
             $points = 0.0;
             if ($deadline > 0) {
-                $rates = [$resolved->daily ?? $daily, $resolved->max ?? $max, (float) $gradeitem->grademin];
+                // On the maximum grade, the one the module recorded with this grade: the raw grade's own scale.
+                $rates = [
+                    $resolved->daily ?? $daily,
+                    $resolved->max ?? $max,
+                    (float) $gradeitem->grademin,
+                    $basemax ? (float) $grade->rawgrademax : null,
+                ];
                 if (!empty($candidates[$userid])) {
                     // Highest grade: the best grade after each attempt's own penalty (F15).
                     $best = null;
-                    foreach ($candidates[$userid] as [$candidateraw, $candidatetime]) {
+                    foreach ($candidates[$userid] as [$candidateraw, $candidatetime, $candidatemax]) {
+                        // On the grade's own scale: the module may already be on a new maximum grade.
+                        if ($candidatemax > 0) {
+                            $candidateraw = $candidateraw * (float) $grade->rawgrademax / $candidatemax;
+                        }
                         $value = self::penalised($candidateraw, $candidatetime, $deadline, $rates);
                         $best = $best === null ? $value : max($best, $value);
                     }
@@ -436,15 +448,15 @@ class recalculator {
      * @param float $raw Raw grade.
      * @param int $time Submission time.
      * @param int $deadline Deadline.
-     * @param array $rates [daily penalty, penalty cap, grade minimum].
+     * @param array $rates [daily penalty, penalty cap, grade minimum, maximum grade or null for the grade obtained].
      * @return float
      */
     private static function penalised(float $raw, int $time, int $deadline, array $rates): float {
-        [$daily, $max, $grademin] = $rates;
+        [$daily, $max, $grademin, $grademax] = $rates;
         $dayslate = penalty_helper::calculate_days_late($time, $deadline);
         if ($dayslate <= 0) {
             return $raw;
         }
-        return penalty_helper::apply_penalty($raw, $dayslate, $daily, $max, $grademin);
+        return penalty_helper::apply_penalty($raw, $dayslate, $daily, $max, $grademin, $grademax);
     }
 }

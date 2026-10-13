@@ -1,6 +1,6 @@
 # 🧪 Testes Automatizados
 
-O Late Penalty inclui **408 testes PHPUnit** e **14 cenários Behat**, executados em todo push de
+O Late Penalty inclui **460 testes PHPUnit** e **16 cenários Behat**, executados em todo push de
 CI na matriz completa: Moodle 4.5, 5.0, 5.1, 5.2 e 5.3 (`main`), cada um com PostgreSQL e
 MariaDB. Alguns testes só se aplicam onde o core oferece o recurso que verificam (o prazo final
 do questionário a partir do 5.3, as notas com dedução a partir da correção da penalidade por
@@ -25,6 +25,7 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `local/deadline_resolver_test` | A cadeia de prazos: sobreposições do plugin, extensões, sobreposições da atividade, data de entrega, conclusão esperada, isenções |
 | `local/handed_in_test` | Quem já entregou cada atividade, para as badges e os avisos: o trabalho de cada módulo, avaliado ou não, nunca a conclusão da atividade |
 | `local/penalty_writer_test` | Como as penalidades são gravadas, alteradas e removidas — nota com dedução ou nota sobreposta — e as invariantes de toda gravação |
+| `penalty_base_test` | A base do desconto: nota obtida e nota máxima em todos os módulos, intervalos e fatores de nota, nota máxima alterada, sobreposições e recálculos |
 | `keepbest_test` | Atividades com "nota mais alta": uma tentativa atrasada nunca rebaixa um resultado anterior melhor |
 | `recalculator_test`, `activity_overrides_test` | Recálculo quando muda uma regra, uma sobreposição ou uma extensão |
 | `group_changes_test` | Estudantes que entram ou saem de um grupo, grupos apagados e reconfiguração do curso |
@@ -33,7 +34,7 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `observer_test`, `penalty_helper_group_test` | A cadeia do evento de nota, sobreposições por estudante e por grupo |
 | `lib_test`, `lib_callbacks_test` | A seção do formulário da atividade, o que salvá-la faz, validação e links de navegação |
 | `hook_listener_test`, `activity_notice_test` | Avisos na página do curso e na página da atividade, para estudantes e professores |
-| `report/controller_test`, `report/deadline_column_test` | O relatório: restrição por grupos, filtros, exportação, cada origem de prazo, número de consultas |
+| `report/controller_test`, `report/deadline_column_test`, `report/discount_test` | O relatório: restrição por grupos, filtros, exportação, cada origem de prazo, número de consultas, desconto e pontos descontados nas duas bases |
 | `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Páginas de sobreposição e restrição por grupos separados |
 | `engine_edges_test` | Casos de borda do motor, dos observadores e da tarefa agendada |
 | `privacy/provider_test` | Exportação e exclusão da API de Privacidade |
@@ -57,7 +58,8 @@ vendor/bin/phpunit --testsuite local_latepenalty_testsuite
   melhor nota, desativar a regra e remover a data de entrega devolvendo as notas originais, o
   plugin se retirando quando a penalidade de tarefas do core está ligada, o prazo final do
   questionário, e páginas de atividade que nunca carregam o livro de notas (revisão do
-  questionário, glossário) abrindo normalmente com uma regra ativa.
+  questionário, glossário) abrindo normalmente com uma regra ativa, a base do desconto no
+  formulário e uma penalidade sobre a nota máxima.
 
 ```bash
 php admin/tool/behat/cli/init.php

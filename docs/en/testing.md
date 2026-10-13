@@ -1,6 +1,6 @@
 # 🧪 Automated Tests
 
-Late Penalty ships with **408 PHPUnit tests** and **14 Behat scenarios**, run on every CI push
+Late Penalty ships with **460 PHPUnit tests** and **16 Behat scenarios**, run on every CI push
 across the full matrix: Moodle 4.5, 5.0, 5.1, 5.2 and 5.3 (`main`), each on PostgreSQL and
 MariaDB. A few tests only apply where the core offers the feature they check (the quiz due date
 from 5.3, deducted marks from the core late-penalty fix) and are skipped elsewhere.
@@ -24,6 +24,7 @@ on a wrong assumption about where a module keeps its data.
 | `local/deadline_resolver_test` | The deadline chain: plugin overrides, extensions, activity overrides, due date, completion date, exemptions |
 | `local/handed_in_test` | Who has handed an activity in, for the badges and notices: each module's own work, graded or not, never activity completion |
 | `local/penalty_writer_test` | How penalties are stored, changed and removed — deducted marks or overrides — and the invariants of every write |
+| `penalty_base_test` | The penalty base: grade obtained and maximum grade on every module, grade ranges and factors, changed maximum grades, overrides and recalculations |
 | `keepbest_test` | "Highest grade" activities: a late attempt never lowers a better earlier result |
 | `recalculator_test`, `activity_overrides_test` | Recalculation when a rule, an override or an extension changes |
 | `group_changes_test` | Students joining or leaving a group, deleted groups and course resets |
@@ -32,7 +33,7 @@ on a wrong assumption about where a module keeps its data.
 | `observer_test`, `penalty_helper_group_test` | The grade event chain, per-student and per-group overrides |
 | `lib_test`, `lib_callbacks_test` | The activity form section, what saving it does, validation and navigation links |
 | `hook_listener_test`, `activity_notice_test` | Notices on the course page and on the activity page, for students and teachers |
-| `report/controller_test`, `report/deadline_column_test` | The report: group restrictions, filters, export, each deadline origin, query count |
+| `report/controller_test`, `report/deadline_column_test`, `report/discount_test` | The report: group restrictions, filters, export, each deadline origin, query count, discount and points discounted on both bases |
 | `override/controller_test`, `group_override/controller_test`, `group_scope_test` | Override pages and separate-groups restrictions |
 | `engine_edges_test` | Edge cases of the engine, the observers and the scheduled task |
 | `privacy/provider_test` | Privacy API export and deletion |
@@ -55,7 +56,8 @@ vendor/bin/phpunit --testsuite local_latepenalty_testsuite
   help, scale-graded activities left alone, the keep-best option, disabling the rule and removing
   the due date giving the original grades back, stepping aside when the core assignment penalty
   is on, the quiz due date, and activity pages that never load the gradebook (quiz review,
-  glossary) opening normally with a rule enabled.
+  glossary) opening normally with a rule enabled, the penalty base in the form and a penalty on
+  the maximum grade.
 
 ```bash
 php admin/tool/behat/cli/init.php

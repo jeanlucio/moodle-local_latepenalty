@@ -509,6 +509,7 @@ final class lib_test extends latepenalty_testcase {
 
         $form = $this->activity_form($assign->cmid);
         $this->assertTrue($form->elementExists('latepenalty_nativewarning'));
+        $this->assertContains('latepenalty_base', $form->_dependencies['gradepenalty']['eq']['1'] ?? [], 'F20-22');
         $rule = $this->get_rule($assign->cmid);
         $this->assertSame(1, (int) $rule->enabled);
         $this->assertSame(80.0, $this->final_grade('assign', $assign->id, $student->id));
@@ -537,9 +538,54 @@ final class lib_test extends latepenalty_testcase {
         $assign = $this->create_assign_activity($course);
 
         $form = $this->plugin_section($assign->cmid, 'assign');
-        foreach (['latepenalty_enabled', 'latepenalty_recalc_deadline', 'latepenalty_recalc_rate'] as $name) {
+        foreach (['latepenalty_enabled', 'latepenalty_base', 'latepenalty_recalc_deadline', 'latepenalty_recalc_rate'] as $name) {
             $this->assertNotEmpty($form->getElement($name)->_helpbutton, $name);
         }
+    }
+
+    /**
+     * The penalty base choice: after the maximum, grade obtained first and by default, saved value loaded (F20-18).
+     *
+     * @return void
+     */
+    public function test_base_field(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$course] = $this->create_course_with_users();
+        $assign = $this->create_assign_activity($course);
+
+        $form = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertTrue($form->elementExists('latepenalty_base'));
+        $field = $form->getElement('latepenalty_base');
+        $this->assertNotEmpty($field->_helpbutton);
+        $this->assertSame(
+            [(string) penalty_helper::BASE_GRADE, (string) penalty_helper::BASE_MAX],
+            array_map(fn(array $option): string => (string) $option['attr']['value'], $field->_options)
+        );
+        $this->assertEquals(penalty_helper::BASE_GRADE, $form->_defaultValues['latepenalty_base']);
+        $order = array_keys($form->_elementIndex);
+        $this->assertSame(array_search('latepenalty_max', $order) + 1, array_search('latepenalty_base', $order));
+
+        $this->lp_generator()->create_rule(['cmid' => $assign->cmid, 'penaltybase' => penalty_helper::BASE_MAX]);
+        $form = $this->plugin_section($assign->cmid, 'assign');
+        $this->assertEquals(penalty_helper::BASE_MAX, $form->_defaultValues['latepenalty_base']);
+    }
+
+    /**
+     * A base other than the two choices (a script) is saved as the grade obtained (F20-21).
+     *
+     * @return void
+     */
+    public function test_unknown_base_saved_as_grade_obtained(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$assign] = $this->late_assign();
+
+        $this->save($assign->cmid, ['latepenalty_base' => 7]);
+        $this->assertSame(penalty_helper::BASE_GRADE, (int) $this->get_rule($assign->cmid)->penaltybase);
+
+        $this->save($assign->cmid, ['latepenalty_base' => penalty_helper::BASE_MAX]);
+        $this->assertSame(penalty_helper::BASE_MAX, (int) $this->get_rule($assign->cmid)->penaltybase);
     }
 
     /**
@@ -614,6 +660,7 @@ final class lib_test extends latepenalty_testcase {
             'latepenalty_enabled',
             'latepenalty_daily',
             'latepenalty_max',
+            'latepenalty_base',
             'latepenalty_recalc_deadline',
             'latepenalty_recalc_rate',
             'latepenalty_disablewarning',
