@@ -80,7 +80,7 @@ Feature: Late Penalty discounts late work and explains its deadline
     And I should see "(Due date)"
     And "Help with Enable progressive penalty?" "icon" should exist
     And "Help with Recalculate penalties when deadline changes" "icon" should exist
-    And "Help with Recalculate penalties when daily rate or maximum changes" "icon" should exist
+    And "Help with Recalculate penalties when the penalty settings change" "icon" should exist
     And I am on the "Draft" "assign activity editing" page
     And I should see "No deadline: no late penalty is applied."
 
