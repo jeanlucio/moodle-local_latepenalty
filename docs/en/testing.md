@@ -1,6 +1,6 @@
 # 🧪 Automated Tests
 
-Late Penalty ships with **463 PHPUnit tests** and **16 Behat scenarios**, run on every CI push
+Late Penalty ships with **465 PHPUnit tests** and **16 Behat scenarios**, run on every CI push
 across the full matrix: Moodle 4.5, 5.0, 5.1, 5.2 and 5.3 (`main`), each on PostgreSQL and
 MariaDB. A few tests only apply where the core offers the feature they check (the quiz due date
 from 5.3, deducted marks from the core late-penalty fix) and are skipped elsewhere.
@@ -68,22 +68,16 @@ vendor/bin/behat --config /var/www/behatdata/behatrun/behat/behat.yml --tags @lo
 
 | Class | Line coverage |
 |-------|:-------------:|
-| `group_scope`, `local\deadline`, `observer`, `penalty_helper`, `task\reprocess_grades` | 100% |
-| `local\submission_resolver` | 99% |
-| `recalculator` | 99% |
-| `local\penalty_writer` | 97% |
-| `local\deadline_resolver` | 97% |
-| `hook_listener` | 95% |
-| `report\controller` | 95% |
+| `group_scope`, `local\deadline`, `task\recalculate_course`, `task\reprocess_grades` | 100% |
+| `local\submission_resolver`, `observer`, `recalculator` | 99% |
+| `report\controller` | 98% |
+| `hook_listener`, `local\deadline_resolver`, `penalty_helper` | 97% |
+| `local\penalty_writer` | 96% |
+| `form\override_form`, `form\group_override_form`, `override\controller` | 95% |
 | `privacy\provider` | 94% |
-| `override\controller` | 83% |
-| `group_override\controller` | 72% |
-| **Overall** | **87%** |
+| `group_override\controller` | 93% |
+| **Overall** | **97%** |
 
-> The two override controllers look lower than they are: their forms
-> (`classes/form/override_form.php`, `classes/form/group_override_form.php`) are instantiated in
-> every add/save scenario, but Xdebug fails to record line hits for a `moodleform` subclass
-> instantiated across many test methods of one test class — a tool artifact confirmed by
-> isolating the same form in a smaller test class. The remaining lines elsewhere are defensive
-> returns for states the core does not produce (a grade item whose activity is gone, for example)
-> and branches for core versions other than the one measured.
+> The lines left are defensive returns for states the core does not produce (a grade item whose
+> activity is gone, for example), the handling of a failed database write, and branches for core
+> versions other than the one measured.

@@ -1,6 +1,6 @@
 # 🧪 Testes Automatizados
 
-O Late Penalty inclui **463 testes PHPUnit** e **16 cenários Behat**, executados em todo push de
+O Late Penalty inclui **465 testes PHPUnit** e **16 cenários Behat**, executados em todo push de
 CI na matriz completa: Moodle 4.5, 5.0, 5.1, 5.2 e 5.3 (`main`), cada um com PostgreSQL e
 MariaDB. Alguns testes só se aplicam onde o core oferece o recurso que verificam (o prazo final
 do questionário a partir do 5.3, as notas com dedução a partir da correção da penalidade por
@@ -70,23 +70,16 @@ vendor/bin/behat --config /var/www/behatdata/behatrun/behat/behat.yml --tags @lo
 
 | Classe | Cobertura de linhas |
 |--------|:-------------------:|
-| `group_scope`, `local\deadline`, `observer`, `penalty_helper`, `task\reprocess_grades` | 100% |
-| `local\submission_resolver` | 99% |
-| `recalculator` | 99% |
-| `local\penalty_writer` | 97% |
-| `local\deadline_resolver` | 97% |
-| `hook_listener` | 95% |
-| `report\controller` | 95% |
+| `group_scope`, `local\deadline`, `task\recalculate_course`, `task\reprocess_grades` | 100% |
+| `local\submission_resolver`, `observer`, `recalculator` | 99% |
+| `report\controller` | 98% |
+| `hook_listener`, `local\deadline_resolver`, `penalty_helper` | 97% |
+| `local\penalty_writer` | 96% |
+| `form\override_form`, `form\group_override_form`, `override\controller` | 95% |
 | `privacy\provider` | 94% |
-| `override\controller` | 83% |
-| `group_override\controller` | 72% |
-| **Total** | **87%** |
+| `group_override\controller` | 93% |
+| **Total** | **97%** |
 
-> Os dois controllers de sobreposição parecem menos cobertos do que estão: seus formulários
-> (`classes/form/override_form.php`, `classes/form/group_override_form.php`) são instanciados em
-> todo cenário de adição/salvamento, mas o Xdebug não registra hits de linha de uma subclasse de
-> `moodleform` instanciada em muitos métodos de teste da mesma classe de teste — um artefato da
-> ferramenta, confirmado ao isolar o mesmo formulário numa classe de teste menor. As linhas
-> restantes nas demais classes são retornos defensivos para estados que o core não produz (um
-> item de nota cuja atividade não existe mais, por exemplo) e ramos para versões do core
-> diferentes da medida.
+> As linhas restantes são retornos defensivos para estados que o core não produz (um item de nota
+> cuja atividade não existe mais, por exemplo), o tratamento de uma gravação que falha no banco e
+> ramos para versões do core diferentes da medida.

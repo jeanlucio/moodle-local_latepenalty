@@ -320,6 +320,50 @@ final class penalty_writer_test extends latepenalty_testcase {
     }
 
     /**
+     * Overridden path: a grade whose lock date has passed is left alone, as core's update_final_grade() does.
+     *
+     * @return void
+     */
+    public function test_override_respects_lock_date(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path(false);
+        [$assign, $student] = $this->late_assign();
+        $item = $this->item('assign', $assign);
+        $DB->set_field('grade_grades', 'locktime', time() - MINSECS, ['itemid' => $item->id, 'userid' => $student->id]);
+
+        recalculator::recalculate_for_student($assign->cmid, $student->id, 20.0, 50.0);
+
+        $this->assertSame(80.0, $this->final_grade('assign', $assign->id, $student->id));
+        $this->assertSame(1, $this->plugin_writes('assign', $assign->id, $student->id));
+        $this->assertEquals(1, $DB->get_field('grade_items', 'needsupdate', ['id' => $item->id]));
+    }
+
+    /**
+     * Overridden path: a grade with no date gets the time of the write, as core's update_final_grade() does.
+     *
+     * @return void
+     */
+    public function test_override_dates_a_grade_without_date(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path(false);
+        [$assign, $student] = $this->late_assign();
+        $item = $this->item('assign', $assign);
+        $DB->set_field('grade_grades', 'timemodified', null, ['itemid' => $item->id, 'userid' => $student->id]);
+        $before = time();
+
+        recalculator::recalculate_for_student($assign->cmid, $student->id, 20.0, 50.0);
+
+        $this->assertSame(60.0, $this->final_grade('assign', $assign->id, $student->id));
+        $this->assertGreaterThanOrEqual($before, (int) $this->grade_row('assign', $assign->id, $student->id)->timemodified);
+    }
+
+    /**
      * A teacher's edit wins over later attempts, recalculations and the task (F5-05, G07).
      *
      * @dataProvider storage_paths
