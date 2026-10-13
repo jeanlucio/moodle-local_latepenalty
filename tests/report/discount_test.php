@@ -189,25 +189,35 @@ final class discount_test extends latepenalty_testcase {
     }
 
     /**
+     * Both storage paths.
+     *
+     * @return array
+     */
+    public static function storage_paths(): array {
+        return [
+            'deducted mark' => [true],
+            'overridden final grade' => [false],
+        ];
+    }
+
+    /**
      * Item maximum changed in the gradebook, quiz: the figures compare grades on the same scale (F20-34).
      *
      * 60 of 100 reached the gradebook; the item now goes to 50, which the core maps
      * proportionally. A recalculation at 20% a day discounts 40%: 36 raw, 18 of 50.
      * Comparing the final grade (scale 50) with the raw grade (scale 100) read 70%.
      *
-     * Deducted mark path only: on the overridden path the core stamps the item's new
-     * maximum on the grade when the plugin writes it, and the raw grade no longer says
-     * which scale it was sent on.
-     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
      * @return void
      */
-    public function test_item_maximum_changed_quiz(): void {
-        if (!penalty_writer::core_supports_deducted_mark()) {
+    public function test_item_maximum_changed_quiz(bool $deductedmark): void {
+        if ($deductedmark && !penalty_writer::core_supports_deducted_mark()) {
             $this->markTestSkipped('This core has no MDL-88407 fix.');
         }
         $this->resetAfterTest();
         $this->setAdminUser();
-        penalty_writer::force_path_for_tests(true);
+        penalty_writer::force_path_for_tests($deductedmark);
         $deadline = time() - 5 * DAYSECS;
         [$course, $student] = $this->create_course_with_users();
         $quiz = $this->create_quiz_with_questions($course, 10, ['name' => 'Quiz']);

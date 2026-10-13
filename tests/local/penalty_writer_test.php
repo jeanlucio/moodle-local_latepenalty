@@ -282,6 +282,44 @@ final class penalty_writer_test extends latepenalty_testcase {
     }
 
     /**
+     * Item maximum changed in the gradebook: every later recalculation stays on the raw grade's own scale.
+     *
+     * Quiz (no rescaling of its own), 60 of 100, 20% after two days. The item goes to 50:
+     * 20% a day gives 36 raw, 18 of 50; back to 10% a day, 48 raw, 24 of 50.
+     *
+     * Regression guard (overridden path, since 1.2.0): core's update_final_grade() stamps
+     * the item's current maximum on the grade, so after the first write the raw 60 read as
+     * 60 of 50 and the next recalculation gave 48 instead of 24.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_gradebook_maximum_change_keeps_raw_scale(bool $deductedmark): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $this->use_path($deductedmark);
+        $deadline = time() - 5 * DAYSECS;
+        [$course, $student] = $this->create_course_with_users();
+        $quiz = $this->create_quiz_with_questions($course, 10, ['grademethod' => QUIZ_GRADEAVERAGE]);
+        $this->set_reminder($quiz->cmid, $deadline);
+        $this->enable_rule($quiz->cmid);
+        $this->attempt_quiz($quiz, $student, 6, $deadline + 2 * DAYSECS - 60);
+        $this->assertSame(48.0, $this->final_grade('quiz', $quiz->id, $student->id));
+
+        $item = $this->item('quiz', $quiz);
+        $item->grademax = 50;
+        $item->update();
+        grade_regrade_final_grades($course->id);
+
+        recalculator::recalculate_for_student($quiz->cmid, $student->id, 20.0, 50.0);
+        $this->assertSame(18.0, $this->final_grade('quiz', $quiz->id, $student->id));
+        recalculator::recalculate_for_student($quiz->cmid, $student->id, 10.0, 50.0);
+        $this->assertSame(24.0, $this->final_grade('quiz', $quiz->id, $student->id));
+        $this->assertEqualsWithDelta(100.0, (float) $this->grade_row('quiz', $quiz->id, $student->id)->rawgrademax, 0.001);
+    }
+
+    /**
      * A teacher's edit wins over later attempts, recalculations and the task (F5-05, G07).
      *
      * @dataProvider storage_paths

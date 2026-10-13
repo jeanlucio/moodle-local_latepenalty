@@ -263,6 +263,8 @@ final class penalty_writer {
         float $points,
         ?float $finalgrade
     ): bool {
+        global $USER;
+
         $userid = (int) $grade->userid;
 
         if ($points <= 0) {
@@ -284,11 +286,38 @@ final class penalty_writer {
         if (!empty($grade->overridden) && !self::differs($grade->finalgrade, $finalgrade)) {
             return false;
         }
-        self::$pending[$userid . '_' . $gradeitem->id] = (float) $gradeitem->bounded_grade($finalgrade);
-        // Pass the grade's own date: without it, core stamps the time of this write, and modules that
-        // report no submission date have their submission time read from it in later recalculations.
-        $timemodified = empty($grade->timemodified) ? null : (int) $grade->timemodified;
-        $gradeitem->update_final_grade($userid, $finalgrade, self::SOURCE, false, FORMAT_MOODLE, null, $timemodified, true);
+        $locktime = $grade->get_locktime();
+        if ($locktime && $locktime < time()) {
+            $gradeitem->force_regrading();
+            return false;
+        }
+
+        // What grade_item::update_final_grade() writes, except the raw grade's minimum and maximum: core
+        // stamps the item's current range on them, and once a maximum changed in the gradebook the raw
+        // grade would be read on the wrong scale by every later recalculation. The grade keeps its own
+        // date too: modules that report no submission date have their submission time read from it.
+        $oldfinalgrade = $grade->finalgrade;
+        $wasoverridden = !empty($grade->overridden);
+        if ($gradeitem->is_overridable_item() && $gradeitem->markasoverriddenwhengraded) {
+            $grade->overridden = time();
+        }
+        $grade->finalgrade = $gradeitem->bounded_grade($finalgrade);
+        $grade->usermodified = $USER->id;
+        if (empty($grade->timemodified)) {
+            $grade->timemodified = time();
+        }
+        self::$pending[$userid . '_' . $gradeitem->id] = (float) $grade->finalgrade;
+        if (!$grade->update(self::SOURCE, true)) {
+            $gradeitem->force_regrading();
+            return false;
+        }
+
+        if (self::differs($oldfinalgrade, $grade->finalgrade)) {
+            \core\event\user_graded::create_from_grade($grade)->trigger();
+        }
+        if (self::differs($oldfinalgrade, $grade->finalgrade) || (!$wasoverridden && !empty($grade->overridden))) {
+            self::regrade_parents($gradeitem, $userid);
+        }
         return true;
     }
 
