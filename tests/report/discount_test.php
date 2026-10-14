@@ -234,15 +234,60 @@ final class discount_test extends latepenalty_testcase {
     }
 
     /**
+     * Item maximum changed after the penalty, with no recalculation: the figures are the penalty's own.
+     *
+     * The quiz grade was 60 of 100, penalised to 48 while the item went to 100. The
+     * item then goes to 50 and nothing is recalculated. The penalty row still holds a
+     * final grade on the old range, so it is read back with the item as it was then:
+     * 20% and 12 points, not 0. The item change is dated a second after the penalty,
+     * as it would be in a real course.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_item_maximum_changed_without_recalculation(bool $deductedmark): void {
+        global $DB;
+
+        if ($deductedmark && !penalty_writer::core_supports_deducted_mark()) {
+            $this->markTestSkipped('This core has no MDL-88407 fix.');
+        }
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        penalty_writer::force_path_for_tests($deductedmark);
+        $deadline = time() - 5 * DAYSECS;
+        [$course, $student] = $this->create_course_with_users();
+        $quiz = $this->create_quiz_with_questions($course, 10, ['name' => 'Quiz']);
+        $this->set_reminder($quiz->cmid, $deadline);
+        $this->enable_rule($quiz->cmid);
+        $this->attempt_quiz($quiz, $student, 6, $deadline + 2 * DAYSECS - 60);
+        $penaltytime = (int) $DB->get_field_sql(
+            "SELECT MAX(timemodified) FROM {grade_grades_history} WHERE source = 'local_latepenalty'"
+        );
+        $lastitemrow = (int) $DB->get_field_sql('SELECT MAX(id) FROM {grade_items_history}');
+        $this->change_item_maximum('quiz', $quiz, 50);
+        $DB->set_field_select('grade_items_history', 'timemodified', $penaltytime + 1, 'id > :lastid', ['lastid' => $lastitemrow]);
+
+        $row = $this->rows($course)['Quiz / ' . fullname($student)];
+        $this->assertSame([format_float(20.0, 1), format_float(12.0, 2)], $this->figures($row));
+    }
+
+    /**
      * Item maximum changed in the gradebook, assignment: the core only caps grades the module rescales itself (F20-34).
      *
      * The same recalculation gives 36, on both storage paths.
      *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
      * @return void
      */
-    public function test_item_maximum_changed_assignment(): void {
+    public function test_item_maximum_changed_assignment(bool $deductedmark): void {
+        if ($deductedmark && !penalty_writer::core_supports_deducted_mark()) {
+            $this->markTestSkipped('This core has no MDL-88407 fix.');
+        }
         $this->resetAfterTest();
         $this->setAdminUser();
+        penalty_writer::force_path_for_tests($deductedmark);
         [$course, $student, $teacher] = $this->create_course_with_users();
         $assign = $this->late_assign($course, 'Assignment', penalty_helper::BASE_GRADE);
         $this->hand_in($assign, $student, $teacher, 60);

@@ -219,9 +219,14 @@ class controller {
         [$groupwhere, $groupparams] = $this->scope_where();
         $params = array_merge($params, $groupparams);
 
+        // The grade item as it was when the penalty was written (item history): its final grade is on that range.
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified, ggh.rawgrademin, ggh.rawgrademax,
-                       gi.grademin, gi.grademax, gi.multfactor, gi.plusfactor, gi.itemmodule, gi.iteminstance,
+                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       COALESCE(gih.grademin, gi.grademin) AS itemgrademin,
+                       COALESCE(gih.grademax, gi.grademax) AS itemgrademax,
+                       COALESCE(gih.multfactor, gi.multfactor) AS itemmultfactor,
+                       COALESCE(gih.plusfactor, gi.plusfactor) AS itemplusfactor,
                        r.penaltybase,
                        cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
@@ -231,6 +236,10 @@ class controller {
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
+             LEFT JOIN {grade_items_history} gih ON gih.id = (SELECT MAX(gih2.id)
+                                                                FROM {grade_items_history} gih2
+                                                               WHERE gih2.oldid = gi.id
+                                                                 AND gih2.timemodified <= ggh.timemodified)
                   JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
                   JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance
@@ -323,12 +332,19 @@ class controller {
      * recalculating, older penalties show a percentage of the new base, while the
      * points stay exact.
      *
-     * @param \stdClass $row Report row (history grades, item range and factors, rule base).
+     * @param \stdClass $row Report row (history grades, item range and factors when the penalty was written, rule base).
      * @return float[] [points, percentage].
      */
     private static function figures(\stdClass $row): array {
+        $item = (object) [
+            'itemmodule' => $row->itemmodule,
+            'grademin' => $row->itemgrademin,
+            'grademax' => $row->itemgrademax,
+            'multfactor' => $row->itemmultfactor,
+            'plusfactor' => $row->itemplusfactor,
+        ];
         [$points, $percentage] = penalty_helper::discount_figures(
-            $row,
+            $item,
             (float) $row->rawgrade,
             (float) $row->finalgrade,
             (float) $row->rawgrademin,
@@ -369,9 +385,14 @@ class controller {
         [$groupwhere, $groupparams] = $this->scope_where();
         $params = array_merge($params, $groupparams);
 
+        // The grade item as it was when the penalty was written (item history): its final grade is on that range.
         $sql = "SELECT ggh.id, ggh.userid, ggh.itemid,
                        ggh.rawgrade, ggh.finalgrade, ggh.timemodified, ggh.rawgrademin, ggh.rawgrademax,
-                       gi.grademin, gi.grademax, gi.multfactor, gi.plusfactor, gi.itemmodule, gi.iteminstance,
+                       gi.grademax, gi.itemmodule, gi.iteminstance,
+                       COALESCE(gih.grademin, gi.grademin) AS itemgrademin,
+                       COALESCE(gih.grademax, gi.grademax) AS itemgrademax,
+                       COALESCE(gih.multfactor, gi.multfactor) AS itemmultfactor,
+                       COALESCE(gih.plusfactor, gi.plusfactor) AS itemplusfactor,
                        r.penaltybase,
                        cm.id AS cmid, cm.completionexpected,
                        u.firstname, u.lastname,
@@ -381,6 +402,10 @@ class controller {
                   JOIN {grade_items} gi ON gi.id = ggh.itemid
                                        AND gi.itemtype = 'mod'
                                        AND gi.courseid = :courseid
+             LEFT JOIN {grade_items_history} gih ON gih.id = (SELECT MAX(gih2.id)
+                                                                FROM {grade_items_history} gih2
+                                                               WHERE gih2.oldid = gi.id
+                                                                 AND gih2.timemodified <= ggh.timemodified)
                   JOIN {user} u ON u.id = ggh.userid AND u.deleted = 0
                   JOIN {modules} m ON m.name = gi.itemmodule
                   JOIN {course_modules} cm ON cm.instance = gi.iteminstance

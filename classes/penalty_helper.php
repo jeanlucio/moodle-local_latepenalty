@@ -362,6 +362,10 @@ class penalty_helper {
         float $rawmax,
         int $base
     ): array {
+        global $CFG;
+        // The report export loads nothing of the gradebook before getting here.
+        require_once($CFG->libdir . '/gradelib.php');
+
         $grademin = (float) $item->grademin;
         $grademax = (float) $item->grademax;
         $multfactor = (float) $item->multfactor;
