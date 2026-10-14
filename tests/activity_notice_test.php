@@ -254,6 +254,90 @@ final class activity_notice_test extends latepenalty_testcase {
     }
 
     /**
+     * Teacher: students the activity's access restriction keeps out are never counted as pending.
+     *
+     * Restricted to group A (two students, one has handed in), two more students outside it:
+     * one pending, on the course page and on the activity page, and nothing once the last
+     * student of group A hands in. Regression guard: the five students counted as four pending
+     * and the badge never went away.
+     *
+     * @return void
+     */
+    public function test_pending_count_follows_access_restriction(): void {
+        set_config('enableavailability', 1);
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $this->course->id]);
+        $classmate = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        foreach ([$this->student, $classmate] as $member) {
+            $this->getDataGenerator()->create_group_member(['groupid' => $groupa->id, 'userid' => $member->id]);
+        }
+        $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $past = time() - 2 * DAYSECS + HOURSECS;
+        $assign = $this->assignment([
+            'duedate' => $past,
+            'availability' => json_encode(\core_availability\tree::get_root_json(
+                [\availability_group\condition::get_json($groupa->id)]
+            )),
+        ]);
+        $this->submit_assign($assign, $classmate);
+
+        $this->assertSame(get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
+            'deadline' => penalty_helper::format_deadline($past),
+            'pct' => '20',
+            'daily' => '10',
+            'max' => '50',
+            'pending' => 1,
+        ]), $this->notice($assign, $this->teacher));
+        $this->assertSame(
+            get_string('badge_teacher_pending', 'local_latepenalty', ['pct' => '20', 'pending' => 1]),
+            $this->course_badges($this->teacher)[$assign->cmid]['badgelabel'] ?? null
+        );
+
+        $this->submit_assign($assign, $this->student);
+        $this->assertNull($this->notice($assign, $this->teacher));
+        $this->assertArrayNotHasKey($assign->cmid, $this->course_badges($this->teacher));
+    }
+
+    /**
+     * Teacher in separate groups: the course page counts the same groups as the activity page.
+     *
+     * The activity uses a grouping with group A only; the non-editing teacher belongs to groups
+     * A and B, with one pending student in each. Only group A counts on both pages. Regression
+     * guard: the course page counted every group of the teacher in the course, two pending.
+     *
+     * @return void
+     */
+    public function test_pending_count_same_on_both_pages_with_grouping(): void {
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $this->course->id]);
+        $groupb = $this->getDataGenerator()->create_group(['courseid' => $this->course->id]);
+        $grouping = $this->getDataGenerator()->create_grouping(['courseid' => $this->course->id]);
+        $this->getDataGenerator()->create_grouping_group(['groupingid' => $grouping->id, 'groupid' => $groupa->id]);
+        $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'teacher');
+        $other = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        foreach ([[$groupa, $teacher], [$groupb, $teacher], [$groupa, $this->student], [$groupb, $other]] as [$group, $user]) {
+            $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
+        }
+        $past = time() - 2 * DAYSECS + HOURSECS;
+        $assign = $this->assignment([
+            'duedate' => $past,
+            'groupmode' => SEPARATEGROUPS,
+            'groupingid' => $grouping->id,
+        ]);
+
+        $this->assertSame(
+            get_string('badge_teacher_pending', 'local_latepenalty', ['pct' => '20', 'pending' => 1]),
+            $this->course_badges($teacher)[$assign->cmid]['badgelabel'] ?? null
+        );
+        $this->assertSame(get_string('courseinfo_teacher_overdue', 'local_latepenalty', (object) [
+            'deadline' => penalty_helper::format_deadline($past),
+            'pct' => '20',
+            'daily' => '10',
+            'max' => '50',
+            'pending' => 1,
+        ]), $this->notice($assign, $teacher));
+    }
+
+    /**
      * Course page: the student's badge stays until the work is handed in; the teacher counts who has not.
      *
      * @return void

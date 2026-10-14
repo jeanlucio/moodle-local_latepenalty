@@ -382,11 +382,9 @@ class hook_listener {
     /**
      * Count enrolled students who have not handed a given activity in yet.
      *
-     * Counts the students the gradebook grades (see penalty_helper::graded_student_ids()). Honours the
-     * activity's separate-groups scoping: a caller without moodle/site:accessallgroups
-     * only counts students in their own group(s), mirroring group_scope::resolve_activity_restriction()
-     * as already applied on the override management pages. Returns 0 if no students
-     * are enrolled, or if the caller belongs to no group at all in a restricted activity.
+     * Counts the students the gradebook grades (see penalty_helper::graded_student_ids()) who can
+     * open the activity: its separate-groups scoping (group_scope::resolve_activity_restriction(), as
+     * on the override pages) and its access restrictions. Returns 0 if no such student is enrolled.
      *
      * @param \cm_info $cm Course module info for the activity.
      * @return int Number of students who have not handed the activity in.
@@ -395,56 +393,91 @@ class hook_listener {
         $coursecontext = \context_course::instance((int) $cm->course);
         $restrictgroupids = group_scope::resolve_activity_restriction($cm, \context_module::instance((int) $cm->id));
 
-        $students = penalty_helper::graded_student_ids($coursecontext, $restrictgroupids);
+        $students = self::available_to(
+            $cm,
+            penalty_helper::graded_student_ids($coursecontext, $restrictgroupids)
+        );
         $cmrecord = (object) ['id' => (int) $cm->id, 'modname' => $cm->modname, 'instance' => (int) $cm->instance];
         $handedin = submission_resolver::handed_in([$cmrecord], $students);
-        return count($students) - count($handedin[$cmrecord->id]);
+        return count(array_diff_key(array_flip($students), $handedin[$cmrecord->id]));
     }
 
     /**
      * Bulk-load pending student counts for multiple course modules.
      *
-     * Mirrors report\controller::resolve_group_restriction(): a caller without
-     * moodle/site:accessallgroups in the course is confined to their own group(s)
-     * for every course module whose effective group mode is SEPARATEGROUPS, using
-     * a single get_fast_modinfo() call to resolve each cm's groupmode (no query in
-     * the loop). The students are loaded at most twice (all, and the caller's
-     * groups) and who handed what in is loaded once for every activity.
+     * The same count as count_pending_students() for every activity of the course page: the
+     * groups each activity lets the caller see and its access restrictions. The students, their
+     * groups and who handed what in are each loaded once for all the activities.
      *
      * @param \stdClass[] $cms Course modules (id, modname, instance), keyed by ID.
      * @param int $courseid Course ID.
      * @return array Pending student counts keyed by course module ID.
      */
     private static function load_pending_counts(array $cms, int $courseid): array {
-        global $USER;
+        global $DB;
 
-        $coursecontext = \context_course::instance($courseid);
+        $modinfo = get_fast_modinfo($courseid);
+        $allstudents = penalty_helper::graded_student_ids(\context_course::instance($courseid), null);
 
-        $restricted = [];
-        if (!has_capability('moodle/site:accessallgroups', $coursecontext)) {
-            $modinfo = get_fast_modinfo($courseid);
-            foreach ($cms as $cmid => $cm) {
-                $info = $modinfo->cms[$cmid] ?? null;
-                if ($info && (int) groups_get_activity_groupmode($info) === SEPARATEGROUPS) {
-                    $restricted[$cmid] = true;
-                }
+        $scopes = [];
+        foreach (array_keys($cms) as $cmid) {
+            $info = $modinfo->cms[$cmid] ?? null;
+            $scopes[$cmid] = $info ? group_scope::resolve_activity_restriction($info, \context_module::instance($cmid)) : null;
+        }
+
+        $membership = [];
+        if (array_filter($scopes, fn(?array $scope): bool => $scope !== null)) {
+            $rs = $DB->get_recordset_sql(
+                "SELECT gm.id, gm.userid, gm.groupid
+                   FROM {groups_members} gm
+                   JOIN {groups} g ON g.id = gm.groupid
+                  WHERE g.courseid = :courseid",
+                ['courseid' => $courseid]
+            );
+            foreach ($rs as $member) {
+                $membership[(int) $member->userid][(int) $member->groupid] = true;
             }
+            $rs->close();
         }
 
-        $allstudents = count($restricted) < count($cms) ? penalty_helper::graded_student_ids($coursecontext, null) : [];
-        $groupstudents = [];
-        if (!empty($restricted)) {
-            $callergroupids = array_keys(groups_get_all_groups($courseid, (int) $USER->id));
-            $groupstudents = penalty_helper::graded_student_ids($coursecontext, $callergroupids);
-        }
-
-        $handedin = submission_resolver::handed_in($cms, array_merge($allstudents, $groupstudents));
+        $handedin = submission_resolver::handed_in($cms, $allstudents);
         $result = [];
-        foreach ($cms as $cmid => $cm) {
-            $students = isset($restricted[$cmid]) ? $groupstudents : $allstudents;
+        foreach (array_keys($cms) as $cmid) {
+            $students = $allstudents;
+            if ($scopes[$cmid] !== null) {
+                $allowed = array_flip($scopes[$cmid]);
+                $students = array_values(array_filter(
+                    $allstudents,
+                    fn(int $userid): bool => !empty(array_intersect_key($membership[$userid] ?? [], $allowed))
+                ));
+            }
+            if (isset($modinfo->cms[$cmid])) {
+                $students = self::available_to($modinfo->cms[$cmid], $students);
+            }
             $result[$cmid] = count(array_diff_key(array_flip($students), $handedin[$cmid]));
         }
         return $result;
+    }
+
+    /**
+     * The students an activity's access restrictions let in (group, grouping, profile...).
+     *
+     * A student who cannot open the activity never hands it in, so would count as pending forever.
+     * Conditions that do not apply to lists of users, such as dates, let everyone through.
+     *
+     * @param \cm_info $cm Course module info.
+     * @param int[] $userids Student IDs.
+     * @return int[] The students the activity is available to.
+     */
+    private static function available_to(\cm_info $cm, array $userids): array {
+        if (empty($cm->availability) || empty($userids)) {
+            return $userids;
+        }
+        $users = [];
+        foreach ($userids as $userid) {
+            $users[$userid] = (object) ['id' => $userid];
+        }
+        return array_map('intval', array_keys((new \core_availability\info_module($cm))->filter_user_list($users)));
     }
 
     /**
