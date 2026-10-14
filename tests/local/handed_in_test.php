@@ -259,8 +259,6 @@ final class handed_in_test extends latepenalty_testcase {
      * @return void
      */
     public function test_queries_do_not_grow_with_activities(): void {
-        global $DB;
-
         $count = function (int $assigns): int {
             global $DB;
             $cms = [];
@@ -277,7 +275,10 @@ final class handed_in_test extends latepenalty_testcase {
             return $DB->perf_get_reads() - $before;
         };
 
-        $this->assertSame($count(2), $count(8));
-        $this->assertGreaterThan(0, $DB->perf_get_reads());
+        $few = $count(2);
+        $many = $count(8);
+        // A zero would compare two empty measures, not two query counts.
+        $this->assertGreaterThan(0, $few);
+        $this->assertSame($few, $many);
     }
 }
