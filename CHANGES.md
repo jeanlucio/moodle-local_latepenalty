@@ -1,5 +1,24 @@
 # Changes
 
+## [v1.5.0] — 2026-10-14
+
+### Penalty base
+
+- New "Penalty applies to" setting in the Late Penalty section: the percentage is taken from the grade obtained (the default, which every existing rule keeps) or from the maximum grade, where each day late costs the same points for every student
+- Changing it recalculates the grades already discounted, like a change of rate; the recalculation box now reads "Recalculate penalties when the penalty settings change"
+- The activity and course notices say which grade the percentage applies to
+
+### Report
+
+- New "Points discounted" column, on screen and in the CSV/Excel export
+- The discount percentage is read on the raw grade's own scale: an item multiplier or offset, or a maximum changed in the gradebook, no longer distorts it (a 40% penalty could show as 70%)
+
+### Fixes
+
+- Changing a quiz's maximum grade no longer drops the penalty of quizzes graded by the highest attempt (Moodle 5.1 and later)
+- On Moodle 4.5 and 5.0, and in frozen gradebooks, changing a grade item's maximum in the gradebook no longer makes later recalculations use the wrong scale
+- The pending count on teacher badges and notices counts only the students who can open the activity: access restrictions and groupings are now honoured, and the course page and the activity page give the same number
+
 ## [v1.4.1] — 2026-10-07
 
 ### Activity page
