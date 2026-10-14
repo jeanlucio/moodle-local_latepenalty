@@ -319,19 +319,23 @@ final class recalculator_test extends advanced_testcase {
     }
 
     /**
-     * Students with no penalty history record are not touched by recalculate().
+     * Moving the deadline earlier never penalises a student who handed in on time.
      *
-     * The student submitted on time so the observer never wrote a
-     * grade_grades_history row with source = 'local_latepenalty'. The
-     * recalculator must leave the grade unchanged.
+     * The student submitted a day before the deadline, so the observer never wrote a
+     * penalty. The deadline then moves two days earlier: against it the submission is a
+     * day late, but recalculate() only reconsiders students already penalised, so the
+     * grade stays 80 and the plugin writes nothing.
      */
     public function test_ontime_student_not_affected(): void {
+        global $DB;
+
         $s = $this->make_scenario(-DAYSECS);
         $this->grade_via_module($s, 80.0);
 
-        recalculator::recalculate($s['assign']->cmid, $s['deadline'], 10.0, 50.0);
+        recalculator::recalculate($s['assign']->cmid, $s['deadline'] - 2 * DAYSECS, 10.0, 50.0);
 
         self::assertEqualsWithDelta(80.0, $this->read_final_grade($s), 0.01);
+        self::assertSame(0, $DB->count_records('grade_grades_history', ['source' => 'local_latepenalty']));
     }
 
     /**
