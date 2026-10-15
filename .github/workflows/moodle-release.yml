@@ -44,6 +44,9 @@
 #
 name: Releasing in Moodle Marketplace
 
+permissions:
+  contents: read
+
 on:
   workflow_run:
     workflows:
@@ -65,16 +68,16 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
-    env:
-      BASE_URL: 'https://marketplace.moodle.com/api'
-      TOKEN: ${{ secrets.MOODLE_MARKETPLACE_TOKEN }}
-      GH_TOKEN: ${{ github.token }}
-
     steps:
       - name: Resolve tag name
         id: resolve-tag
+        # The tag comes from user input or from the triggering run; read it through the
+        # environment so the shell never parses it as part of the script.
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          TAGNAME="${{ inputs.tag || github.event.workflow_run.head_branch }}"
+          TAGNAME="${INPUT_TAG:-$RUN_BRANCH}"
 
           if [[ -z "${TAGNAME}" ]]; then
             echo "::error::No tag name resolved!"
@@ -87,6 +90,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ steps.resolve-tag.outputs.tag }}
+          persist-credentials: false
 
       - name: Build zip package
         id: package
@@ -110,8 +114,10 @@ jobs:
         id: release_notes
         env:
           TAGNAME: ${{ steps.resolve-tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          NOTES=$(gh release view "$TAGNAME" --repo "${{ github.repository }}" --json body -q '.body' 2>/dev/null || true)
+          NOTES=$(gh release view "$TAGNAME" --repo "$GH_REPO" --json body -q '.body' 2>/dev/null || true)
 
           echo "notes<<EOF" >> "$GITHUB_OUTPUT"
           echo "$NOTES" >> "$GITHUB_OUTPUT"
@@ -119,6 +125,8 @@ jobs:
 
       - name: Submit version to Marketplace API
         env:
+          BASE_URL: 'https://marketplace.moodle.com/api'
+          TOKEN: ${{ secrets.MOODLE_MARKETPLACE_TOKEN }}
           TAGNAME: ${{ steps.resolve-tag.outputs.tag }}
           COMPONENT: ${{ steps.package.outputs.component }}
           ZIP_FILE: ${{ steps.package.outputs.zip_file }}
