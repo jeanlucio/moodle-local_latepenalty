@@ -28,7 +28,7 @@ $tasks = [
     [
         'classname' => '\local_latepenalty\task\reprocess_grades',
         'blocking' => 0,
-        'minute' => 'R',
+        'minute' => '*/5',
         'hour' => '*',
         'day' => '*',
         'month' => '*',

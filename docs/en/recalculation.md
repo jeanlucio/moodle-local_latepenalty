@@ -37,7 +37,7 @@ A new attempt, a regrade or a corrected essay reaches the plugin as a new grade 
 | Moodle | How the discount is stored | A better grade after a penalty |
 |---|---|---|
 | **5.1 and 5.2 (updated), 5.3+** | Moodle's own late-penalty field: the raw grade stays as the activity sent it, the discount is stored beside it and the gradebook shows *Late penalty applied -N points* | Shown immediately |
-| **4.5, 5.0 and older 5.1/5.2 builds** | The final grade is written as an override | The override hides the new grade until the scheduled task **Reprocess late-penalised grades changed by the activity** runs (hourly) |
+| **4.5, 5.0 and older 5.1/5.2 builds** | The final grade is written as an override | A quiz attempt or a quiz question graded by the teacher is picked up at once. For other activities the override hides the new grade until the scheduled task **Reprocess late-penalised grades changed by the activity** runs (every 5 minutes by default) |
 
 A course whose gradebook calculations are **frozen** at an old version also uses the override storage, because its regrades ignore the stored discount.
 

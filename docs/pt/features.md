@@ -8,7 +8,7 @@
 * 🔒 **Limite máximo de penalidade:** O desconto nunca excede o teto configurado (ex.: 50% no máximo) e a nota final é sempre ≥ 0.
 * 🕒 **Atraso da ação do próprio estudante:** a tentativa, post, verbete ou registro por trás da nota, ou a data de entrega que a atividade informa — nunca o momento da correção.
 * 🏆 **Nota mais alta respeitada:** quando a atividade fica com a maior nota, uma tentativa atrasada nunca a baixa.
-* 🔄 **Orientado a eventos:** reage a eventos `user_graded` em tempo real. No Moodle 5.1+ o desconto fica no campo de penalidade do próprio Moodle e o livro de notas mostra o indicador de penalidade; nas versões anteriores, uma tarefa de hora em hora pega as notas que mudaram depois de uma penalidade.
+* 🔄 **Orientado a eventos:** reage a eventos `user_graded` em tempo real. No Moodle 5.1+ o desconto fica no campo de penalidade do próprio Moodle e o livro de notas mostra o indicador de penalidade; nas versões anteriores, as tentativas e as questões corrigidas de Questionário são pegas na hora, e uma tarefa que roda a cada 5 minutos pega as notas que outras atividades mudaram depois de uma penalidade.
 * ⚖️ **Seguro:** notas por escala nunca são descontadas; tarefas que usam as penalidades de nota do próprio Moodle ficam com elas; notas editadas pelo professor e bloqueadas nunca são alteradas.
 * 📝 **Histórico de notas:** Toda modificação de nota é registrada na tabela padrão de histórico do Moodle.
 * 💾 **Backup e restauração:** As regras de penalidade viajam junto com a atividade no backup, restauração e duplicação de cursos.

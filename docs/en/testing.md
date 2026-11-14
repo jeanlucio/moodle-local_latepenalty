@@ -25,6 +25,7 @@ on a wrong assumption about where a module keeps its data.
 | `local/handed_in_test` | Who has handed an activity in, for the badges and notices: each module's own work, graded or not, never activity completion |
 | `local/penalty_writer_test` | How penalties are stored, changed and removed — deducted marks or overrides — and the invariants of every write |
 | `penalty_base_test` | The penalty base: grade obtained and maximum grade on every module, grade ranges and factors, changed maximum grades, overrides and recalculations |
+| `immediate_reprocess_test` | A better grade sent after a penalty reaches the gradebook at once, on both storage paths: quiz attempts and manual grading |
 | `keepbest_test` | "Highest grade" activities: a late attempt never lowers a better earlier result |
 | `recalculator_test`, `activity_overrides_test` | Recalculation when a rule, an override or an extension changes |
 | `group_changes_test` | Students joining or leaving a group, deleted groups and course resets |

@@ -456,6 +456,32 @@ final class lib_test extends latepenalty_testcase {
     }
 
     /**
+     * Form: the delay notice appears only where penalties are stored as an overridden final grade.
+     *
+     * @dataProvider storage_paths
+     * @param bool $deductedmark Storage path.
+     * @return void
+     */
+    public function test_form_override_storage_notice(bool $deductedmark): void {
+        $this->resetAfterTest();
+        if ($deductedmark && !penalty_writer::core_supports_deducted_mark()) {
+            $this->markTestSkipped('This core has no MDL-88407 fix.');
+        }
+        penalty_writer::force_path_for_tests($deductedmark);
+
+        $section = $this->plugin_section(0, 'assign');
+
+        $this->assertSame(!$deductedmark, $section->elementExists('latepenalty_delaywarning'));
+        if (!$deductedmark) {
+            $task = get_string('task_reprocess_grades', 'local_latepenalty');
+            $this->assertStringContainsString(
+                get_string('warning_override_storage', 'local_latepenalty', $task),
+                $section->getElement('latepenalty_delaywarning')->toHtml()
+            );
+        }
+    }
+
+    /**
      * Form: activities without a numeric grade show the "numeric grades only" notice (F18).
      *
      * Scale grades, "none" grades and activities with no grade item at all (a forum
@@ -655,7 +681,7 @@ final class lib_test extends latepenalty_testcase {
         $form = $this->plugin_section($assign->cmid, 'assign', true);
 
         $names = array_map(fn($element) => $element->getName(), $form->_elements);
-        $this->assertSame([
+        $expected = [
             'latepenaltyheader',
             'latepenalty_enabled',
             'latepenalty_daily',
@@ -666,7 +692,12 @@ final class lib_test extends latepenalty_testcase {
             'latepenalty_disablewarning',
             'latepenalty_deadlineused',
             'tagshdr',
-        ], $names);
+        ];
+        if (!penalty_writer::uses_deducted_mark()) {
+            // The delay notice exists only where penalties are overridden final grades.
+            array_splice($expected, 7, 0, 'latepenalty_delaywarning');
+        }
+        $this->assertSame($expected, $names);
         $this->assertStringContainsString(get_string('latepenalty', 'local_latepenalty'), $form->toHtml());
     }
 }

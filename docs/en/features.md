@@ -8,7 +8,7 @@
 * 🔒 **Maximum penalty cap:** Deduction never exceeds the configured cap (e.g., 50% maximum), and the final grade is always ≥ 0.
 * 🕒 **Lateness of the student's own action:** The attempt, post, entry or record behind the grade, or the submission date the activity reports — never the moment of grading.
 * 🏆 **Highest grade respected:** When an activity keeps the highest grade, a late attempt never lowers it.
-* 🔄 **Event-driven:** Reacts to `user_graded` events in real time. On Moodle 5.1+ the discount is stored in Moodle's own late-penalty field and the gradebook shows the penalty indicator; on older versions an hourly task picks up grades that changed after a penalty.
+* 🔄 **Event-driven:** Reacts to `user_graded` events in real time. On Moodle 5.1+ the discount is stored in Moodle's own late-penalty field and the gradebook shows the penalty indicator; on older versions quiz attempts and graded quiz questions are picked up at once, and a task that runs every 5 minutes picks up the grades that other activities changed after a penalty.
 * ⚖️ **Plays safe:** Scale grades are never discounted; assignments using Moodle's own grade penalties are left to it; teacher edits and locked grades are never changed.
 * 📝 **Gradebook audit trail:** Every grade modification is recorded in Moodle's standard grade history table.
 * 💾 **Backup and restore:** Penalty rules travel with the activity on course backup, restore, and duplication.

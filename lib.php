@@ -166,6 +166,26 @@ function local_latepenalty_coursemodule_standard_elements($formwrapper, $mform):
         );
     }
 
+    // With the penalty stored as an overridden final grade, a better grade sent later waits for the scheduled task.
+    $courseid = (int) ($formwrapper->get_current()->course ?? 0);
+    if (!\local_latepenalty\local\penalty_writer::uses_deducted_mark($courseid ?: null)) {
+        $elements['latepenalty_delaywarning'] = $mform->addElement(
+            'static',
+            'latepenalty_delaywarning',
+            '',
+            $OUTPUT->notification(
+                get_string(
+                    'warning_override_storage',
+                    'local_latepenalty',
+                    get_string('task_reprocess_grades', 'local_latepenalty')
+                ),
+                'info',
+                false
+            )
+        );
+        $mform->hideIf('latepenalty_delaywarning', 'latepenalty_enabled', 'notchecked');
+    }
+
     // Disabling an active rule gives the original grades back on save, unless there is no history to find them.
     if ($existing && $existing->enabled && empty($CFG->disablegradehistory)) {
         $elements['latepenalty_disablewarning'] = $mform->addElement(

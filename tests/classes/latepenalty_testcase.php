@@ -447,6 +447,18 @@ abstract class latepenalty_testcase extends \advanced_testcase {
             $qa->get_control_field_name('sequencecheck') => $qa->get_sequence_check_count(),
         ];
         $attemptobj->process_submitted_actions($timestamp, false, $post);
+
+        // The page logs the action after the transaction closes; observers hear about it here.
+        \mod_quiz\event\question_manually_graded::create([
+            'objectid' => $qa->get_question_id(),
+            'courseid' => $attemptobj->get_courseid(),
+            'context' => $attemptobj->get_quizobj()->get_context(),
+            'other' => [
+                'quizid' => $attemptobj->get_quizid(),
+                'attemptid' => $attemptobj->get_attemptid(),
+                'slot' => $slot,
+            ],
+        ])->trigger();
     }
 
     /**

@@ -190,12 +190,8 @@ final class penalty_writer_test extends latepenalty_testcase {
         $this->attempt_quiz($quiz, $student, 6, $late);
         $this->assertSame(48.0, $this->final_grade('quiz', $quiz->id, $student->id));
 
+        // On the override path the quiz events stand in for the grade event the core does not fire.
         $this->attempt_quiz($quiz, $student, 9, $late + 60);
-        if (!$deductedmark) {
-            // The override hides the new raw grade until the task runs.
-            $this->assertSame(48.0, $this->final_grade('quiz', $quiz->id, $student->id));
-            $this->run_task();
-        }
 
         $this->assertSame(72.0, $this->final_grade('quiz', $quiz->id, $student->id));
         $this->assertLessThanOrEqual(2, $this->plugin_writes('quiz', $quiz->id, $student->id));

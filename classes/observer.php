@@ -82,6 +82,51 @@ class observer {
     }
 
     /**
+     * Reprocess a quiz student right after the quiz grade changed, where the core sends no grade event.
+     *
+     * With the penalty stored as an overridden final grade (Moodle 4.5, 5.0, frozen gradebooks), a
+     * better grade from a new attempt or a regrade by the teacher only changes the raw grade and the
+     * core fires no user_graded for it. The quiz updates the grade before it logs the attempt as
+     * submitted (Moodle 4.5), as graded (5.0 and later) or the question as manually graded, so the raw
+     * grade is already in place here. Where the deducted mark is used the core reports every new raw
+     * grade and nothing is needed.
+     *
+     * @param \core\event\base $event attempt_submitted, attempt_graded or question_manually_graded.
+     * @return void
+     */
+    public static function quiz_grade_updated(\core\event\base $event): void {
+        global $DB;
+
+        if ((int) $event->contextlevel !== CONTEXT_MODULE || penalty_writer::uses_deducted_mark((int) $event->courseid)) {
+            return;
+        }
+        // From Moodle 5.0 a submitted attempt is graded later and attempt_graded follows; the grade is unchanged now.
+        $submitted = $event->eventname === '\mod_quiz\event\attempt_submitted'
+            && defined(\mod_quiz\quiz_attempt::class . '::SUBMITTED');
+        if ($submitted) {
+            return;
+        }
+        $rule = $DB->get_record('local_latepenalty_rules', ['cmid' => (int) $event->contextinstanceid, 'enabled' => 1]);
+        if (!$rule) {
+            return;
+        }
+
+        // The manual grading event names the attempt in its data, the submission event is about the attempt.
+        $attemptid = (int) ($event->other['attemptid'] ?? $event->objectid);
+        $userid = (int) $DB->get_field('quiz_attempts', 'userid', ['id' => $attemptid, 'preview' => 0]);
+        if (empty($userid)) {
+            return;
+        }
+
+        recalculator::recalculate_for_student(
+            (int) $event->contextinstanceid,
+            $userid,
+            (float) $rule->daily_penalty,
+            (float) $rule->max_penalty
+        );
+    }
+
+    /**
      * Recalculate when an activity override or extension changes a deadline (F7).
      *
      * Handles the student and group override events of assignments, quizzes and

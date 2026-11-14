@@ -29,6 +29,21 @@ $observers = [
         'eventname' => '\core\event\user_graded',
         'callback' => '\local_latepenalty\observer::user_graded',
     ],
+    // Where the penalty is an overridden final grade the core reports no new raw grade: the quiz events
+    // that follow its grade update stand in. Optional integration, as the overrides below.
+    [
+        'eventname' => '\mod_quiz\event\attempt_submitted',
+        'callback' => '\local_latepenalty\observer::quiz_grade_updated',
+    ],
+    [
+        // Moodle 5.0 and later: the grade is updated when the attempt is graded, after it was submitted.
+        'eventname' => '\mod_quiz\event\attempt_graded',
+        'callback' => '\local_latepenalty\observer::quiz_grade_updated',
+    ],
+    [
+        'eventname' => '\mod_quiz\event\question_manually_graded',
+        'callback' => '\local_latepenalty\observer::quiz_grade_updated',
+    ],
     [
         'eventname' => '\core\event\course_module_deleted',
         'callback' => '\local_latepenalty\observer::course_module_deleted',

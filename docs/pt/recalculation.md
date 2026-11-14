@@ -37,7 +37,7 @@ Uma tentativa nova, uma reavaliação ou uma dissertação corrigida chegam ao p
 | Moodle | Como o desconto é guardado | Uma nota melhor depois de uma penalidade |
 |---|---|---|
 | **5.1 e 5.2 (atualizados), 5.3+** | No campo de penalidade do próprio Moodle: a nota bruta fica como a atividade enviou, o desconto fica ao lado e o livro de notas mostra *Penalidade por atraso aplicada -N pontos* | Aparece na hora |
-| **4.5, 5.0 e versões antigas do 5.1/5.2** | A nota final é gravada como sobrescrita | A sobrescrita esconde a nota nova até a tarefa agendada **Reprocessar notas com penalidade por atraso alteradas pela atividade** rodar (de hora em hora) |
+| **4.5, 5.0 e versões antigas do 5.1/5.2** | A nota final é gravada como sobrescrita | Uma tentativa de Questionário ou uma questão de Questionário corrigida pelo professor é pega na hora. Nas outras atividades, a sobrescrita esconde a nota nova até a tarefa agendada **Reprocessar notas com penalidade por atraso alteradas pela atividade** rodar (a cada 5 minutos por padrão) |
 
 Um curso cujo livro de notas está **congelado** numa versão antiga de cálculo também usa a sobrescrita, porque os recálculos dele ignoram o desconto guardado.
 

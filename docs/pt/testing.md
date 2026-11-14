@@ -26,6 +26,7 @@ modo que um teste não passa com uma suposição errada sobre onde o módulo gua
 | `local/handed_in_test` | Quem já entregou cada atividade, para as badges e os avisos: o trabalho de cada módulo, avaliado ou não, nunca a conclusão da atividade |
 | `local/penalty_writer_test` | Como as penalidades são gravadas, alteradas e removidas — nota com dedução ou nota sobreposta — e as invariantes de toda gravação |
 | `penalty_base_test` | A base do desconto: nota obtida e nota máxima em todos os módulos, intervalos e fatores de nota, nota máxima alterada, sobreposições e recálculos |
+| `immediate_reprocess_test` | Uma nota melhor enviada depois de uma penalidade chega ao livro de notas na hora, nos dois caminhos de armazenamento: tentativas e avaliação manual de Questionário |
 | `keepbest_test` | Atividades com "nota mais alta": uma tentativa atrasada nunca rebaixa um resultado anterior melhor |
 | `recalculator_test`, `activity_overrides_test` | Recálculo quando muda uma regra, uma sobreposição ou uma extensão |
 | `group_changes_test` | Estudantes que entram ou saem de um grupo, grupos apagados e reconfiguração do curso |
