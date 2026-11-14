@@ -1,5 +1,16 @@
 # Changes
 
+## [v1.5.1] — 2026-11-14
+
+### Recalculation
+
+- On Moodle 4.5 and 5.0, and in frozen gradebooks, a better quiz attempt or a quiz question graded by the teacher after a penalty now reaches the gradebook at once; it used to wait for the scheduled task, so a better second late attempt kept showing the penalised grade of the first
+- The scheduled task that picks up the other activities' grades changed after a penalty now runs every 5 minutes instead of every hour (sites that set their own schedule for it keep it)
+
+### Activity form
+
+- A notice explains that delay, shown only where it applies; it does not appear where Moodle stores the discount in its own late-penalty field (Moodle 5.1 and later with the fix for MDL-88407)
+
 ## [v1.5.0] — 2026-10-14
 
 ### Penalty base
