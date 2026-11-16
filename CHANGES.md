@@ -1,5 +1,11 @@
 # Changes
 
+## [v1.5.2] — 2026-11-16
+
+### Compatibility
+
+- Fixed a fatal error ("Call to undefined method core_grades\penalty_manager::is_frozen_for_legacy_penalty()") that blocked every page of an activity with a grade on Moodle 5.1.6 and 5.2.2, the releases that have the fix for MDL-88407 but not yet the one for MDL-89497; versions 1.2.0 to 1.5.1 were affected
+
 ## [v1.5.1] — 2026-11-14
 
 ### Recalculation
