@@ -47,6 +47,9 @@ final class penalty_writer {
     /** @var bool|null Forced storage path for tests: true deducted mark, false override, null detect. */
     private static ?bool $forceddeductedmark = null;
 
+    /** @var bool Tests only: pretend the core predates the gradebook freeze check (MDL-89497). */
+    private static bool $forcednofreezecheck = false;
+
     /** @var array Expected final grades (float or null) of our own pending user_graded events, keyed "userid_itemid". */
     private static array $pending = [];
 
@@ -59,6 +62,10 @@ final class penalty_writer {
      * frozen at a pre-fix calculation version also ignores the deducted mark of any
      * module but the assignment when it regrades, so it uses the override path.
      *
+     * The freeze check (MDL-89497) reached the core in later patch releases than the
+     * deducted mark fix (MDL-88407): Moodle 5.1.6 and 5.2.2 have the fix without the
+     * check. There no gradebook can be frozen by it, so the deducted mark is safe.
+     *
      * @param int|null $courseid Course ID, or null for the site-wide answer.
      * @return bool
      */
@@ -67,10 +74,20 @@ final class penalty_writer {
         if (self::$forceddeductedmark !== null) {
             $supported = self::$forceddeductedmark && $supported;
         }
-        if (!$supported || $courseid === null) {
+        if (!$supported || $courseid === null || !self::core_knows_frozen_gradebooks()) {
             return $supported;
         }
         return !\core_grades\penalty_manager::is_frozen_for_legacy_penalty($courseid);
+    }
+
+    /**
+     * Whether the core can tell that a gradebook is frozen at a pre-fix calculation version (MDL-89497).
+     *
+     * @return bool
+     */
+    private static function core_knows_frozen_gradebooks(): bool {
+        return !self::$forcednofreezecheck
+            && method_exists(\core_grades\penalty_manager::class, 'is_frozen_for_legacy_penalty');
     }
 
     /**
@@ -96,6 +113,21 @@ final class penalty_writer {
     }
 
     /**
+     * Pretend the core has the deducted mark fix but not the freeze check (tests only).
+     *
+     * That is Moodle 5.1.6 and 5.2.2, which the test sites do not run.
+     *
+     * @param bool $absent True to hide the freeze check from the plugin.
+     * @return void
+     */
+    public static function force_no_freeze_check_for_tests(bool $absent): void {
+        if (!PHPUNIT_TEST) {
+            throw new \coding_exception('force_no_freeze_check_for_tests() is for PHPUnit only.');
+        }
+        self::$forcednofreezecheck = $absent;
+    }
+
+    /**
      * Forget forced paths and pending echoes (tests only).
      *
      * @return void
@@ -105,6 +137,7 @@ final class penalty_writer {
             throw new \coding_exception('reset_for_tests() is for PHPUnit only.');
         }
         self::$forceddeductedmark = null;
+        self::$forcednofreezecheck = false;
         self::$pending = [];
     }
 

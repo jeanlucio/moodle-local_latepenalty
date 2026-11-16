@@ -437,6 +437,34 @@ final class penalty_writer_test extends latepenalty_testcase {
     }
 
     /**
+     * A core with the deducted mark fix but without the freeze check (Moodle 5.1.6, 5.2.2) must not be asked
+     * about frozen gradebooks: the method does not exist there and the call is a fatal error (issue #8).
+     *
+     * @return void
+     */
+    public function test_core_without_freeze_check(): void {
+        $this->resetAfterTest();
+        $hasfix = penalty_writer::core_supports_deducted_mark();
+        $hascheck = method_exists(\core_grades\penalty_manager::class, 'is_frozen_for_legacy_penalty');
+        if (!$hasfix || !$hascheck) {
+            $this->markTestSkipped('This core cannot tell the two cases apart.');
+        }
+        $course = $this->getDataGenerator()->create_course();
+        set_config('gradebook_calculations_freeze_' . $course->id, 20150627);
+
+        // With the check present, the frozen course uses the override path.
+        $this->assertFalse(penalty_writer::uses_deducted_mark((int) $course->id));
+
+        // Without it nothing can be frozen: the deducted mark is used, and the missing method is never called.
+        penalty_writer::force_no_freeze_check_for_tests(true);
+        $this->assertTrue(penalty_writer::uses_deducted_mark((int) $course->id));
+        $this->assertTrue(penalty_writer::uses_deducted_mark());
+
+        penalty_writer::reset_for_tests();
+        $this->assertFalse(penalty_writer::uses_deducted_mark((int) $course->id));
+    }
+
+    /**
      * Back on time (extension, exempting override, plugin override): the original grade returns (F5-08).
      *
      * @dataProvider storage_paths
