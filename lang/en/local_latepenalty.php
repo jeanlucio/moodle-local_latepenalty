@@ -23,7 +23,6 @@
  */
 
 defined('MOODLE_INTERNAL') || die();
-// phpcs:disable moodle.Files.LineLength
 
 $string['badge_ontime'] = 'Deadline: {$a->date}';
 $string['badge_penalty'] = 'Penalty: {$a->pct}%';
